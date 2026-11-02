@@ -716,3 +716,81 @@ input[type="text"] {
   background: var(--yellow);
   color: var(--navy);
 }
+
+/* calculation card */
+.calc-card {
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.calc-card.pass {
+  border-color: var(--wisdom);
+}
+.calc-card.fail {
+  border-color: var(--danger);
+}
+.calc-title {
+  margin: 0;
+  font-weight: 700;
+}
+.calc-verdict {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+.calc-card.pass .calc-verdict {
+  color: var(--wisdom);
+}
+.calc-card.fail .calc-verdict {
+  color: var(--danger);
+}
+.calc-steps {
+  margin: 4px 0 0;
+  padding-left: 1.3em;
+  font-size: 0.92rem;
+}
+.calc-card summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  cursor: pointer;
+}
+.src-tag.law {
+  color: var(--law);
+}
+.stamp.small {
+  font-size: 0.8rem;
+  align-self: flex-start;
+}
+.fill-fig {
+  margin: 4px auto;
+  width: 200px;
+  text-align: center;
+}
+.fill-fig figcaption {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+select {
+  width: 100%;
+  min-height: 48px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font: inherit;
+  color: inherit;
+}
+input[inputmode="decimal"] {
+  width: 100%;
+  min-height: 48px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 8px 12px;
+}

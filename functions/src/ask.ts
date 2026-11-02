@@ -1,6 +1,8 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { getClient, jsonCall } from "./claude";
+import { getClient, jsonCall, pickTools } from "./claude";
+import { CalcOutput, calcTools, runCalc } from "./calc";
+import { CalcInputError } from "./calc/types";
 import { MODEL_ANSWER, MODEL_ROUTER } from "./models";
 import { searchCards } from "./search";
 import { Law, getLawById, quoteIsInOriginal, searchLaws } from "./laws";
@@ -20,7 +22,7 @@ interface Routed {
 }
 
 const ROUTER_SYSTEM = `電気工事の現場の若手からの質問を受け取ります。話し言葉・方言・現場の呼び名（例「VE」「ねじなし」「サンダー」）のままです。
-- interpretedAs: 質問の意味を、標準的な言葉で1文に言い直す（「こう受け取りました」として本人に見せる）
+- interpretedAs: 質問の意味を、標準的な言葉で1文・40字以内に言い直す（「こう受け取りました」として本人に見せる。推測の説明は書かない）
 - kind: law=法令・基準・資格／calc=計算・判定／part=部材・工具の名前や用途／howto=やり方・コツ／other
 - searchTerms: 社内の知恵カードと法令を探すための言い換え・正式名・別名・関係する作業名・法令の用語を3〜8個`;
 
@@ -31,10 +33,16 @@ const ANSWER_SYSTEM = `あなたは電気工事会社の「でんきの親方」
 - general: 一般的な知識。確かな範囲だけを短く。条文番号や数値を言い切らない。
 - 質問に関係する知恵カードがあれば、必ず wisdom を1文以上入れる（親方の現場の知恵は、法令と同じくらい大事な答え）。カードに書かれている内容を言う文は、言い換えても必ず wisdom にする（general にしない）。
 - 順番は law → wisdom → general。全体で2〜7文、text は1文60字以内、現場でスマホで読める言葉で（quote は長さに数えない）。
+- 「計算結果（プログラム）」が渡されたら、その数値と判定をそのまま使って答える（自分で計算し直さない、数値を変えない）。計算結果の内容を言う文は general にしてよい（画面に計算の過程が別に出る）。
 - 質問に関係しない条文・カードは使わない。関係するものが無く、一般知識でも確かに答えられない時は sentences を空にする。
 - 資格が要る作業・活線作業に触れる時は、無資格者ができない範囲をはっきり書く。
 - 文体は標準語の「です・ます」。親方の言い回しは wisdom の文の中でだけ残してよい。
 - 「カードに載っていない」など、仕組みの内側の話は書かない。`;
+
+const CALC_PICK_SYSTEM = `電気工事の若手の質問に、計算・判定の道具が使えるかを判断します。
+- 道具で答えられる部分があれば、その道具を呼び、質問から読み取れる値を入れる。読み取れない値は入れない（既定値が使われる）。
+- 「何本入る？」のように候補を比べる質問は、同じ道具を条件を変えて2回まで呼んでよい。
+- 道具で答えられない質問なら、道具を呼ばずに「なし」とだけ答える。`;
 
 function dummyAnswer(text: string, hits: Card[], laws: Law[]): Sentence[] {
   const s: Sentence[] = laws
@@ -81,6 +89,8 @@ export async function ask(data: Record<string, unknown>, uid: string) {
   let sentences: Sentence[];
   let hits: Card[];
   let laws: Law[];
+  const calcs: CalcOutput[] = [];
+  const calcErrors: string[] = [];
   let mode: "claude" | "dummy" = "dummy";
   const models: Record<string, string> = {};
 
@@ -118,10 +128,35 @@ export async function ask(data: Record<string, unknown>, uid: string) {
     const lawText = laws.length
       ? laws.map((l) => `[lawId=${l.id}] ${l.lawName}（${l.edition}） ${l.article}【${l.heading}】\n原文:\n${l.text}`).join("\n\n")
       : "（関係する条文はありません）";
+
+    // Calculations: the model only chooses the tool and its inputs; the numbers come from code.
+    if (routed.kind === "calc" || routed.kind === "law") {
+      const picked = await pickTools({
+        model: MODEL_ANSWER,
+        system: CALC_PICK_SYSTEM,
+        user: `質問: ${text}\n（こう受け取りました: ${interpretedAs}）`,
+        tools: calcTools(),
+      });
+      models.calc = MODEL_ANSWER;
+      for (const t of picked) {
+        try {
+          calcs.push(runCalc(t.name, t.input));
+        } catch (e) {
+          if (!(e instanceof CalcInputError)) throw e;
+          calcErrors.push(e.message);
+        }
+      }
+    }
+    const calcText = calcs.length
+      ? calcs.map((c) => `【${c.title}】結果: ${c.verdict}\n${c.steps.join("\n")}${c.notes.length ? `\n注意: ${c.notes.join(" ")}` : ""}`).join("\n\n")
+      : calcErrors.length
+        ? `（計算できませんでした: ${calcErrors.join(" / ")}。足りない条件を若手に聞き返す文を general で入れる）`
+        : "";
+
     const r = await jsonCall<{ sentences: Sentence[] }>({
       model: MODEL_ANSWER,
       system: ANSWER_SYSTEM,
-      user: `質問: ${text}\n（こう受け取りました: ${interpretedAs}）\n\n法令・基準:\n${lawText}\n\n社内の知恵カード:\n${cardText}`,
+      user: `質問: ${text}\n（こう受け取りました: ${interpretedAs}）\n\n${calcText ? `計算結果（プログラム）:\n${calcText}\n\n` : ""}法令・基準:\n${lawText}\n\n社内の知恵カード:\n${cardText}`,
       schema: {
         type: "object",
         properties: {
@@ -156,7 +191,7 @@ export async function ask(data: Record<string, unknown>, uid: string) {
 
   const usedCardIds = [...new Set(sentences.flatMap((s) => (s.source === "wisdom" && s.cardId ? [s.cardId] : [])))];
   const usedLawIds = [...new Set(sentences.flatMap((s) => (s.source === "law" && s.lawId ? [s.lawId] : [])))];
-  const grounded = usedCardIds.length > 0 || usedLawIds.length > 0;
+  const grounded = usedCardIds.length > 0 || usedLawIds.length > 0 || calcs.length > 0;
   const ref = await db.collection("answers").add({
     companyId: COMPANY,
     question: text,
@@ -193,6 +228,7 @@ export async function ask(data: Record<string, unknown>, uid: string) {
         triggerAskerName: c.triggerAskerName,
       };
     }),
+    calcs,
     laws: usedLawIds.map((id) => {
       const l = getLawById(id)!;
       return { id, lawName: l.lawName, short: l.short, edition: l.edition, article: l.article, heading: l.heading, sourceUrl: l.sourceUrl };

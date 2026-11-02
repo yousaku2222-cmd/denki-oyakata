@@ -3,6 +3,7 @@ import { call } from "../firebase";
 import { getName, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
+import { CalcCard, type CalcOutput } from "../CalcCard";
 
 interface Answer {
   answerId: string;
@@ -13,6 +14,7 @@ interface Answer {
   safetyNote: string | null;
   cards: { id: string; title: string; author: string; publishedAt: number | null; triggerAskerName: string | null }[];
   laws: LawRef[];
+  calcs?: CalcOutput[];
 }
 
 const EXAMPLES = ["資格が無くても出来る作業はありますか？", "PF管って何回まで曲げていい？", "圧着端子の2とか3.5って何の数字？"];
@@ -86,6 +88,7 @@ export function Ask({ role }: { role: Role }) {
             こう受け取りました：<strong>{answer.interpretedAs}</strong>
           </p>
           {answer.mode === "dummy" && <p className="hint">※ 試験用のダミー応答です（AIの接続前）</p>}
+          {answer.calcs?.map((c, i) => <CalcCard key={i} c={c} />)}
 
           {answer.sentences.map((s, i) => {
             const c = s.source === "wisdom" ? cardOf(s.cardId) : undefined;

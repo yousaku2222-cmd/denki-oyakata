@@ -6,6 +6,7 @@ import { Box } from "./screens/Box";
 import { MyCards } from "./screens/MyCards";
 import { Me } from "./screens/Me";
 import { Browse } from "./screens/Browse";
+import { Calc } from "./screens/Calc";
 
 type Tab = "ask" | "browse" | "calc" | "photo" | "me" | "talk" | "box" | "mycards";
 
@@ -73,7 +74,7 @@ export default function App() {
       <main>
         {tab === "ask" && (role === "veteran" ? <VeteranAsk role={role} /> : <Ask role={role} />)}
         {tab === "browse" && <Browse />}
-        {tab === "calc" && <Soon icon="🧮" title="計算・判定" text="占有率・電圧降下・絶縁抵抗の合否など。準備中です。" />}
+        {tab === "calc" && <Calc />}
         {tab === "photo" && <Soon icon="📷" title="撮って調べる" text="部材の写真から名前と使い方を調べます。準備中です。" />}
         {tab === "me" && <Me />}
         {tab === "talk" && <Talk key={talkKey} topic={topic} onDone={() => startTalk(null)} />}

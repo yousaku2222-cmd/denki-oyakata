@@ -7,6 +7,8 @@ import { interviewNext as interviewNextImpl, draftCard as draftCardImpl, publish
 import { ask as askImpl, markHelped as markHelpedImpl } from "./ask";
 import { sendToBox as sendToBoxImpl, markGoodQuestion as markGoodQuestionImpl } from "./box";
 import { listLaws as listLawsImpl, getLaw as getLawImpl } from "./laws";
+import { listCalcs as listCalcsImpl, runCalc } from "./calc";
+import { CalcInputError } from "./calc/types";
 
 setGlobalOptions({ region: "asia-northeast1", maxInstances: 5 });
 
@@ -40,3 +42,12 @@ export const sendToBox = callable(sendToBoxImpl);
 export const markGoodQuestion = callable(markGoodQuestionImpl);
 export const listLaws = callable(listLawsImpl);
 export const getLaw = callable(getLawImpl);
+export const listCalcs = callable(listCalcsImpl);
+export const calc = callable(async (data) => {
+  try {
+    return { result: runCalc(String(data.name ?? ""), (data.params ?? {}) as Record<string, unknown>) };
+  } catch (e) {
+    if (e instanceof CalcInputError) throw new HttpsError("invalid-argument", e.message);
+    throw e;
+  }
+});

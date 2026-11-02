@@ -18,6 +18,29 @@ export function getClient(): Anthropic | null {
   return client;
 }
 
+/** Lets the model pick tools and fill in their inputs. Returns the tool calls; the caller runs them. */
+export async function pickTools(opts: {
+  model: string;
+  system: string;
+  user: string;
+  tools: Anthropic.Tool[];
+  maxCalls?: number;
+}): Promise<{ name: string; input: Record<string, unknown> }[]> {
+  const c = getClient();
+  if (!c) throw new Error("no api key");
+  const res = await c.messages.create({
+    model: opts.model,
+    max_tokens: 4000,
+    system: opts.system,
+    messages: [{ role: "user", content: opts.user }],
+    tools: opts.tools,
+    tool_choice: { type: "auto" },
+  });
+  return res.content
+    .flatMap((b) => (b.type === "tool_use" ? [{ name: b.name, input: (b.input ?? {}) as Record<string, unknown> }] : []))
+    .slice(0, opts.maxCalls ?? 2);
+}
+
 /** One request whose reply must match `schema` (structured output). */
 export async function jsonCall<T>(opts: {
   model: string;

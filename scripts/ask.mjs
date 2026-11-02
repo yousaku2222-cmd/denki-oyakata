@@ -10,6 +10,11 @@ for (const text of process.argv.slice(2)) {
   if (j.error) { console.log(text, "→", j.error); continue; }
   const a = j.result;
   console.log(`\n■ ${text}  (${((Date.now() - t0) / 1000).toFixed(1)}秒, ${a.mode})\n  こう受け取りました: ${a.interpretedAs}`);
+  for (const c of a.calcs ?? []) {
+    console.log(`  🧮 ${c.title}: ${c.verdict}`);
+    for (const s of c.steps) console.log(`     ${s}`);
+    for (const b of c.basisShown) console.log(`     ⚖️「${b.quote}」${b.label} ✔`);
+  }
   for (const s of a.sentences) {
     const law = a.laws.find((l) => l.id === s.lawId);
     console.log(`  ${mark[s.source]} ${s.text}${s.verified ? "  ✔原文と一致" : ""}`);
