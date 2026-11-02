@@ -2,6 +2,7 @@ import { useState } from "react";
 import { call } from "../firebase";
 import { getName, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
+import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
 
 interface Answer {
   answerId: string;
@@ -11,6 +12,7 @@ interface Answer {
   mode: "claude" | "dummy";
   safetyNote: string | null;
   cards: { id: string; title: string; author: string; publishedAt: number | null; triggerAskerName: string | null }[];
+  laws: LawRef[];
 }
 
 const EXAMPLES = ["資格が無くても出来る作業はありますか？", "PF管って何回まで曲げていい？", "圧着端子の2とか3.5って何の数字？"];
@@ -23,6 +25,7 @@ export function Ask({ role }: { role: Role }) {
   const [asked, setAsked] = useState("");
   const [helped, setHelped] = useState(false);
   const [sent, setSent] = useState(false);
+  const [openLaw, setOpenLaw] = useState<{ id: string; quote?: string } | null>(null);
 
   async function submit(q = text) {
     if (!q.trim() || busy) return;
@@ -86,6 +89,7 @@ export function Ask({ role }: { role: Role }) {
 
           {answer.sentences.map((s, i) => {
             const c = s.source === "wisdom" ? cardOf(s.cardId) : undefined;
+            const law = s.source === "law" ? answer.laws.find((l) => l.id === s.lawId) : undefined;
             return (
               <div key={i} className={`sentence src-${s.source}`}>
                 <span className="src-tag">
@@ -98,12 +102,21 @@ export function Ask({ role }: { role: Role }) {
                     {c.triggerAskerName ? `（きっかけ: ${c.triggerAskerName}さんの質問）` : ""}
                   </p>
                 )}
+                {law && (
+                  <button className="law-cite" onClick={() => setOpenLaw({ id: law.id, quote: s.quote })}>
+                    <q>{s.quote}</q>
+                    <span className="src-meta">
+                      {lawTitle(law)}・{law.edition} ›
+                    </span>
+                  </button>
+                )}
                 {s.verified && <span className="stamp">✔ 原文と一致</span>}
               </div>
             );
           })}
 
           {answer.safetyNote && <Notice>⚠️ {answer.safetyNote}</Notice>}
+          {openLaw && <LawSheet id={openLaw.id} highlight={openLaw.quote} onClose={() => setOpenLaw(null)} />}
 
           {!answer.grounded && (
             <div className="no-ground">

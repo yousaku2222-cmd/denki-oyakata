@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER, MODEL_ROUTER } from "./models";
 import { searchCards } from "./search";
+import { Law, getLawById, quoteIsInOriginal, searchLaws } from "./laws";
 import { COMPANY, CardDoc, Sentence, db, displayAuthor, safetyNote, str } from "./common";
 
 type Card = CardDoc & { id: string };
@@ -21,36 +22,52 @@ interface Routed {
 const ROUTER_SYSTEM = `電気工事の現場の若手からの質問を受け取ります。話し言葉・方言・現場の呼び名（例「VE」「ねじなし」「サンダー」）のままです。
 - interpretedAs: 質問の意味を、標準的な言葉で1文に言い直す（「こう受け取りました」として本人に見せる）
 - kind: law=法令・基準・資格／calc=計算・判定／part=部材・工具の名前や用途／howto=やり方・コツ／other
-- searchTerms: 社内の知恵カードを探すための言い換え・正式名・別名・関係する作業名を3〜8個`;
+- searchTerms: 社内の知恵カードと法令を探すための言い換え・正式名・別名・関係する作業名・法令の用語を3〜8個`;
 
 const ANSWER_SYSTEM = `あなたは電気工事会社の「でんきの親方」アプリで、若手の質問に答えます。
 答えは一文ずつ、出どころ(source)を付けて返します。
+- law: 渡された「法令・基準」の条文に書かれていることだけ。必ず lawId と quote を付ける。quote は条文の原文から一続きでそのまま抜き出した部分（10〜80字。言い換え・省略・漢数字の書き換えをしない。「〜とする。」「〜こと。」など意味の切れ目で終える）。プログラムが原文と照合し、一致しなければ法令として表示されない。
 - wisdom: 渡された「社内の知恵カード」に書かれている内容だけ。必ず cardId を付ける。カードに無いことを wisdom にしない。
-- general: 一般的な知識。確かな範囲だけを短く。条文番号や数値を言い切らない（法令の引用は別の仕組みで行う）。
-- 知恵カードを最初に、一般知識は補足として。全体で2〜6文、1文60字以内、現場でスマホで読める言葉で。
-- 関係するカードが無く、一般知識でも確かに答えられない時は sentences を空にする。
+- general: 一般的な知識。確かな範囲だけを短く。条文番号や数値を言い切らない。
+- 質問に関係する知恵カードがあれば、必ず wisdom を1文以上入れる（親方の現場の知恵は、法令と同じくらい大事な答え）。カードに書かれている内容を言う文は、言い換えても必ず wisdom にする（general にしない）。
+- 順番は law → wisdom → general。全体で2〜7文、text は1文60字以内、現場でスマホで読める言葉で（quote は長さに数えない）。
+- 質問に関係しない条文・カードは使わない。関係するものが無く、一般知識でも確かに答えられない時は sentences を空にする。
 - 資格が要る作業・活線作業に触れる時は、無資格者ができない範囲をはっきり書く。
 - 文体は標準語の「です・ます」。親方の言い回しは wisdom の文の中でだけ残してよい。
 - 「カードに載っていない」など、仕組みの内側の話は書かない。`;
 
-function dummyAnswer(text: string, hits: Card[]): Sentence[] {
-  if (!hits.length) return [];
+function dummyAnswer(text: string, hits: Card[], laws: Law[]): Sentence[] {
+  const s: Sentence[] = laws
+    .slice(0, 1)
+    .map((l) => ({ text: l.summary.split("。")[0] + "。", source: "law", lawId: l.id, quote: l.text.split("\n")[0].slice(0, 40) }));
+  if (!hits.length) return s;
   const c = hits[0];
-  const s: Sentence[] = [{ text: `${c.title}。${c.body}`, source: "wisdom", cardId: c.id }];
+  s.push({ text: `${c.title}。${c.body}`, source: "wisdom", cardId: c.id });
   if (c.reason) s.push({ text: c.reason, source: "wisdom", cardId: c.id });
   if (c.caution) s.push({ text: `新人が間違えやすい点: ${c.caution}`, source: "wisdom", cardId: c.id });
   s.push({ text: `（ダミー応答）APIキーが入ると、「${text.slice(0, 20)}」への一般的な説明がここに入ります。`, source: "general" });
   return s;
 }
 
-/** Program-side check: a wisdom sentence must point at a card we actually gave the model. */
-export function enforceSources(sentences: Sentence[], allowedCardIds: Set<string>): Sentence[] {
+/**
+ * Program-side checks, so a wrong citation never shows as a source:
+ * - wisdom must point at a card we actually gave the model
+ * - law must point at an article we gave it, and its quote must appear word for word in that article
+ * Anything that fails is shown as general knowledge (要確認) instead.
+ */
+export function enforceSources(sentences: Sentence[], allowedCardIds: Set<string>, allowedLawIds: Set<string>): Sentence[] {
+  const general = (text: string): Sentence => ({ text, source: "general" });
   return sentences
     .filter((s) => s.text.trim())
     .map((s) => {
-      if (s.source === "wisdom" && (!s.cardId || !allowedCardIds.has(s.cardId))) return { text: s.text, source: "general" as const };
-      if (s.source === "law") return { text: s.text, source: "general" as const }; // law answers arrive in stage 2
-      return s.source === "general" ? { text: s.text, source: "general" as const } : s;
+      if (s.source === "wisdom") return s.cardId && allowedCardIds.has(s.cardId) ? { text: s.text, source: "wisdom", cardId: s.cardId } : general(s.text);
+      if (s.source === "law") {
+        const law = s.lawId && allowedLawIds.has(s.lawId) ? getLawById(s.lawId) : undefined;
+        if (!law || !s.quote || !quoteIsInOriginal(s.quote, law.text)) return general(s.text);
+        const quote = s.quote.replace(/^[「『]|[」』]$/g, "").replace(/｜/g, " ").trim(); // ｜ = table cell break
+        return { text: s.text, source: "law", lawId: law.id, quote, verified: true };
+      }
+      return general(s.text);
     });
 }
 
@@ -63,6 +80,7 @@ export async function ask(data: Record<string, unknown>, uid: string) {
   let interpretedAs = text;
   let sentences: Sentence[];
   let hits: Card[];
+  let laws: Law[];
   let mode: "claude" | "dummy" = "dummy";
   const models: Record<string, string> = {};
 
@@ -87,17 +105,23 @@ export async function ask(data: Record<string, unknown>, uid: string) {
     });
     models.router = MODEL_ROUTER;
     interpretedAs = routed.interpretedAs || text;
-    hits = searchCards(`${text} ${routed.searchTerms.join(" ")}`, cards, 5, 0.8).map((r) => r.card);
+    // The score is the share of query bigrams found, so keep the query short (no rephrased sentence).
+    const query = `${text} ${routed.searchTerms.join(" ")}`;
+    hits = searchCards(query, cards, 5, 0.8).map((r) => r.card);
+    laws = searchLaws(query, 4);
 
     const cardText = hits.length
       ? hits
           .map((c) => `[cardId=${c.id}] ${c.title}\n場面: ${c.scene}\nやり方: ${c.body}\n理由・失敗: ${c.reason}\n新人の間違い: ${c.caution}`)
           .join("\n\n")
       : "（関係する知恵カードはありません）";
+    const lawText = laws.length
+      ? laws.map((l) => `[lawId=${l.id}] ${l.lawName}（${l.edition}） ${l.article}【${l.heading}】\n原文:\n${l.text}`).join("\n\n")
+      : "（関係する条文はありません）";
     const r = await jsonCall<{ sentences: Sentence[] }>({
       model: MODEL_ANSWER,
       system: ANSWER_SYSTEM,
-      user: `質問: ${text}\n（こう受け取りました: ${interpretedAs}）\n\n社内の知恵カード:\n${cardText}`,
+      user: `質問: ${text}\n（こう受け取りました: ${interpretedAs}）\n\n法令・基準:\n${lawText}\n\n社内の知恵カード:\n${cardText}`,
       schema: {
         type: "object",
         properties: {
@@ -107,8 +131,10 @@ export async function ask(data: Record<string, unknown>, uid: string) {
               type: "object",
               properties: {
                 text: { type: "string" },
-                source: { type: "string", enum: ["wisdom", "general"] },
+                source: { type: "string", enum: ["law", "wisdom", "general"] },
                 cardId: { type: "string" },
+                lawId: { type: "string" },
+                quote: { type: "string" },
               },
               required: ["text", "source"],
               additionalProperties: false,
@@ -118,17 +144,19 @@ export async function ask(data: Record<string, unknown>, uid: string) {
         required: ["sentences"],
         additionalProperties: false,
       },
-      maxTokens: 4000,
+      maxTokens: 6000,
     });
     models.answer = MODEL_ANSWER;
-    sentences = enforceSources(r.sentences, new Set(hits.map((c) => c.id)));
+    sentences = enforceSources(r.sentences, new Set(hits.map((c) => c.id)), new Set(laws.map((l) => l.id)));
   } else {
     hits = searchCards(text, cards, 5).map((r) => r.card);
-    sentences = dummyAnswer(text, hits);
+    laws = searchLaws(text, 4);
+    sentences = enforceSources(dummyAnswer(text, hits, laws), new Set(hits.map((c) => c.id)), new Set(laws.map((l) => l.id)));
   }
 
   const usedCardIds = [...new Set(sentences.flatMap((s) => (s.source === "wisdom" && s.cardId ? [s.cardId] : [])))];
-  const grounded = usedCardIds.length > 0;
+  const usedLawIds = [...new Set(sentences.flatMap((s) => (s.source === "law" && s.lawId ? [s.lawId] : [])))];
+  const grounded = usedCardIds.length > 0 || usedLawIds.length > 0;
   const ref = await db.collection("answers").add({
     companyId: COMPANY,
     question: text,
@@ -136,7 +164,7 @@ export async function ask(data: Record<string, unknown>, uid: string) {
     sentences,
     grounded,
     usedCardIds,
-    usedLawIds: [],
+    usedLawIds,
     helped: false,
     askerId,
     askerRole,
@@ -164,6 +192,10 @@ export async function ask(data: Record<string, unknown>, uid: string) {
         publishedAt: c.publishedAt?.toMillis() ?? null,
         triggerAskerName: c.triggerAskerName,
       };
+    }),
+    laws: usedLawIds.map((id) => {
+      const l = getLawById(id)!;
+      return { id, lawName: l.lawName, short: l.short, edition: l.edition, article: l.article, heading: l.heading, sourceUrl: l.sourceUrl };
     }),
   };
 }

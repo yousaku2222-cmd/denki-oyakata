@@ -26,6 +26,7 @@ test("wisdom sentences pointing at unknown cards fall back to general", () => {
       { text: "c", source: "law" },
     ],
     new Set(["pf"]),
+    new Set(),
   );
   assert.deepEqual(out.map((s) => s.source), ["wisdom", "general", "general"]);
 });

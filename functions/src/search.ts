@@ -33,9 +33,7 @@ export function bigrams(s: string): Set<string> {
 }
 
 export function scoreCard(query: string, card: SearchableCard): number {
-  const q = bigrams(query);
-  if (q.size === 0) return 0;
-  const weighted: [string, number][] = [
+  return scoreFields(query, [
     [card.title, 3],
     [card.tags.join(" "), 3],
     [card.triggerQuestionText ?? "", 3],
@@ -43,9 +41,15 @@ export function scoreCard(query: string, card: SearchableCard): number {
     [card.body, 1],
     [card.reason, 1],
     [card.caution, 1],
-  ];
+  ]);
+}
+
+/** Share of the query's bigrams found in each field, weighted. */
+export function scoreFields(query: string, fields: [string, number][]): number {
+  const q = bigrams(query);
+  if (q.size === 0) return 0;
   let hit = 0;
-  for (const [text, w] of weighted) {
+  for (const [text, w] of fields) {
     const t = bigrams(text);
     let n = 0;
     for (const g of q) if (t.has(g)) n++;

@@ -6,6 +6,8 @@ export interface Sentence {
   text: string;
   source: Source;
   cardId?: string;
+  lawId?: string;
+  quote?: string;
   verified?: boolean;
 }
 export interface Card {

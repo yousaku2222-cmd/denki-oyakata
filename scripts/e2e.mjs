@@ -52,16 +52,16 @@ if (a.mode === "claude") for (const s of a.sentences) console.log(`     [${s.sou
 await call("markHelped", { answerId: a.answerId }, young);
 
 // 4. Unknown question goes to the box; veteran answers it; young sees it answered.
-const u = await call("ask", { text: "資格が無くても出来る作業はありますか？", askerRole: "young" }, young);
+const u = await call("ask", { text: "新しい現場の朝礼は何時からですか？", askerRole: "young" }, young);
 check("ungrounded question detected", !u.grounded);
-const { questionId } = await call("sendToBox", { text: "資格が無くても出来る作業はありますか？", askerName: "テスト若手", askerRole: "young" }, young);
-const t2 = [{ role: "veteran", text: "（テスト用の文）資格が無い間は、材料運びや養生、片付けを手伝ってもらう。" }];
+const { questionId } = await call("sendToBox", { text: "新しい現場の朝礼は何時からですか？", askerName: "テスト若手", askerRole: "young" }, young);
+const t2 = [{ role: "veteran", text: "（テスト用の文）新しい現場の朝礼は、だいたい8時から。前の日に職長に確認しておく。" }];
 const d2 = await call("draftCard", { transcript: t2, authorName: "溝上（親方）", triggerQuestionId: questionId }, vet);
-await call("publishCard", { cardId: d2.cardId, authorName: "溝上（親方）", showAuthorName: false, edits: { ...d2.draft, tags: ["無資格", "資格なし", "見習い"] } }, vet);
+await call("publishCard", { cardId: d2.cardId, authorName: "溝上（親方）", showAuthorName: false, edits: { ...d2.draft, tags: ["朝礼", "集合時間", "新規入場"] } }, vet);
 if (u.mode === "claude") for (const s of u.sentences) console.log(`     [${s.source}] ${s.text}`);
 const q = await (await fetch(`${FS}/questions/${questionId}`)).json();
 check("question marked answered", q.fields?.status?.stringValue === "answered");
-const a2 = await call("ask", { text: "資格が無くても出来る作業はありますか？", askerRole: "young" }, young);
+const a2 = await call("ask", { text: "新しい現場の朝礼は何時からですか？", askerRole: "young" }, young);
 check("same question now answered from the new card", a2.grounded && a2.cards.some((c) => c.id === d2.cardId && c.author === "社内のベテラン" && c.triggerAskerName === "テスト若手"));
 
 // 5. Veteran's own view.
