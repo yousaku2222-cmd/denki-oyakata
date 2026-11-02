@@ -1,0 +1,10 @@
+node_modules/
+lib/
+dist/
+.env*
+.secret.local
+*.log
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

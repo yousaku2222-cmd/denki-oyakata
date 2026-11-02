@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Clients only read. Every write goes through Cloud Functions (admin SDK).
+    match /cards/{id} {
+      allow read: if resource.data.status == 'published';
+    }
+    match /questions/{id} {
+      allow read: if true;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

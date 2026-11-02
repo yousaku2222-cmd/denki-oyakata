@@ -1,0 +1,20 @@
+# CLAUDE.md
+
+でんきの親方 — 電気工事のベテランの知恵を若手へ受け継ぐ Web アプリ（Built with Claude: Japan 2026）。仕様は SPEC.md、設計は docs/design.md。
+
+## 構成
+- `web/` Vite + React + TypeScript（スマホ画面、PWA）
+- `functions/` Firebase Functions (TypeScript)。Claude API はここからだけ呼ぶ。APIキーは Secret `ANTHROPIC_API_KEY`、未設定ならダミー応答で動く
+- Firestore。クライアントは読むだけ、書き込みはすべて Functions 経由（firestore.rules）
+
+## コマンド（Node は PATH に `/c/Program Files/nodejs`、firebase は `/c/Users/優作（積算用）/AppData/Roaming/npm` を足す）
+- `cd functions && npm run build` / `npm test`
+- `cd web && npm run build` / `npm run dev`
+- `firebase emulators:start --project demo-denki-oyakata`（ルートで。Functions は先に build）
+
+## 決まり
+- モデル名は `functions/src/models.ts` の役割ごとの定数だけで指定する（ROUTER=Haiku / ANSWER=Sonnet / HEAVY=Opus）
+- 計算・判定はプログラムで行い、AI に計算させない
+- 法令の引用は原文との照合を通ったものだけ「✔」を付ける
+- 画面の文言は日本語。コメント・コミットは英語可
+- 個人情報（お客様名・住所）や他社の資料本文をリポジトリに入れない
