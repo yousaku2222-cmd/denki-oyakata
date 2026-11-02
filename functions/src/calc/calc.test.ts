@@ -68,3 +68,17 @@ test("ampacity: IV 2.0mm in conduit with 3 wires = 35×1×0.7 = 24.5A", () => {
   basisOk(r);
   assert.match(ampacity.run({ conductor: "5.5sq", insulation: "vinyl", ambient: 40, inConduit: 0 }).verdict, /40A/); // 49×√(20/30)=40.0
 });
+
+import { conduitFill } from "./fill";
+test("conduit fill: VE22 with IV2.0 x3, and auto size", () => {
+  // IV2.0 外径3.6 → 10.18mm²×3 = 30.5mm²、VE22 内径22 → 380.1mm² → 8.0%
+  const r = conduitFill.run({ conduitType: "VE", conduitSize: 22, wire1: "IV-2.0", count1: 3 });
+  assert.equal(r.ok, true);
+  assert.match(r.verdict, /VE22: 8(\.0)?% ≦ 32%/);
+  assert.ok(r.steps.some((s) => /VE22に IV 2\.0mm は 11本まで/.test(s))); // 0.32×380.1/10.18 = 11.9
+  const auto = conduitFill.run({ conduitType: "VE", wire1: "CV3-38", count1: 1, wire2: "IV-14", count2: 1 });
+  assert.match(auto.verdict, /^VE54 以上/); // (490.9+45.4)/2042.8 = 26.3%
+  assert.equal(conduitFill.run({ conduitType: "PF", wire1: "CV3-38", count1: 1, wire2: "IV-14", count2: 1 }).ok, false);
+  assert.match(conduitFill.run({ conduitType: "VE", conduitSize: 22, wire1: "IV-2.0", maxCount: true }).verdict, /^11本まで/);
+  assert.throws(() => conduitFill.run({ conduitType: "PF", conduitSize: 99, wire1: "IV-2.0", count1: 1 }));
+});

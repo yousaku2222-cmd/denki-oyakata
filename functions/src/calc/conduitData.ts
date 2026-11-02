@@ -1,17 +1,46 @@
-// Representative dimensions for the conduit fill calculation. Sources are listed next to each table.
-// (Filled in from manufacturers' public catalogs based on JIS; see README.)
+// Representative dimensions for the conduit fill calculation (mm), from manufacturers' public documents based on JIS.
+// Where makers differ, the smaller inner diameter is used (the safe side). Values marked "D-2t" are outer diameter
+// minus twice the wall thickness, as the makers publish no inner diameter for steel conduit.
 
 export interface WireSpec {
   label: string;
-  d?: number; // finished outer diameter, mm (round wires)
-  long?: number; // flat cables (VVF): major x minor, mm
+  d?: number; // finished outer diameter (round)
+  long?: number; // flat cable (VVF): major x minor
   short?: number;
 }
 export interface ConduitSpec {
   label: string;
   short: string;
-  sizes: Record<string, number>; // nominal size -> inner diameter, mm
+  sizes: Record<string, number>; // nominal size -> inner diameter
 }
 
-export const WIRES: Record<string, WireSpec> = {};
-export const CONDUITS: Record<string, ConduitSpec> = {};
+// IV (JIS C 3307) / HIV: SWCC 産業用電線ケーブル vol.4 p.6 構造・性能表、SWCC SF-0010B、HS&T HST-SS10-0002（3資料で一致）
+const IV: [string, number][] = [["1.6", 3.2], ["2.0", 3.6], ["2.6", 4.6], ["5.5", 5.0], ["8", 6.0], ["14", 7.6], ["22", 9.2], ["38", 11.5], ["60", 14.0]];
+// VVF (JIS C 3342): HS&T 600V VVF、SWCC SF-0039（2資料で一致）
+const VVF: [string, number, number][] = [["1.6×2C", 9.4, 6.2], ["1.6×3C", 13.0, 6.2], ["2.0×2C", 10.5, 6.6], ["2.0×3C", 14.0, 6.6], ["2.6×2C", 12.5, 7.6]];
+// CV (JIS C 3605): 古河電工 電設資材ガイド2016〜2017 構造表
+const CV1: [string, number][] = [["5.5", 8.0], ["8", 8.6], ["14", 9.4], ["22", 11.0], ["38", 13.0], ["60", 15.5]];
+const CV3: [string, number][] = [["5.5", 14.5], ["8", 16.0], ["14", 17.5], ["22", 21], ["38", 25], ["60", 31]];
+const CVT: [string, number][] = [["8", 19.0], ["14", 21], ["22", 24], ["38", 28], ["60", 33]];
+
+const unit = (s: string) => (s.includes(".") && Number(s) < 3 ? `${s}mm` : `${s}sq`);
+export const WIRES: Record<string, WireSpec> = Object.fromEntries([
+  ...IV.map(([s, d]) => [`IV-${s}`, { label: `IV ${unit(s)}`, d }]),
+  ...VVF.map(([s, l, sh]) => [`VVF-${s}`, { label: `VVF ${s}`, long: l, short: sh }]),
+  ...CV1.map(([s, d]) => [`CV1-${s}`, { label: `CV ${s}sq 単心`, d }]),
+  ...CV3.map(([s, d]) => [`CV3-${s}`, { label: `CV ${s}sq 3心`, d }]),
+  ...CVT.map(([s, d]) => [`CVT-${s}`, { label: `CVT ${s}sq`, d }]),
+]);
+
+export const CONDUITS: Record<string, ConduitSpec> = {
+  // 積水化学 承認図 E-VE01 の D-2t（14.4…）と未来工業の近似内径（14…）のうち小さい方
+  VE: { label: "硬質ビニル電線管（VE）", short: "VE", sizes: { 14: 14, 16: 18, 22: 22, 28: 28, 36: 35, 42: 40, 54: 51 } },
+  // パナソニック パナフレキエース・未来工業 ミラフレキSS（一致）
+  PF: { label: "合成樹脂製可とう電線管（PF管）", short: "PF", sizes: { 14: 14, 16: 16, 22: 22, 28: 28, 36: 36 } },
+  // パナソニック CD管（16以上は未来工業と一致）
+  CD: { label: "CD管", short: "CD", sizes: { 14: 14, 16: 16, 22: 22, 28: 28, 36: 36 } },
+  // パナソニック 製品ページの外径・厚さから D-2t
+  E: { label: "ねじなし電線管（E）", short: "E", sizes: { 19: 16.7, 25: 23.0, 31: 29.0, 39: 35.3, 51: 48.0 } },
+  C: { label: "薄鋼電線管（C）", short: "C", sizes: { 19: 15.9, 25: 22.2, 31: 28.6, 39: 34.9, 51: 47.6 } },
+  G: { label: "厚鋼電線管（G）", short: "G", sizes: { 16: 16.4, 22: 21.9, 28: 28.3, 36: 36.9, 42: 42.8, 54: 54.0 } },
+};

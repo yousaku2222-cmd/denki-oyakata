@@ -39,6 +39,8 @@ const ANSWER_SYSTEM = `あなたは電気工事会社の「でんきの親方」
 - 文体は標準語の「です・ます」。親方の言い回しは wisdom の文の中でだけ残してよい。
 - 「カードに載っていない」など、仕組みの内側の話は書かない。`;
 
+const STRONG_MATCH = 1.0; // card search score above which a card is surely about the question
+
 const CALC_PICK_SYSTEM = `電気工事の若手の質問に、計算・判定の道具が使えるかを判断します。
 - 道具で答えられる部分があれば、その道具を呼び、質問から読み取れる値を入れる。読み取れない値は入れない（既定値が使われる）。
 - 「何本入る？」のように候補を比べる質問は、同じ道具を条件を変えて2回まで呼んでよい。
@@ -89,6 +91,7 @@ export async function ask(data: Record<string, unknown>, uid: string) {
   let sentences: Sentence[];
   let hits: Card[];
   let laws: Law[];
+  let strongCard: Card | undefined;
   const calcs: CalcOutput[] = [];
   const calcErrors: string[] = [];
   let mode: "claude" | "dummy" = "dummy";
@@ -117,7 +120,14 @@ export async function ask(data: Record<string, unknown>, uid: string) {
     interpretedAs = routed.interpretedAs || text;
     // The score is the share of query bigrams found, so keep the query short (no rephrased sentence).
     const query = `${text} ${routed.searchTerms.join(" ")}`;
-    hits = searchCards(query, cards, 5, 0.8).map((r) => r.card);
+    // Extra search words can dilute the score (it is a share of the query), so also search with the question alone.
+    const best = new Map<string, { card: Card; score: number }>();
+    for (const r of [...searchCards(query, cards, 5, 0.8), ...searchCards(text, cards, 5, 0.8)]) {
+      if ((best.get(r.card.id)?.score ?? -1) < r.score) best.set(r.card.id, r);
+    }
+    const scored = [...best.values()].sort((a, b) => b.score - a.score).slice(0, 5);
+    hits = scored.map((r) => r.card);
+    strongCard = scored.find((r) => r.score >= STRONG_MATCH)?.card;
     laws = searchLaws(query, 4);
 
     const cardText = hits.length
@@ -183,6 +193,11 @@ export async function ask(data: Record<string, unknown>, uid: string) {
     });
     models.answer = MODEL_ANSWER;
     sentences = enforceSources(r.sentences, new Set(hits.map((c) => c.id)), new Set(laws.map((l) => l.id)));
+    // The veteran's knowledge is the point of the app: if a card clearly matches but the model left it out, show it.
+    if (strongCard && !sentences.some((s) => s.source === "wisdom")) {
+      const at = sentences.findIndex((s) => s.source === "general");
+      sentences.splice(at < 0 ? sentences.length : at, 0, { text: `${strongCard.title}。`, source: "wisdom", cardId: strongCard.id });
+    }
   } else {
     hits = searchCards(text, cards, 5).map((r) => r.card);
     laws = searchLaws(text, 4);
