@@ -1,1 +1,1 @@
-{ "projects": { "default": "demo-denki-oyakata" } }
+{ "projects": { "default": "demo-denki-oyakata", "prod": "denki-oyakata" } }
