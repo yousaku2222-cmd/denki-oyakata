@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { COMPANY, call, db } from "../firebase";
-import { deviceId } from "../local";
+import { COMPANY, call, db, myId } from "../firebase";
 import { fmtDate } from "../components";
 import type { Topic } from "./Talk";
 
@@ -17,7 +16,7 @@ interface Q {
 
 export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
   const [items, setItems] = useState<Q[] | null>(null);
-  const me = deviceId();
+  const me = myId();
 
   useEffect(
     () =>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { call } from "../firebase";
-import { deviceId, getName, setName } from "../local";
+import { getName, setName } from "../local";
 import { MicInput, Notice } from "../components";
 
 type Turn = { role: "veteran" | "ai"; text: string };
@@ -51,7 +51,6 @@ export function Talk({ topic, onDone }: { topic: Topic | null; onDone: () => voi
       } else {
         const d = await call<{ cardId: string; draft: Draft }>("draftCard", {
           transcript: t,
-          authorId: deviceId(),
           authorName: name,
           triggerQuestionId: topic?.questionId,
         });
@@ -74,7 +73,6 @@ export function Talk({ topic, onDone }: { topic: Topic | null; onDone: () => voi
       setName("veteran", name);
       await call("publishCard", {
         cardId,
-        authorId: deviceId(),
         authorName: name,
         showAuthorName: showName,
         edits: { ...draft, tags: tagsText.split(/[、,\s]+/).filter(Boolean) },

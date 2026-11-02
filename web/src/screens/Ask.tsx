@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { call } from "../firebase";
-import { deviceId, getName, type Role } from "../local";
+import { getName, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
 
 interface Answer {
@@ -32,7 +32,7 @@ export function Ask({ role }: { role: Role }) {
     setHelped(false);
     setSent(false);
     try {
-      const a = await call<Answer>("ask", { text: q.trim(), askerId: deviceId(), askerRole: role });
+      const a = await call<Answer>("ask", { text: q.trim(), askerRole: role });
       setAnswer(a);
       setAsked(q.trim());
       setText("");
@@ -46,12 +46,12 @@ export function Ask({ role }: { role: Role }) {
   async function helpedClick() {
     if (!answer) return;
     setHelped(true);
-    await call("markHelped", { answerId: answer.answerId, askerId: deviceId() }).catch(() => setHelped(false));
+    await call("markHelped", { answerId: answer.answerId }).catch(() => setHelped(false));
   }
 
   async function sendToBox() {
     setSent(true);
-    await call("sendToBox", { text: asked, askerId: deviceId(), askerName: getName(role), askerRole: role }).catch(() => setSent(false));
+    await call("sendToBox", { text: asked, askerName: getName(role), askerRole: role }).catch(() => setSent(false));
   }
 
   const cardOf = (id?: string) => answer?.cards.find((c) => c.id === id);

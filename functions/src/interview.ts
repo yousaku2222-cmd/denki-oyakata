@@ -2,7 +2,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER } from "./models";
-import { CATEGORIES, COMPANY, CardDoc, LOCATIONS, Turn, db, deviceId, str, strList, turns } from "./common";
+import { CATEGORIES, COMPANY, CardDoc, LOCATIONS, Turn, db, str, strList, turns } from "./common";
 
 const MAX_FOLLOW_UPS = 3;
 const DUMMY_FOLLOW_UPS = ["なぜそうするんですか？", "新人がよく間違えるのは、どんなところですか？"];
@@ -78,10 +78,10 @@ function dummyDraft(t: Turn[]): Draft {
   };
 }
 
-export async function draftCard(data: Record<string, unknown>) {
+export async function draftCard(data: Record<string, unknown>, uid: string) {
   const transcript = turns(data.transcript);
   if (!transcript.some((t) => t.role === "veteran")) throw new HttpsError("invalid-argument", "nothing was said");
-  const authorId = deviceId(data.authorId);
+  const authorId = uid;
   const authorName = str(data.authorName, "authorName", 30, false);
   const triggerQuestionId = str(data.triggerQuestionId, "triggerQuestionId", 64, false) || null;
 
@@ -158,9 +158,9 @@ async function ownCard(cardId: string, authorId: string) {
   return { ref, card: snap.data() as CardDoc };
 }
 
-export async function publishCard(data: Record<string, unknown>) {
+export async function publishCard(data: Record<string, unknown>, uid: string) {
   const cardId = str(data.cardId, "cardId", 64);
-  const authorId = deviceId(data.authorId);
+  const authorId = uid;
   const e = (data.edits ?? {}) as Record<string, unknown>;
   const { ref, card } = await ownCard(cardId, authorId);
   const authorName = str(data.authorName, "authorName", 30, false) || card.authorName;
@@ -193,9 +193,9 @@ export async function publishCard(data: Record<string, unknown>) {
   return { ok: true };
 }
 
-export async function setCardStatus(data: Record<string, unknown>) {
+export async function setCardStatus(data: Record<string, unknown>, uid: string) {
   const cardId = str(data.cardId, "cardId", 64);
-  const authorId = deviceId(data.authorId);
+  const authorId = uid;
   const status = data.status;
   if (status !== "published" && status !== "private") throw new HttpsError("invalid-argument", "status is invalid");
   const { ref, card } = await ownCard(cardId, authorId);
@@ -204,8 +204,8 @@ export async function setCardStatus(data: Record<string, unknown>) {
   return { ok: true };
 }
 
-export async function myCards(data: Record<string, unknown>) {
-  const authorId = deviceId(data.authorId);
+export async function myCards(data: Record<string, unknown>, uid: string) {
+  const authorId = uid;
   const snap = await db.collection("cards").where("companyId", "==", COMPANY).where("authorId", "==", authorId).get();
   return {
     cards: snap.docs

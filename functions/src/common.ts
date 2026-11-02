@@ -80,12 +80,6 @@ export function turns(v: unknown): Turn[] {
   });
 }
 
-export function deviceId(v: unknown): string {
-  const s = str(v, "deviceId", 64);
-  if (!/^[A-Za-z0-9_-]{8,64}$/.test(s)) throw new HttpsError("invalid-argument", "deviceId is invalid");
-  return s;
-}
-
 export function displayAuthor(c: Pick<CardDoc, "showAuthorName" | "authorName">): string {
   return c.showAuthorName && c.authorName ? c.authorName : "社内のベテラン";
 }

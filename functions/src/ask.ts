@@ -3,7 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER, MODEL_ROUTER } from "./models";
 import { searchCards } from "./search";
-import { COMPANY, CardDoc, Sentence, db, deviceId, displayAuthor, safetyNote, str } from "./common";
+import { COMPANY, CardDoc, Sentence, db, displayAuthor, safetyNote, str } from "./common";
 
 type Card = CardDoc & { id: string };
 
@@ -54,9 +54,9 @@ export function enforceSources(sentences: Sentence[], allowedCardIds: Set<string
     });
 }
 
-export async function ask(data: Record<string, unknown>) {
+export async function ask(data: Record<string, unknown>, uid: string) {
   const text = str(data.text, "text", 500);
-  const askerId = deviceId(data.askerId);
+  const askerId = uid;
   const askerRole = data.askerRole === "veteran" ? "veteran" : "young";
   const cards = await publishedCards();
 
@@ -168,9 +168,9 @@ export async function ask(data: Record<string, unknown>) {
   };
 }
 
-export async function markHelped(data: Record<string, unknown>) {
+export async function markHelped(data: Record<string, unknown>, uid: string) {
   const answerId = str(data.answerId, "answerId", 64);
-  const askerId = deviceId(data.askerId);
+  const askerId = uid;
   const ref = db.collection("answers").doc(answerId);
   await db.runTransaction(async (tx) => {
     const a = await tx.get(ref);

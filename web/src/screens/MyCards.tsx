@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { call } from "../firebase";
-import { deviceId } from "../local";
 import { fmtDate } from "../components";
 
 interface Mine {
@@ -17,7 +16,7 @@ const STATUS = { draft: "下書き", published: "公開中", private: "非公開
 export function MyCards() {
   const [cards, setCards] = useState<Mine[] | null>(null);
   const load = useCallback(() => {
-    call<{ cards: Mine[] }>("myCards", { authorId: deviceId() })
+    call<{ cards: Mine[] }>("myCards", {})
       .then((r) => setCards(r.cards))
       .catch(() => setCards([]));
   }, []);
@@ -26,7 +25,7 @@ export function MyCards() {
   const total = cards?.reduce((n, c) => n + (c.status === "published" ? c.helpedCount : 0), 0) ?? 0;
 
   async function toggle(c: Mine) {
-    await call("setCardStatus", { cardId: c.id, authorId: deviceId(), status: c.status === "published" ? "private" : "published" });
+    await call("setCardStatus", { cardId: c.id, status: c.status === "published" ? "private" : "published" });
     load();
   }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
-import { COMPANY, db } from "../firebase";
-import { deviceId, getName, setName } from "../local";
+import { COMPANY, db, myId } from "../firebase";
+import { getName, setName } from "../local";
 import { fmtDate } from "../components";
 
 interface Q {
@@ -20,7 +20,7 @@ export function Me() {
   useEffect(
     () =>
       onSnapshot(
-        query(collection(db, "questions"), where("companyId", "==", COMPANY), where("askerId", "==", deviceId())),
+        query(collection(db, "questions"), where("companyId", "==", COMPANY), where("askerId", "==", myId())),
         (snap) =>
           setItems(
             snap.docs

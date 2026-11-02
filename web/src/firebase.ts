@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { connectAuthEmulator, getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 
@@ -13,14 +14,29 @@ const app = initializeApp({
 });
 
 export const db = getFirestore(app);
+const auth = getAuth(app);
 const functions = getFunctions(app, "asia-northeast1");
 
 const useEmulator = !env.VITE_FIREBASE_PROJECT_ID || env.VITE_USE_EMULATOR === "1";
 if (useEmulator) {
   const host = location.hostname;
+  connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
   connectFirestoreEmulator(db, host, 8080);
   connectFunctionsEmulator(functions, host, 5001);
 }
+
+// No login screen: each device signs in anonymously, and the server trusts only this verified id.
+export const signedIn: Promise<string> = new Promise((resolve, reject) => {
+  const stop = onAuthStateChanged(auth, (user) => {
+    if (user) {
+      stop();
+      resolve(user.uid);
+    }
+  });
+  signInAnonymously(auth).catch(reject);
+});
+
+export const myId = () => auth.currentUser?.uid ?? "";
 
 export async function call<T>(name: string, data: unknown): Promise<T> {
   const fn = httpsCallable(functions, name);

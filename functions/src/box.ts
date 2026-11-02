@@ -1,10 +1,10 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { COMPANY, db, deviceId, str } from "./common";
+import { COMPANY, db, str } from "./common";
 
-export async function sendToBox(data: Record<string, unknown>) {
+export async function sendToBox(data: Record<string, unknown>, uid: string) {
   const text = str(data.text, "text", 500);
-  const askerId = deviceId(data.askerId);
+  const askerId = uid;
   const askerName = str(data.askerName, "askerName", 30, false) || "若手";
   const askerRole = data.askerRole === "veteran" ? "veteran" : "young";
   const ref = await db.collection("questions").add({
@@ -25,9 +25,9 @@ export async function sendToBox(data: Record<string, unknown>) {
   return { questionId: ref.id };
 }
 
-export async function markGoodQuestion(data: Record<string, unknown>) {
+export async function markGoodQuestion(data: Record<string, unknown>, uid: string) {
   const questionId = str(data.questionId, "questionId", 64);
-  const veteranId = deviceId(data.veteranId);
+  const veteranId = uid;
   const ref = db.collection("questions").doc(questionId);
   const q = await ref.get();
   if (!q.exists) throw new HttpsError("not-found", "question not found");

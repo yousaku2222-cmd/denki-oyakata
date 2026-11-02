@@ -4,7 +4,7 @@
 
 ## 構成
 - `web/` Vite + React + TypeScript（スマホ画面、PWA）
-- `functions/` Firebase Functions (TypeScript)。Claude API はここからだけ呼ぶ。APIキーは Secret `ANTHROPIC_API_KEY`、未設定ならダミー応答で動く
+- `functions/` Firebase Functions (TypeScript)。Claude API はここからだけ呼ぶ。APIキーは Secret `ANTHROPIC_API_KEY`、未設定ならダミー応答で動く。呼び出しは匿名ログイン必須、uid はトークンからだけ取る。Claude の呼び出しは1日の上限あり（`limits.ts`）
 - Firestore。クライアントは読むだけ、書き込みはすべて Functions 経由（firestore.rules）
 
 ## コマンド（Node は PATH に `/c/Program Files/nodejs`、firebase は `/c/Users/優作（積算用）/AppData/Roaming/npm` を足す）

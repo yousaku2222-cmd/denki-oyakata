@@ -17,17 +17,6 @@ function set(key: string, value: string | null) {
   }
 }
 
-let memoryId: string | null = null;
-export function deviceId(): string {
-  let id = get("oyakata.deviceId") ?? memoryId;
-  if (!id) {
-    id = crypto.randomUUID().replace(/-/g, "");
-    memoryId = id;
-    set("oyakata.deviceId", id);
-  }
-  return id;
-}
-
 export const getRole = () => get("oyakata.role") as Role | null;
 export const setRole = (r: Role | null) => set("oyakata.role", r);
 export const getName = (r: Role) => get(`oyakata.name.${r}`) ?? "";
