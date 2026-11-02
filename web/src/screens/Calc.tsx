@@ -10,6 +10,9 @@ interface Field {
   options?: { value: string; label: string }[];
   default?: number | string | boolean;
   help?: string;
+  optionsBy?: { key: string; map: Record<string, { value: string; label: string }[]> };
+  emptyLabel?: string;
+  showIf?: { key: string; values: string[] };
 }
 interface CalcDef {
   name: string;
@@ -52,13 +55,23 @@ function CalcForm({ def, onBack }: { def: CalcDef; onBack: () => void }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // changing a field clears the fields whose options depend on it
+  function change(key: string, v: string | boolean) {
+    const next = { ...values, [key]: v };
+    for (const f of def.fields) if (f.optionsBy?.key === key) next[f.key] = "";
+    setValues(next);
+  }
+
   async function run() {
     setBusy(true);
     setErr("");
     setResult(null);
     const params = Object.fromEntries(
       Object.entries(values)
-        .filter(([, v]) => v !== "")
+        .filter(([k, v]) => {
+          const f = def.fields.find((x) => x.key === k);
+          return v !== "" && (!f?.showIf || f.showIf.values.includes(String(values[f.showIf.key])));
+        })
         .map(([k, v]) => [k, def.fields.find((f) => f.key === k)?.type === "number" ? Number(v) : v]),
     );
     try {
@@ -76,7 +89,7 @@ function CalcForm({ def, onBack }: { def: CalcDef; onBack: () => void }) {
         ← 一覧へ
       </button>
       <h1 className="screen-title">🧮 {def.label}</h1>
-      {def.fields.map((f) => (
+      {def.fields.filter((f) => !f.showIf || f.showIf.values.includes(String(values[f.showIf.key]))).map((f) => (
         <label key={f.key} className={f.type === "boolean" ? "toggle" : "field"}>
           {f.type === "boolean" ? (
             <>
@@ -90,9 +103,9 @@ function CalcForm({ def, onBack }: { def: CalcDef; onBack: () => void }) {
                 {f.unit ? `（${f.unit}）` : ""}
               </span>
               {f.type === "select" ? (
-                <select value={String(values[f.key] ?? "")} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}>
-                  {f.default === undefined && <option value="">（なし）</option>}
-                  {f.options!.map((o) => (
+                <select value={String(values[f.key] ?? "")} onChange={(e) => change(f.key, e.target.value)}>
+                  {f.default === undefined && <option value="">{f.emptyLabel ?? "（なし）"}</option>}
+                  {(f.optionsBy?.map[String(values[f.optionsBy.key])] ?? f.options!).map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>

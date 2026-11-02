@@ -1,14 +1,15 @@
 import { logger } from "firebase-functions";
 import { getLawById, lawLabel, quoteIsInOriginal } from "../laws";
-import { ampacity, voltageDrop } from "./electrical";
+import { ampacity, loadToWire, voltageDrop } from "./electrical";
 import { engineer, grounding, insulation, license, rack, support } from "./checks";
 import { conduitFill } from "./fill";
+import { cableRack } from "./rack";
 import { Calc, CalcInputError, CalcResult } from "./types";
 
 import { CONDUITS } from "./conduitData";
 
 // conduit_fill appears once its dimension table is filled in.
-export const CALCS: Calc[] = [...(Object.keys(CONDUITS).length ? [conduitFill] : []), voltageDrop, ampacity, insulation, grounding, support, rack, license, engineer];
+export const CALCS: Calc[] = [...(Object.keys(CONDUITS).length ? [conduitFill] : []), voltageDrop, loadToWire, ampacity, cableRack, insulation, grounding, support, rack, license, engineer];
 const byName = new Map(CALCS.map((c) => [c.name, c]));
 
 export type CalcOutput = CalcResult & {
@@ -42,7 +43,9 @@ export function calcTools() {
       properties: Object.fromEntries(
         c.fields.map((f) => [
           f.key,
-          f.type === "select"
+          f.optionsBy
+            ? { type: "number", description: `${f.label}（${Object.entries(f.optionsBy.map).map(([k, o]) => `${k}: ${o.map((x) => x.value).join("・")}`).join(" / ")}）` }
+            : f.type === "select"
             ? { type: "string", enum: f.options!.map((o) => o.value), description: `${f.label}（${f.options!.map((o) => `${o.value}=${o.label}`).join(" / ")}）` }
             : f.type === "boolean"
               ? { type: "boolean", description: f.label }

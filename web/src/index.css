@@ -776,6 +776,9 @@ input[type="text"] {
   font-size: 0.8rem;
   color: var(--muted);
 }
+.fill-fig.rack {
+  width: 100%;
+}
 select {
   width: 100%;
   min-height: 48px;

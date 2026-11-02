@@ -1,4 +1,4 @@
-import { Calc, Field, fmt, flag, num, pick } from "./types";
+import { Calc, CalcInputError, CalcResult, Field, flag, fmt, num, pick } from "./types";
 
 // ---------- 絶縁抵抗（電技省令 第58条） ----------
 const ins = {
@@ -43,20 +43,32 @@ export const insulation: Calc = {
 const gnd = {
   type: { key: "type", label: "接地工事の種類", type: "select", default: "D", options: [
     { value: "A", label: "A種" },
+    { value: "B", label: "B種（変圧器の低圧側の中性点など）" },
     { value: "C", label: "C種（300V超の低圧の機器）" },
     { value: "D", label: "D種（300V以下の低圧の機器）" },
   ] },
-  fastBreaker: { key: "fastBreaker", label: "地絡時に0.5秒以内に自動遮断する装置（漏電遮断器など）がある", type: "boolean", default: false, help: "C種・D種だけに関係します" },
-  measured: { key: "measured", label: "測定値", type: "number", unit: "Ω", min: 0 },
+  fastBreaker: { key: "fastBreaker", label: "地絡時に0.5秒以内に自動遮断する装置（漏電遮断器など）がある", type: "boolean", default: false, showIf: { key: "type", values: ["C", "D"] } },
+  // B種: 17-1表の値 = 150/300/600 ÷ Ig。Ig は実測（電力会社に聞いた値）か 17-2表の式
+  cutoff: { key: "cutoff", label: "混触時に高圧側を自動で遮断する時間", type: "select", default: "none", showIf: { key: "type", values: ["B"] }, options: [
+    { value: "none", label: "遮断装置なし（または2秒を超える）" },
+    { value: "1to2", label: "1秒を超え2秒以下" },
+    { value: "le1", label: "1秒以下" },
+  ] },
+  ig: { key: "ig", label: "1線地絡電流 Ig（電力会社に聞いた値。空欄なら下の式で計算）", type: "number", unit: "A", min: 0.1, max: 1000, showIf: { key: "type", values: ["B"] } },
+  kv: { key: "kv", label: "高圧電路の公称電圧", type: "number", unit: "kV", default: 6.6, min: 1, max: 35, showIf: { key: "type", values: ["B"] } },
+  overhead: { key: "overhead", label: "同じ母線の架空電線（ケーブル以外）の電線延長", type: "number", unit: "km", default: 0, min: 0, max: 10000, help: "線路の長さ×電線の本数（3線なら3倍）", showIf: { key: "type", values: ["B"] } },
+  cableLen: { key: "cableLen", label: "同じ母線のケーブルの線路延長", type: "number", unit: "km", default: 0, min: 0, max: 10000, showIf: { key: "type", values: ["B"] } },
+  measured: { key: "measured", label: "測定値（B種は空欄なら基準値だけ）", type: "number", unit: "Ω", min: 0 },
 } satisfies Record<string, Field>;
 
 export const grounding: Calc = {
   name: "grounding_check",
   label: "接地抵抗の合否",
-  description: "A種・C種・D種接地工事の接地抵抗の測定値（Ω）が電技解釈第17条の値以下かを判定する。B種は変圧器ごとの計算が要るので扱わない。",
+  description: "A種・B種・C種・D種接地工事の接地抵抗の測定値（Ω）が電技解釈第17条の値以下かを判定する。B種は 17-1表（150/300/600 ÷ 1線地絡電流Ig）で基準値を出す。Igは実測値か、17-2表の式（公称電圧・架空電線延長・ケーブル線路延長）で計算する。",
   fields: Object.values(gnd),
   run(p) {
-    const t = pick<"A" | "C" | "D">(p, gnd.type);
+    const t = pick<"A" | "B" | "C" | "D">(p, gnd.type);
+    if (t === "B") return groundingB(p);
     const fast = flag(p, gnd.fastBreaker);
     const m = num(p, gnd.measured);
     const lim = t === "A" ? 10 : fast ? 500 : t === "C" ? 10 : 100;
@@ -77,6 +89,56 @@ export const grounding: Calc = {
     };
   },
 };
+
+const has = (p: Record<string, unknown>, k: string) => p[k] !== undefined && p[k] !== null && p[k] !== "";
+
+function groundingB(p: Record<string, unknown>): CalcResult {
+  const cut = pick<"none" | "1to2" | "le1">(p, gnd.cutoff);
+  const numer = { none: 150, "1to2": 300, le1: 600 }[cut];
+  const steps: string[] = [];
+  let ig: number;
+  if (has(p, "ig")) {
+    ig = num(p, gnd.ig);
+    steps.push(`1線地絡電流 Ig = ${fmt(ig)}A（入力値）`);
+  } else {
+    // 17-2表 中性点非接地式電路: I1 = 1 + (V'/3·L − 100)/150 + (V'/3·L' − 1)/2、第2項・第3項は負なら0
+    const v = num(p, gnd.kv) / 1.1;
+    const L = num(p, gnd.overhead);
+    const Lc = num(p, gnd.cableLen);
+    if (L === 0 && Lc === 0) throw new CalcInputError("Ig を入れるか、架空電線延長・ケーブル線路延長を入れてください");
+    const t2 = Math.max(0, ((v / 3) * L - 100) / 150);
+    const t3 = Math.max(0, ((v / 3) * Lc - 1) / 2);
+    const raw = 1 + t2 + t3;
+    ig = Math.max(2, Math.ceil(raw));
+    steps.push(
+      `V' = ${fmt(num(p, gnd.kv), 1)}kV ÷ 1.1 = ${fmt(v, 3)}kV`,
+      `I1 = 1 ＋ (${fmt(v, 3)}/3 × ${fmt(L)} − 100) ÷ 150 ＋ (${fmt(v, 3)}/3 × ${fmt(Lc)} − 1) ÷ 2`,
+      `　= 1 ＋ ${fmt(t2, 3)} ＋ ${fmt(t3, 3)} = ${fmt(raw, 3)}（負の項は0）`,
+      `小数点以下を切り上げ（2A未満は2A）→ Ig = ${ig}A`,
+    );
+  }
+  const lim = numer / ig;
+  steps.push(`基準値 = ${numer} ÷ ${fmt(ig)} = ${fmt(lim, 1)}Ω`);
+  const hasM = has(p, "measured");
+  const m = hasM ? num(p, gnd.measured) : null;
+  const ok = m === null ? null : m <= lim;
+  if (m !== null) steps.push(`測定値: ${fmt(m)}Ω`);
+  return {
+    title: "B種接地工事の接地抵抗",
+    ok,
+    verdict: m === null ? `基準値 ${fmt(lim, 1)}Ω以下（${numer}／Ig、Ig = ${fmt(ig)}A）` : `${ok ? "合格" : "不合格"}（測定 ${fmt(m)}Ω ${ok ? "≦" : "＞"} 基準 ${fmt(lim, 1)}Ω）`,
+    steps,
+    basis: [
+      { lawId: "kaishaku-17", quote: "2 B種接地工事は、次の各号によること。" },
+      { lawId: "kaishaku-17", quote: "一 接地抵抗値は、17-1表に規定する値以下であること。" },
+      ...(has(p, "ig") ? [] : [{ lawId: "kaishaku-17", quote: "計算結果は、小数点以下を切り上げ、2A未満となる場合は2Aとする。" }]),
+    ],
+    notes: [
+      "1線地絡電流は、受電する電力会社に問い合わせた値を使うのが確実です。式は中性点非接地式の高圧電路の場合です。",
+      "B種の基準値が5Ω未満になるなど施工が難しい場合の扱い（混触防止板など）は、条文の全文を確認してください。",
+    ],
+  };
+}
 
 // ---------- 配管・ケーブルの支持間隔（標準仕様書 / 電技解釈） ----------
 const SUPPORT = {

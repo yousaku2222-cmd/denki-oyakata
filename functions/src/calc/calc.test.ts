@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ampacity, voltageDrop } from "./electrical";
+import { ampacity, loadToWire, voltageDrop } from "./electrical";
 import { engineer, grounding, insulation, license, rack, support } from "./checks";
 import { getLawById, quoteIsInOriginal } from "../laws";
 import { CalcResult } from "./types";
@@ -55,18 +55,39 @@ test("engineer: 5,000万 subcontract makes a 監理技術者; 4,500万 public ma
   basisOk(engineer.run({ prime: true, subTotal: 0, contract: 1 }));
 });
 
-test("voltage drop: single-phase 2-wire, 2.0mm, 30m, 15A", () => {
-  const r = voltageDrop.run({ system: "single2", length: 30, current: 15, conductor: "2.0" });
-  // 35.6×30×15 / (1000×3.1416) = 5.10V
-  assert.match(r.verdict, /^5\.1V（5\.1%）/);
+test("voltage drop: single-phase 2-wire, IV 2.0mm, 30m, 15A", () => {
+  const r = voltageDrop.run({ system: "single2", length: 30, current: 15, wireType: "IV", size: "2.0", inConduit: 3 });
+  // 35.6×30×15 / (1000×3.1416) = 5.10V = 5.1% > 2% (30m) → 8sq は 2.0025% でわずかに超えるので IV 14sq
+  assert.match(r.verdict, /^5.1V（5.1%）／電圧降下が目安2%を超えます → IV 14sq 以上/);
+  assert.equal(r.ok, false);
 });
 
-test("ampacity: IV 2.0mm in conduit with 3 wires = 35×1×0.7 = 24.5A", () => {
-  const r = ampacity.run({ conductor: "2.0", insulation: "vinyl", ambient: 30, inConduit: 3, load: 20 });
+test("voltage drop: CVT100 double, three-phase 200V, 100m, 500A", () => {
+  // A=200, e=30.8×100×500/200000 = 7.7V = 3.85% ≦ 4%; 許容 290×2 = 580A ≧ 500
+  const r = voltageDrop.run({ system: "three3", length: 100, current: 500, wireType: "CVT", size: "100", parallel: "2", install: "air" });
   assert.equal(r.ok, true);
-  assert.match(r.verdict, /24\.5A/);
+  assert.match(r.verdict, /^7.7V（3.9%）／この太さで適正/);
+});
+
+test("ampacity: IV 2.0mm in conduit with 3 wires = 35×1×0.7 = 24.5A; CVT by maker table", () => {
+  const r = ampacity.run({ wireType: "IV", size: "2.0", inConduit: 3, load: 20 });
+  assert.equal(r.ok, true);
+  assert.match(r.verdict, /24.5A/);
   basisOk(r);
-  assert.match(ampacity.run({ conductor: "5.5sq", insulation: "vinyl", ambient: 40, inConduit: 0 }).verdict, /40A/); // 49×√(20/30)=40.0
+  assert.match(ampacity.run({ wireType: "IV", size: "5.5", inConduit: 0, ambient: 40 }).verdict, /40A/); // 49×√(20/30)=40.0
+  assert.match(ampacity.run({ wireType: "CVT", size: "325", install: "air" }).verdict, /^CVT 325sq：許容電流 635A/);
+  assert.match(ampacity.run({ wireType: "CVT", size: "100", install: "duct", parallel: "2" }).verdict, /500A/);
+  assert.match(ampacity.run({ wireType: "CV3", size: "38", install: "air", ambient: 32 }).verdict, /147A/); // 140×1.05
+  assert.throws(() => ampacity.run({ wireType: "CV1", size: "38", install: "duct" }));
+});
+
+test("kW to wire: 37kW three-phase 200V pf0.8 motor", () => {
+  // I = 37000/(√3×200×0.8) = 133.5A; motor >50A → ×1.1 = 146.9A → CVT 38sq (155A)
+  const r = loadToWire.run({ kw: 37, phase: "three", voltage: 200, pf: 0.8, motor: true, wireType: "CVT", install: "air" });
+  assert.match(r.verdict, /^電流 133.5A → CVT 38sq 以上（許容 155A）/);
+  basisOk(r);
+  assert.match(loadToWire.run({ kw: 37, phase: "three", voltage: 200, pf: 0.8, wireType: "CVT", install: "air", length: 100 }).verdict, /CVT 60sq/);
+  // 30.8×100×133.5/(1000×38)=10.8V 5.4%>4; 60: 6.85V 3.4% OK
 });
 
 import { conduitFill } from "./fill";
@@ -81,4 +102,22 @@ test("conduit fill: VE22 with IV2.0 x3, and auto size", () => {
   assert.equal(conduitFill.run({ conduitType: "PF", wire1: "CV3-38", count1: 1, wire2: "IV-14", count2: 1 }).ok, false);
   assert.match(conduitFill.run({ conduitType: "VE", conduitSize: 22, wire1: "IV-2.0", maxCount: true }).verdict, /^11本まで/);
   assert.throws(() => conduitFill.run({ conduitType: "PF", conduitSize: 99, wire1: "IV-2.0", count1: 1 }));
+});
+
+import { cableRack } from "./rack";
+test("cable rack: width search, one row per tier", () => {
+  // CVT-60 33mm ×10 = 330mm → 80% usable: 500mm (400) is enough, 400mm (320) is not
+  const r = cableRack.run({ cable1: "CVT-60", count1: 10, tiers: "1", margin: 20, gap: 0 });
+  assert.match(r.verdict, /^必要な幅: 500mm × 1段/);
+  assert.equal(cableRack.run({ width: "400", cable1: "CVT-60", count1: 10, tiers: "1", margin: 20 }).ok, false);
+  assert.match(cableRack.run({ width: "300", cable1: "CVT-60", count1: 10, tiers: "2", margin: 20 }).verdict, /^収まります: 300mm × 2段/);
+});
+
+test("grounding B: 150/Ig, Ig by formula 17-2", () => {
+  // 6.6kV, overhead 0, cable 10km: V'=6, (6/3×10 −1)/2 = 9.5 → 1+9.5 = 10.5 → 11A → 150/11 = 13.6Ω
+  const r = grounding.run({ type: "B", cutoff: "none", kv: 6.6, overhead: 0, cableLen: 10 });
+  assert.match(r.verdict, /^基準値 13\.6Ω以下/);
+  assert.equal(grounding.run({ type: "B", cutoff: "le1", ig: 10, measured: 50 }).ok, true); // 600/10 = 60Ω
+  assert.equal(grounding.run({ type: "B", cutoff: "none", ig: 10, measured: 16 }).ok, false); // 15Ω
+  basisOk(r);
 });

@@ -10,6 +10,10 @@ export interface Field {
   min?: number;
   max?: number;
   help?: string;
+  // the options change with another field (e.g. the sizes of the chosen conduit type); "" means "none / auto"
+  optionsBy?: { key: string; map: Record<string, { value: string; label: string }[]> };
+  emptyLabel?: string;
+  showIf?: { key: string; values: string[] }; // the form shows the field only for these values
 }
 
 /** A sentence of the original text that the result relies on. Checked word for word in tests and at run time. */
@@ -24,6 +28,12 @@ export interface FillFigure {
   wires: { label: string; diameter: number; count: number }[]; // round equivalent diameter, mm
 }
 
+export interface RackFigure {
+  kind: "rack";
+  width: number; // mm
+  tiers: { cables: { label: string; x: number; d: number; hv: boolean }[]; barrierAt?: number }[];
+}
+
 export interface CalcResult {
   title: string;
   ok: boolean | null; // null = no pass/fail, just a number
@@ -31,7 +41,7 @@ export interface CalcResult {
   steps: string[]; // how we got there, shown to the user
   basis: Basis[];
   notes: string[]; // e.g. "数値は代表値"
-  figure?: FillFigure;
+  figure?: FillFigure | RackFigure;
 }
 
 export interface Calc {

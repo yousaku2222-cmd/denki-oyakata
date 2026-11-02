@@ -7,6 +7,7 @@ export interface WireSpec {
   d?: number; // finished outer diameter (round)
   long?: number; // flat cable (VVF): major x minor
   short?: number;
+  hv?: boolean; // high-voltage cable
 }
 export interface ConduitSpec {
   label: string;
@@ -15,13 +16,16 @@ export interface ConduitSpec {
 }
 
 // IV (JIS C 3307) / HIV: SWCC 産業用電線ケーブル vol.4 p.6 構造・性能表、SWCC SF-0010B、HS&T HST-SS10-0002（3資料で一致）
-const IV: [string, number][] = [["1.6", 3.2], ["2.0", 3.6], ["2.6", 4.6], ["5.5", 5.0], ["8", 6.0], ["14", 7.6], ["22", 9.2], ["38", 11.5], ["60", 14.0]];
+// 100sq以上: 矢崎 IV仕様書（200まで）・SWCC 370.pdf・販売店掲載カタログ 440.pdf（一致）
+const IV: [string, number][] = [["1.6", 3.2], ["2.0", 3.6], ["2.6", 4.6], ["5.5", 5.0], ["8", 6.0], ["14", 7.6], ["22", 9.2], ["38", 11.5], ["60", 14.0], ["100", 17.0], ["150", 21], ["200", 23], ["250", 26], ["325", 29]];
 // VVF (JIS C 3342): HS&T 600V VVF、SWCC SF-0039（2資料で一致）
 const VVF: [string, number, number][] = [["1.6×2C", 9.4, 6.2], ["1.6×3C", 13.0, 6.2], ["2.0×2C", 10.5, 6.6], ["2.0×3C", 14.0, 6.6], ["2.6×2C", 12.5, 7.6]];
-// CV (JIS C 3605): 古河電工 電設資材ガイド2016〜2017 構造表
-const CV1: [string, number][] = [["5.5", 8.0], ["8", 8.6], ["14", 9.4], ["22", 11.0], ["38", 13.0], ["60", 15.5]];
-const CV3: [string, number][] = [["5.5", 14.5], ["8", 16.0], ["14", 17.5], ["22", 21], ["38", 25], ["60", 31]];
-const CVT: [string, number][] = [["8", 19.0], ["14", 21], ["22", 24], ["38", 28], ["60", 33]];
+// CV (JIS C 3605): 古河電工 電設資材ガイド2016〜2017 構造表、100sq以上は古河(925/926.pdf)・SWCC(916.pdf)・矢崎 仕様書のうち大きい方
+const CV1: [string, number][] = [["5.5", 8.0], ["8", 8.6], ["14", 9.4], ["22", 11.0], ["38", 13.0], ["60", 15.5], ["100", 19.0], ["150", 22], ["200", 26], ["250", 28], ["325", 31]];
+const CV3: [string, number][] = [["5.5", 14.5], ["8", 16.0], ["14", 17.5], ["22", 21], ["38", 25], ["60", 31], ["100", 40], ["150", 46], ["200", 54], ["250", 59], ["325", 65]];
+const CVT: [string, number][] = [["8", 19.0], ["14", 21], ["22", 24], ["38", 28], ["60", 33], ["100", 41], ["150", 47], ["200", 55], ["250", 60], ["325", 66]];
+// 6600V CVT（より合せ外径）: 矢崎 6kV-CVT(EE)仕様書（SWCC 915.pdf より大きい方）
+const HVCVT: [string, number][] = [["22", 42], ["38", 46], ["60", 51], ["100", 58], ["150", 65], ["200", 73], ["250", 78], ["325", 85]];
 
 const unit = (s: string) => (s.includes(".") && Number(s) < 3 ? `${s}mm` : `${s}sq`);
 export const WIRES: Record<string, WireSpec> = Object.fromEntries([
@@ -30,6 +34,7 @@ export const WIRES: Record<string, WireSpec> = Object.fromEntries([
   ...CV1.map(([s, d]) => [`CV1-${s}`, { label: `CV ${s}sq 単心`, d }]),
   ...CV3.map(([s, d]) => [`CV3-${s}`, { label: `CV ${s}sq 3心`, d }]),
   ...CVT.map(([s, d]) => [`CVT-${s}`, { label: `CVT ${s}sq`, d }]),
+  ...HVCVT.map(([s, d]) => [`HVCVT-${s}`, { label: `6600V CVT ${s}sq`, d, hv: true }]),
 ]);
 
 export const CONDUITS: Record<string, ConduitSpec> = {

@@ -13,7 +13,7 @@ const KAISHAKU = {
   short: "電技解釈",
   edition: "令和7年11月20日改正",
   sourceUrl: "https://www.meti.go.jp/policy/safety_security/industrial_safety/law/kijyunkaisyaku.html",
-  articles: [17, 29, 36, 120, 142, 143, 144, 145, 146, 147, 148, 149, 156, 157, 158, 159, 160, 161, 164, 165, 167],
+  articles: [17, 29, 36, 120, 142, 143, 144, 145, 146, 147, 148, 149, 156, 157, 158, 159, 160, 161, 164, 165, 167, 168],
 };
 const SHIYO = {
   lawName: "公共建築工事標準仕様書（電気設備工事編）",

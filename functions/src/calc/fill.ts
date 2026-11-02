@@ -12,10 +12,18 @@ const conduitArea = (inner: number) => (Math.PI * inner ** 2) / 4;
 
 const wireOptions = () => Object.entries(WIRES).map(([value, w]) => ({ value, label: w.label }));
 const conduitTypeOptions = () => Object.entries(CONDUITS).map(([value, c]) => ({ value, label: c.label }));
+const sizeOptions = (c: (typeof CONDUITS)[string]) => Object.keys(c.sizes).map((s) => ({ value: s, label: `${c.short}${s}（内径${c.sizes[s]}mm）` }));
 
 const f = {
   conduitType: { key: "conduitType", label: "管の種類", type: "select", default: "VE", options: conduitTypeOptions() },
-  conduitSize: { key: "conduitSize", label: "管の呼び（空欄なら入る太さを探す）", type: "number", min: 1, max: 200 },
+  conduitSize: {
+    key: "conduitSize",
+    label: "管の呼び",
+    type: "select",
+    emptyLabel: "（自動で入る太さを探す）",
+    options: [...new Set(Object.values(CONDUITS).flatMap((c) => Object.keys(c.sizes)))].map((s) => ({ value: s, label: s })),
+    optionsBy: { key: "conduitType", map: Object.fromEntries(Object.entries(CONDUITS).map(([k, c]) => [k, sizeOptions(c)])) },
+  },
   maxCount: { key: "maxCount", label: "何本まで入るかを求める（管の呼びと電線1だけで計算）", type: "boolean", default: false },
   wire1: { key: "wire1", label: "電線1", type: "select", default: "IV-2.0", options: wireOptions() },
   count1: { key: "count1", label: "電線1の本数", type: "number", unit: "本", default: 3, min: 1, max: 100 },
@@ -29,7 +37,7 @@ export const conduitFill: Calc = {
   name: "conduit_fill",
   label: "電線管の占有率",
   description:
-    "電線管に入れる電線の断面積の合計が、管の内断面積の何%かを計算する（同じ太さだけなら48%、混在なら32%以下）。管の呼びを省くと、入る一番細い管を探す。「VE22にIV2.0は何本入る？」のように本数を聞かれたら、maxCount=true・conduitSize・wire1 を入れて1回だけ呼ぶ。",
+    "電線管に入れる電線の断面積の合計が、管の内断面積の何%かを計算し、32%以下か判定する（同じ太さだけの時は48%で数えた本数も参考に出す）。管の呼びを省くと、入る一番細い管を探す。「VE22にIV2.0は何本入る？」のように本数を聞かれたら、maxCount=true・conduitSize・wire1 を入れて1回だけ呼ぶ。",
   fields: Object.values(f),
   run(p) {
     const type = pick<string>(p, f.conduitType);
