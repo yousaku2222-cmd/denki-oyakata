@@ -1,0 +1,31 @@
+import { initializeApp } from "firebase/app";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
+
+// Real values come from web/.env.local once the Firebase project exists.
+// Without them the app talks to the local emulators (project "demo-denki-oyakata").
+const env = import.meta.env;
+const app = initializeApp({
+  apiKey: env.VITE_FIREBASE_API_KEY ?? "demo-key",
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID ?? "demo-denki-oyakata",
+  appId: env.VITE_FIREBASE_APP_ID,
+});
+
+export const db = getFirestore(app);
+const functions = getFunctions(app, "asia-northeast1");
+
+const useEmulator = !env.VITE_FIREBASE_PROJECT_ID || env.VITE_USE_EMULATOR === "1";
+if (useEmulator) {
+  const host = location.hostname;
+  connectFirestoreEmulator(db, host, 8080);
+  connectFunctionsEmulator(functions, host, 5001);
+}
+
+export async function call<T>(name: string, data: unknown): Promise<T> {
+  const fn = httpsCallable(functions, name);
+  const res = await fn(data);
+  return res.data as T;
+}
+
+export const COMPANY = "demo";

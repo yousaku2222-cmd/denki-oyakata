@@ -10,7 +10,8 @@
 ## コマンド（Node は PATH に `/c/Program Files/nodejs`、firebase は `/c/Users/優作（積算用）/AppData/Roaming/npm` を足す）
 - `cd functions && npm run build` / `npm test`
 - `cd web && npm run build` / `npm run dev`
-- `firebase emulators:start --project demo-denki-oyakata`（ルートで。Functions は先に build）
+- `firebase emulators:start --project demo-denki-oyakata`（ルートで。Functions は先に build。Java 21 が要る: `JAVA_HOME=/c/dev/tools/jdk-21.0.12.1+1`）
+- `node scripts/e2e.mjs` — エミュレータ起動中に、話す→カード→聞く→質問箱→答える の一周を確認
 
 ## 決まり
 - モデル名は `functions/src/models.ts` の役割ごとの定数だけで指定する（ROUTER=Haiku / ANSWER=Sonnet / HEAVY=Opus）

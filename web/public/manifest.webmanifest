@@ -1,0 +1,10 @@
+{
+  "name": "でんきの親方",
+  "short_name": "でんきの親方",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1b2a4a",
+  "theme_color": "#1b2a4a",
+  "lang": "ja",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

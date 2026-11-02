@@ -1,0 +1,92 @@
+import type { ReactNode } from "react";
+import { useSpeech } from "./speech";
+
+export type Source = "law" | "wisdom" | "general";
+export interface Sentence {
+  text: string;
+  source: Source;
+  cardId?: string;
+  verified?: boolean;
+}
+export interface Card {
+  id: string;
+  title: string;
+  scene: string;
+  body: string;
+  reason: string;
+  caution: string;
+  tags: string[];
+  category: string;
+  location: string;
+  authorName: string;
+  showAuthorName: boolean;
+  helpedCount: number;
+  triggerAskerName: string | null;
+  publishedAt: { toMillis(): number } | null;
+}
+
+export const SOURCE_LABEL: Record<Source, { icon: string; label: string }> = {
+  law: { icon: "⚖️", label: "法令・基準" },
+  wisdom: { icon: "🧰", label: "親方の知恵" },
+  general: { icon: "💡", label: "一般知識（要確認）" },
+};
+
+export const CATEGORY_LABEL: Record<string, string> = {
+  piping: "配管",
+  wiring: "配線",
+  grounding: "接地",
+  license: "資格",
+  calc: "計算",
+  safety: "安全",
+  other: "その他",
+};
+export const LOCATION_LABEL: Record<string, string> = {
+  ceiling: "天井",
+  floor: "床下",
+  outdoor: "屋外",
+  panel: "盤まわり",
+  other: "その他",
+};
+
+export const authorOf = (c: Pick<Card, "showAuthorName" | "authorName">) =>
+  c.showAuthorName && c.authorName ? c.authorName : "社内のベテラン";
+
+export function fmtDate(ms: number | null | undefined): string {
+  if (!ms) return "";
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+/** Big mic button + text box. Speech is appended to the text. */
+export function MicInput(props: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  micLabel: string;
+  rows?: number;
+}) {
+  const { value, onChange } = props;
+  const { listening, interim, error, start, stop } = useSpeech((t) => onChange((value ? value + " " : "") + t));
+  return (
+    <div className="mic-input">
+      <button type="button" className={`mic ${listening ? "on" : ""}`} onClick={listening ? stop : start}>
+        <span className="mic-icon" aria-hidden>
+          {listening ? "■" : "🎤"}
+        </span>
+        {listening ? "止める" : props.micLabel}
+      </button>
+      {listening && <p className="hint live">聞いています… {interim}</p>}
+      {error && <p className="hint error">{error}</p>}
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={props.placeholder}
+        rows={props.rows ?? 3}
+      />
+    </div>
+  );
+}
+
+export function Notice({ children }: { children: ReactNode }) {
+  return <div className="notice">{children}</div>;
+}
