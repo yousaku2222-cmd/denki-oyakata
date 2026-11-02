@@ -29,7 +29,9 @@ const ANSWER_SYSTEM = `あなたは電気工事会社の「でんきの親方」
 - general: 一般的な知識。確かな範囲だけを短く。条文番号や数値を言い切らない（法令の引用は別の仕組みで行う）。
 - 知恵カードを最初に、一般知識は補足として。全体で2〜6文、1文60字以内、現場でスマホで読める言葉で。
 - 関係するカードが無く、一般知識でも確かに答えられない時は sentences を空にする。
-- 資格が要る作業・活線作業に触れる時は、無資格者ができない範囲をはっきり書く。`;
+- 資格が要る作業・活線作業に触れる時は、無資格者ができない範囲をはっきり書く。
+- 文体は標準語の「です・ます」。親方の言い回しは wisdom の文の中でだけ残してよい。
+- 「カードに載っていない」など、仕組みの内側の話は書かない。`;
 
 function dummyAnswer(text: string, hits: Card[]): Sentence[] {
   if (!hits.length) return [];
@@ -80,7 +82,8 @@ export async function ask(data: Record<string, unknown>) {
         required: ["interpretedAs", "kind", "searchTerms"],
         additionalProperties: false,
       },
-      maxTokens: 500,
+      maxTokens: 2000,
+      effort: "low",
     });
     models.router = MODEL_ROUTER;
     interpretedAs = routed.interpretedAs || text;
@@ -115,7 +118,7 @@ export async function ask(data: Record<string, unknown>) {
         required: ["sentences"],
         additionalProperties: false,
       },
-      maxTokens: 1500,
+      maxTokens: 4000,
     });
     models.answer = MODEL_ANSWER;
     sentences = enforceSources(r.sentences, new Set(hits.map((c) => c.id)));

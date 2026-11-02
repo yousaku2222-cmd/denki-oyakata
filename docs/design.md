@@ -23,7 +23,7 @@
 | region / powerCompany | string\|null | どの地域・電力会社の現場で通じる知恵か |
 | confirmations | {by, name, at}[] | 確かめたベテラン（全国公開は複数人を条件にする想定） |
 | helpedCount / viewCount | number | 「助かった」数・参照数 |
-| triggerQuestionId / triggerAskerName | string\|null | きっかけの質問 |
+| triggerQuestionId / triggerAskerName / triggerQuestionText | string|null | きっかけの質問（本文は検索にも使う） |
 | transcript | {role:'veteran'\|'ai', text}[] | 聞き取りのやりとり（文字だけ。声は残さない） |
 | createdAt / updatedAt / publishedAt | Timestamp | |
 

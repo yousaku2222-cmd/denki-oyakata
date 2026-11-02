@@ -10,6 +10,7 @@ export interface SearchableCard {
   reason: string;
   caution: string;
   tags: string[];
+  triggerQuestionText?: string | null; // the question this card was written to answer
 }
 
 const STOP = new Set(["です", "ます", "した", "ので", "って", "ても", "には", "ですか", "すか", "んで", "てる"]);
@@ -37,6 +38,7 @@ export function scoreCard(query: string, card: SearchableCard): number {
   const weighted: [string, number][] = [
     [card.title, 3],
     [card.tags.join(" "), 3],
+    [card.triggerQuestionText ?? "", 3],
     [card.scene, 1.5],
     [card.body, 1],
     [card.reason, 1],

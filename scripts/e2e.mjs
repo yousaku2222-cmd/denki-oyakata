@@ -17,6 +17,9 @@ function check(label, ok, extra = "") {
 }
 const clientGet = (path) => fetch(`${FS}/${path}`).then((r) => r.status);
 
+// Start from an empty local database so earlier runs cannot answer for this one.
+await fetch("http://127.0.0.1:8080/emulator/v1/projects/demo-denki-oyakata/databases/(default)/documents", { method: "DELETE" });
+
 // 1. Veteran talks, AI asks back, card is drafted.
 let t = [{ role: "veteran", text: "PF管はな、床の埋設配管で90度の曲がりが3か所あったら線が通らん。プルボックスを入れる。" }];
 let n = await call("interviewNext", { transcript: t });
@@ -35,6 +38,7 @@ catch (e) { check("other device blocked", /permission-denied|PERMISSION_DENIED/.
 // 3. Young asks: answer cites the card in green.
 const a = await call("ask", { text: "PF管って何回まで曲げていいですか？", askerId: young, askerRole: "young" });
 check("answer grounded in the card", a.grounded && a.sentences.some((s) => s.source === "wisdom" && s.cardId === d.cardId), `[${a.mode}] ${a.sentences.length} sentences`);
+if (a.mode === "claude") for (const s of a.sentences) console.log(`     [${s.source}] ${s.text}`);
 await call("markHelped", { answerId: a.answerId, askerId: young });
 
 // 4. Unknown question goes to the box; veteran answers it; young sees it answered.
@@ -44,6 +48,7 @@ const { questionId } = await call("sendToBox", { text: "資格が無くても出
 const t2 = [{ role: "veteran", text: "（テスト用の文）資格が無い間は、材料運びや養生、片付けを手伝ってもらう。" }];
 const d2 = await call("draftCard", { transcript: t2, authorId: vet, authorName: "溝上（親方）", triggerQuestionId: questionId });
 await call("publishCard", { cardId: d2.cardId, authorId: vet, authorName: "溝上（親方）", showAuthorName: false, edits: { ...d2.draft, tags: ["無資格", "資格なし", "見習い"] } });
+if (u.mode === "claude") for (const s of u.sentences) console.log(`     [${s.source}] ${s.text}`);
 const q = await (await fetch(`${FS}/questions/${questionId}`)).json();
 check("question marked answered", q.fields?.status?.stringValue === "answered");
 const a2 = await call("ask", { text: "資格が無くても出来る作業はありますか？", askerId: young, askerRole: "young" });

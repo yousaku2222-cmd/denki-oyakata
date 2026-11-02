@@ -39,7 +39,7 @@ export async function interviewNext(data: Record<string, unknown>) {
       required: ["done", "question"],
       additionalProperties: false,
     },
-    maxTokens: 400,
+    maxTokens: 2000,
   });
   return { done: r.done, question: r.done ? "" : r.question, mode: "claude" };
 }
@@ -115,10 +115,12 @@ export async function draftCard(data: Record<string, unknown>) {
   }
 
   let triggerAskerName: string | null = null;
+  let triggerQuestionText: string | null = null;
   if (triggerQuestionId) {
     const q = await db.collection("questions").doc(triggerQuestionId).get();
     if (!q.exists) throw new HttpsError("not-found", "question not found");
     triggerAskerName = (q.get("askerName") as string) || "若手";
+    triggerQuestionText = (q.get("text") as string) || null;
   }
 
   const now = Timestamp.now();
@@ -138,6 +140,7 @@ export async function draftCard(data: Record<string, unknown>) {
     viewCount: 0,
     triggerQuestionId,
     triggerAskerName,
+    triggerQuestionText,
     transcript,
     createdAt: now,
     updatedAt: now,

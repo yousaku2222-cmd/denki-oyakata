@@ -45,6 +45,7 @@ export interface CardDoc {
   viewCount: number;
   triggerQuestionId: string | null;
   triggerAskerName: string | null;
+  triggerQuestionText: string | null;
   transcript: Turn[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
