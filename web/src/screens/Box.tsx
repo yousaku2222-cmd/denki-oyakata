@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { COMPANY, call, db, myId } from "../firebase";
+import { call, db, myId, spaces } from "../firebase";
 import { fmtDate } from "../components";
 import type { Topic } from "./Talk";
 
@@ -22,7 +22,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
   useEffect(
     () =>
       onSnapshot(
-        query(collection(db, "questions"), where("companyId", "==", COMPANY), where("status", "==", "open")),
+        query(collection(db, "questions"), where("companyId", "in", spaces()), where("status", "==", "open")),
         (snap) => {
           const list = snap.docs
             .map((d) => ({ id: d.id, ...(d.data() as Omit<Q, "id">) }))

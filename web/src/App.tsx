@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getRole, getTheme, setRole as saveRole, setTheme as saveTheme, type Role } from "./local";
+import { getRole, getTheme, setRole as saveRole, setTheme as saveTheme, getTrial, setTrial, type Role } from "./local";
 import { Ask } from "./screens/Ask";
 import { Talk, type Topic } from "./screens/Talk";
 import { Box } from "./screens/Box";
@@ -39,7 +39,9 @@ export default function App() {
     if (theme) document.documentElement.dataset.theme = theme;
   }, [theme]);
 
-  function choose(r: Role | null) {
+  // Switching role keeps 審査員モード; it ends only with 「終える」.
+  function choose(r: Role | null, trial?: boolean) {
+    if (trial !== undefined) setTrial(trial);
     saveRole(r);
     setRoleState(r);
     setTab(r === "veteran" ? "talk" : "ask");
@@ -72,6 +74,14 @@ export default function App() {
           切替
         </button>
       </header>
+      {getTrial() && (
+        <p className="trial-note">
+          🧪 審査員モード：公開したカードと送った質問は、この端末にだけ見えます
+          <button className="link" onClick={() => choose(null, false)}>
+            終える
+          </button>
+        </p>
+      )}
 
       <main>
         {tab === "ask" && (role === "veteran" ? <VeteranAsk role={role} /> : <Ask role={role} />)}
@@ -130,7 +140,7 @@ function VeteranAsk({ role }: { role: Role }) {
 }
 
 
-function Entry({ onChoose }: { onChoose: (r: Role) => void }) {
+function Entry({ onChoose }: { onChoose: (r: Role, trial?: boolean) => void }) {
   return (
     <div className="entry">
       <div className="entry-logo">⚡</div>
@@ -155,7 +165,7 @@ function Entry({ onChoose }: { onChoose: (r: Role) => void }) {
         若手として使う
         <small>現場の疑問に、根拠つきで答えます</small>
       </button>
-      <button className="link" onClick={() => onChoose("young")}>
+      <button className="link" onClick={() => onChoose("young", true)}>
         審査員の方はこちら（デモ）
       </button>
     </div>

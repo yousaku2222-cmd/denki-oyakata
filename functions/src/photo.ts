@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { HttpsError } from "firebase-functions/v2/https";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER } from "./models";
-import { displayAuthor, str } from "./common";
+import { displayAuthor, spaceOf, str } from "./common";
 import { publishedCards } from "./ask";
 import { LAWS, getLawById, lawLabel } from "./laws";
 import { CONDUITS } from "./calc/conduitData";
@@ -128,13 +128,13 @@ function calcLink(spec: Judged["spec"]) {
   return null;
 }
 
-export async function identifyPart(data: Record<string, unknown>, _uid: string) {
+export async function identifyPart(data: Record<string, unknown>, uid: string) {
   const image = typeof data.image === "string" ? data.image.replace(/^data:image\/\w+;base64,/, "") : "";
   const name = image ? "" : str(data.name, "name", 60);
   if (image && (image.length > MAX_IMAGE || !/^[A-Za-z0-9+/=]+$/.test(image.slice(0, 2000)))) throw new HttpsError("invalid-argument", "写真が大きすぎるか、形式が違います");
 
   // Claude picks the related cards and rules from these lists; the ids are checked against the data afterwards.
-  const all = await publishedCards();
+  const all = await publishedCards(spaceOf(data, uid));
   const catalog = ["社内の知恵カード:", ...all.map((c) => `[${c.id}] ${c.title}`), "法令・基準:", ...LAWS.map((l) => `[${l.id}] ${lawLabel(l)}`)].join("\n");
   const judge = (content: Anthropic.ContentBlockParam[]) =>
     jsonCall<Judged>({ model: MODEL_ANSWER, system: `${SYSTEM}\n\n${catalog}`, user: content, schema: SCHEMA, maxTokens: 6000 });

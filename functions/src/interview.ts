@@ -2,7 +2,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER } from "./models";
-import { CATEGORIES, COMPANY, CardDoc, LOCATIONS, Turn, db, str, strList, turns } from "./common";
+import { CATEGORIES, CardDoc, LOCATIONS, Turn, db, spaceOf, str, strList, turns } from "./common";
 
 const MAX_FOLLOW_UPS = 3;
 const DUMMY_FOLLOW_UPS = ["なぜそうするんですか？", "新人がよく間違えるのは、どんなところですか？"];
@@ -125,7 +125,7 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
 
   const now = Timestamp.now();
   const card: CardDoc = {
-    companyId: COMPANY,
+    companyId: spaceOf(data, uid),
     ...draft,
     tags: draft.tags.slice(0, 15),
     authorId,
@@ -184,7 +184,8 @@ export async function publishCard(data: Record<string, unknown>, uid: string) {
   if (card.triggerQuestionId) {
     const qRef = db.collection("questions").doc(card.triggerQuestionId);
     const q = await qRef.get();
-    if (q.exists && q.get("status") === "open") {
+    // a judge's trial card does not close a question in the shared box
+    if (q.exists && q.get("status") === "open" && q.get("companyId") === card.companyId) {
       await qRef.update({ status: "answered", answeredCardId: cardId, answeredAt: now });
       const askerId = q.get("askerId") as string;
       await db.collection("users").doc(askerId).set({ answeredFromMyQuestions: FieldValue.increment(1) }, { merge: true });
@@ -206,7 +207,8 @@ export async function setCardStatus(data: Record<string, unknown>, uid: string) 
 
 export async function myCards(data: Record<string, unknown>, uid: string) {
   const authorId = uid;
-  const snap = await db.collection("cards").where("companyId", "==", COMPANY).where("authorId", "==", authorId).get();
+  // every space: a judge's trial cards are theirs too
+  const snap = await db.collection("cards").where("authorId", "==", authorId).get();
   return {
     cards: snap.docs
       .map((d) => {

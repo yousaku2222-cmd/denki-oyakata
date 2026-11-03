@@ -6,6 +6,15 @@ if (!getApps().length) initializeApp();
 export const db = getFirestore();
 export const COMPANY = "demo";
 
+/**
+ * Where this caller's cards and questions go. People who came in through 「審査員の方はこちら」 send trial: true:
+ * what they publish or send is seen only by themselves (they still go round the whole loop), so the next person
+ * does not see it. A caller can only ever choose their own trial space, so the flag needs no trust.
+ */
+export function spaceOf(data: Record<string, unknown>, uid: string): string {
+  return data.trial === true ? `trial_${uid}` : COMPANY;
+}
+
 export type Source = "law" | "wisdom" | "general";
 export interface Sentence {
   text: string;

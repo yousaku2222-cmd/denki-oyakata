@@ -71,5 +71,40 @@ const pf = mine.cards.find((c) => c.id === d.cardId);
 check("helped count reached the veteran", pf?.helpedCount === 1, `cards=${mine.cards.length}`);
 check("clients cannot write directly", (await fetch(`${FS}/cards?documentId=x`, { method: "POST", body: JSON.stringify({ fields: { title: { stringValue: "x" } } }) })).status === 403);
 
+// 6. Saved answers: the same question again does not call Claude (with an API key only).
+if (a2.mode === "claude") {
+  const a3 = await call("ask", { text: "新しい現場の朝礼は何時からですか", askerRole: "young" }, young);
+  check("same question served from the saved answer", a3.cached === true && a3.answerId !== a2.answerId && a3.cards.some((c) => c.id === d2.cardId));
+}
+
+// 7. 審査員モード: a judge goes round the loop, and nobody else sees it.
+const judge = await signUp(), other = await signUp();
+const jq = await call("sendToBox", { text: "審査員の試しの質問です", askerName: "審査員", askerRole: "young", trial: true }, judge);
+const jqDoc = await (await fetch(`${FS}/questions/${jq.questionId}`)).json();
+check("judge's question stays in their own space", jqDoc.fields?.companyId?.stringValue?.startsWith("trial_"));
+const jt = [{ role: "veteran", text: "審査員の試しの答え。脚立は開き止めを必ず掛けてから乗る。" }];
+const jd = await call("draftCard", { transcript: jt, authorName: "審査員", trial: true }, judge);
+await call("publishCard", { cardId: jd.cardId, authorName: "審査員", showAuthorName: true, edits: { ...jd.draft, tags: ["脚立", "開き止め"] }, trial: true }, judge);
+const jMine = await call("myCards", { trial: true }, judge);
+check("judge sees their trial card", jMine.cards.some((c) => c.id === jd.cardId));
+const ja = await call("ask", { text: "脚立の開き止めは？", askerRole: "young", trial: true }, judge);
+const oa = await call("ask", { text: "脚立の開き止めは？", askerRole: "young" }, other);
+check("judge's answer uses their trial card, others' does not", ja.cards.some((c) => c.id === jd.cardId) && !oa.cards.some((c) => c.id === jd.cardId));
+// answering a shared question from trial mode leaves it open for everyone else
+const sq = await call("sendToBox", { text: "共有の質問箱の質問です", askerName: "若手", askerRole: "young" }, young);
+const jd2 = await call("draftCard", { transcript: jt, authorName: "審査員", triggerQuestionId: sq.questionId, trial: true }, judge);
+await call("publishCard", { cardId: jd2.cardId, authorName: "審査員", showAuthorName: true, edits: { ...jd2.draft, tags: ["脚立"] }, trial: true }, judge);
+const sqDoc = await (await fetch(`${FS}/questions/${sq.questionId}`)).json();
+check("trial card does not close a shared question", sqDoc.fields?.status?.stringValue === "open");
+
+// 8. Shared writes have a daily cap per device.
+const spammer = await signUp();
+let blocked = false;
+for (let i = 0; i < 21 && !blocked; i++) {
+  try { await call("sendToBox", { text: `連投の試し ${i}`, askerRole: "young", trial: true }, spammer); }
+  catch (e) { blocked = /resource-exhausted|RESOURCE_EXHAUSTED/.test(String(e)) && i === 20; }
+}
+check("21st question in a day is refused", blocked);
+
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);
