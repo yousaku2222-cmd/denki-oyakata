@@ -254,7 +254,8 @@ export function Ask({ role }: { role: Role }) {
                 <motion.span key={plusOne} className="helped-thumb" animate={plusOne ? { scale: [1, 1.5, 0.9, 1], rotate: [0, -15, 8, 0] } : {}} transition={{ duration: 0.45 }}>
                   👍
                 </motion.span>{" "}
-                {helped ? "親方に届きました" : "助かった"}
+                {/* only a veteran's card gets the thanks (markHelped counts the cards the answer used) */}
+                {helped ? (answer.sentences.some((x) => x.source === "wisdom") ? "親方に届きました" : "ありがとうございます") : "助かった"}
                 {plusOne > 0 && (
                   <motion.span key={`plus-${plusOne}`} className="plus-one" aria-hidden initial={{ opacity: 0, y: 0 }} animate={{ opacity: [0, 1, 0], y: -38 }} transition={{ duration: 0.9, ease: "easeOut" }}>
                     👍 +1
