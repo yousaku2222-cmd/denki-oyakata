@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { call } from "../firebase";
+import { call, errorText } from "../firebase";
 import { CalcCard, type CalcOutput } from "../CalcCard";
 
 interface Field {
@@ -114,16 +114,22 @@ function CalcForm({ def, onBack, preset }: { def: CalcDef; onBack: () => void; p
   };
 
   async function run() {
-    setBusy(true);
     setErr("");
     setResult(null);
-    const params = Object.fromEntries(
-      def.fields.filter((f) => shown(f) && values[f.key] !== "").map((f) => [f.key, f.type === "number" ? Number(values[f.key]) : values[f.key]]),
-    );
+    const sent = def.fields.filter((f) => shown(f) && String(values[f.key]).trim() !== "");
+    // ０．８ (full width) → 0.8; anything else that is not a number is an error, never silently the default
+    const toNum = (v: string | boolean) => Number(String(v).normalize("NFKC").trim());
+    const badField = sent.find((f) => f.type === "number" && !Number.isFinite(toNum(values[f.key])));
+    if (badField) {
+      setErr(`${badField.label}を数字で入れてください`);
+      return;
+    }
+    setBusy(true);
+    const params = Object.fromEntries(sent.map((f) => [f.key, f.type === "number" ? toNum(values[f.key]) : values[f.key]]));
     try {
       setResult((await call<{ result: CalcOutput }>("calc", { name: def.name, params })).result);
     } catch (e) {
-      setErr((e as { message?: string }).message || "計算できませんでした");
+      setErr(errorText(e, "計算できませんでした。電波の良い所で、もう一度お試しください"));
     } finally {
       setBusy(false);
     }

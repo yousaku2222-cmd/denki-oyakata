@@ -97,9 +97,14 @@ function settle(R: number, circles: { r: number; color: string }[]) {
   return placed;
 }
 
+// settle() grows roughly with the cube of the wire count (468 wires took 10 s on a PC): draw at most this many
+const MAX_DRAWN = 120;
+
 function FillFigure({ f }: { f: Extract<NonNullable<CalcOutput["figure"]>, { kind: "fill" }> }) {
   const R = 100;
+  const total = f.wires.reduce((n, w) => n + w.count, 0);
   const placed = useMemo(() => {
+    if (total > MAX_DRAWN) return [];
     const scale = (2 * R) / f.innerDiameter;
     const colors = ["#e0302b", "#2a6ad8", "#f5c400"];
     const circles: { r: number; color: string }[] = [];
@@ -108,7 +113,10 @@ function FillFigure({ f }: { f: Extract<NonNullable<CalcOutput["figure"]>, { kin
     });
     circles.sort((a, b) => b.r - a.r);
     return settle(R, circles);
-  }, [f]);
+  }, [f, total]);
+  if (total > MAX_DRAWN) {
+    return <p className="hint">電線が {total} 本と多いので、断面の図は省きます（{MAX_DRAWN} 本までは図を出します）。</p>;
+  }
   return (
     <figure className="fill-fig">
       <svg viewBox="-110 -110 220 220" role="img" aria-label="管の断面と電線">

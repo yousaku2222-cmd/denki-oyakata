@@ -1,6 +1,7 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COMPANY, db, str } from "./common";
+import { takeQuota } from "./limits";
 
 export async function sendToBox(data: Record<string, unknown>, uid: string) {
   const text = str(data.text, "text", 500);
@@ -10,6 +11,8 @@ export async function sendToBox(data: Record<string, unknown>, uid: string) {
   // a small JPEG from ⑤撮る ("これ何ですか？"); kept in the question itself, so no storage bucket is needed
   const photo = typeof data.photo === "string" ? data.photo : "";
   if (photo && (photo.length > 300_000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(photo))) throw new HttpsError("invalid-argument", "写真が大きすぎるか、形式が違います");
+  // No Claude here, but every veteran's device downloads the open questions (photos included): cap the posts too.
+  await takeQuota(askerId, "box");
   const ref = await db.collection("questions").add({
     companyId: COMPANY,
     text,

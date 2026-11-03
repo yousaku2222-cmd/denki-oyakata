@@ -39,7 +39,7 @@ const d = await call("draftCard", { transcript: t, authorName: "溝上（親方�
 check("draft card created", !!d.cardId, d.draft.title);
 check("draft is hidden from clients", (await clientGet(`cards/${d.cardId}`)) === 403);
 await call("publishCard", { cardId: d.cardId, authorName: "溝上（親方）", showAuthorName: true, edits: { ...d.draft, tags: ["PF", "合成樹脂可とう電線管", "曲げ"] } }, vet);
-check("published card is readable", (await clientGet(`cards/${d.cardId}`)) === 200);
+check("published card is readable", (await fetch(`${FS}/cards/${d.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).status === 200);
 
 // 2. Someone else cannot publish or hide it.
 try { await call("setCardStatus", { cardId: d.cardId, status: "private" }, young); check("other device blocked", false); }
@@ -59,8 +59,13 @@ const t2 = [{ role: "veteran", text: "（テスト用の文）新しい現場の
 const d2 = await call("draftCard", { transcript: t2, authorName: "溝上（親方）", triggerQuestionId: questionId }, vet);
 await call("publishCard", { cardId: d2.cardId, authorName: "溝上（親方）", showAuthorName: false, edits: { ...d2.draft, tags: ["朝礼", "集合時間", "新規入場"] } }, vet);
 if (u.mode === "claude") for (const s of u.sentences) console.log(`     [${s.source}] ${s.text}`);
-const q = await (await fetch(`${FS}/questions/${questionId}`)).json();
+const q = await (await fetch(`${FS}/questions/${questionId}`, { headers: { Authorization: `Bearer ${young}` } })).json();
 check("question marked answered", q.fields?.status?.stringValue === "answered");
+// The veteran chose not to show the name: the public card must not carry it (nor the raw interview).
+const hidden = await (await fetch(`${FS}/cards/${d2.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).json();
+check("hidden name is not in the public card", hidden.fields?.authorName?.stringValue === "" && !JSON.stringify(hidden).includes("溝上"), hidden.fields?.authorName?.stringValue);
+check("raw interview is not in the public card", !(hidden.fields?.transcript?.arrayValue?.values ?? []).length);
+check("cards and questions need a signed-in device", (await clientGet(`cards/${d.cardId}`)) === 403 && (await clientGet(`questions/${questionId}`)) === 403);
 const a2 = await call("ask", { text: "新しい現場の朝礼は何時からですか？", askerRole: "young" }, young);
 check("same question now answered from the new card", a2.grounded && a2.cards.some((c) => c.id === d2.cardId && c.author === "社内のベテラン" && c.triggerAskerName === "テスト若手"));
 
@@ -70,6 +75,14 @@ const mine = await call("myCards", {}, vet);
 const pf = mine.cards.find((c) => c.id === d.cardId);
 check("helped count reached the veteran", pf?.helpedCount === 1, `cards=${mine.cards.length}`);
 check("clients cannot write directly", (await fetch(`${FS}/cards?documentId=x`, { method: "POST", body: JSON.stringify({ fields: { title: { stringValue: "x" } } }) })).status === 403);
+
+// 6. The question box has its own daily cap per device (it costs no Claude call, but every veteran downloads it).
+const spammer = await signUp();
+let accepted = 0;
+for (let i = 0; i < 21; i++) {
+  try { await call("sendToBox", { text: `テスト${i}` }, spammer); accepted++; } catch { break; }
+}
+check("question box: 20 posts a day per device", accepted === 20, `accepted=${accepted}`);
 
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);

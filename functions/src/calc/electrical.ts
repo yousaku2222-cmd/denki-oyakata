@@ -146,7 +146,9 @@ const given = (p: Record<string, unknown>, k: string) => p[k] !== undefined && p
 
 function readWire(p: Record<string, unknown>, needSize = true) {
   const t = pick<WireType>(p, wf.wireType);
-  const s = String(p.size ?? wf.size.default);
+  // Claude's tool schema sends the size as a number, and JSON turns 2.0 into 2: match "2" to "2.0" by value
+  const raw = p.size ?? wf.size.default;
+  const s = typeof raw === "number" ? (TYPES[t].sizes.find((x) => Number(x) === raw) ?? String(raw)) : String(raw);
   if (needSize && !TYPES[t].sizes.includes(s)) throw new CalcInputError(`${TYPES[t].label}に ${s} はありません（${TYPES[t].sizes.join("・")}）`);
   const n = Number(pick(p, wf.parallel));
   const c: Conditions = {

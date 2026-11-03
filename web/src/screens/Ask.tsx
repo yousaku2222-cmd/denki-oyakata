@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { call } from "../firebase";
+import { call, errorText } from "../firebase";
 import { getName, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
@@ -41,8 +41,8 @@ export function Ask({ role }: { role: Role }) {
       setAnswer(a);
       setAsked(q.trim());
       setText("");
-    } catch {
-      setErr("答えを取得できませんでした。電波の良い所で、もう一度お試しください。");
+    } catch (e) {
+      setErr(errorText(e, "答えを取得できませんでした。電波の良い所で、もう一度お試しください。"));
     } finally {
       setBusy(false);
     }
@@ -56,7 +56,10 @@ export function Ask({ role }: { role: Role }) {
 
   async function sendToBox() {
     setSent(true);
-    await call("sendToBox", { text: asked, askerName: getName(role), askerRole: role }).catch(() => setSent(false));
+    await call("sendToBox", { text: asked, askerName: getName(role), askerRole: role }).catch((e) => {
+      setSent(false);
+      setErr(errorText(e, "質問箱に送れませんでした。もう一度お試しください。"));
+    });
   }
 
   const cardOf = (id?: string) => answer?.cards.find((c) => c.id === id);

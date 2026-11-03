@@ -55,7 +55,8 @@ const gnd = {
     { value: "le1", label: "1秒以下" },
   ] },
   ig: { key: "ig", label: "1線地絡電流 Ig（電力会社に聞いた値。空欄なら下の式で計算）", type: "number", unit: "A", min: 0.1, max: 1000, showIf: { key: "type", values: ["B"] } },
-  kv: { key: "kv", label: "高圧電路の公称電圧", type: "number", unit: "kV", default: 6.6, min: 1, max: 35, showIf: { key: "type", values: ["B"] } },
+  // 17-2表 is for 高圧 circuits (≤7,000V); 特別高圧 uses measured or line-constant values (第17条第2項第二号ハ)
+  kv: { key: "kv", label: "高圧電路の公称電圧（特別高圧は Ig を入れてください）", type: "number", unit: "kV", default: 6.6, min: 1, max: 7, showIf: { key: "type", values: ["B"] } },
   overhead: { key: "overhead", label: "同じ母線の架空電線（ケーブル以外）の電線延長", type: "number", unit: "km", default: 0, min: 0, max: 10000, help: "線路の長さ×電線の本数（3線なら3倍）", showIf: { key: "type", values: ["B"] } },
   cableLen: { key: "cableLen", label: "同じ母線のケーブルの線路延長", type: "number", unit: "km", default: 0, min: 0, max: 10000, showIf: { key: "type", values: ["B"] } },
   measured: { key: "measured", label: "測定値（B種は空欄なら基準値だけ）", type: "number", unit: "Ω", min: 0 },
@@ -144,7 +145,8 @@ function groundingB(p: Record<string, unknown>): CalcResult {
 const SUPPORT = {
   metal: { label: "金属管（隠ぺい・露出）", limit: 2, basis: [{ lawId: "shiyo-2.2.3", quote: "管の支持は、サドル、ハンガ等を使用し、その取付け間隔は 2ｍ以下とする。" }] },
   pf_hidden: { label: "PF管・CD管（隠ぺい）", limit: 1.5, basis: [{ lawId: "shiyo-2.3.3", quote: "その取付け間隔は1.5ｍ以下とする。" }, { lawId: "kaishaku-158", quote: "支持点間の距離は1.5m以下とし" }] },
-  pf_exposed: { label: "PF管・CD管（露出）", limit: 1, basis: [{ lawId: "shiyo-2.3.4", quote: "管の支持は、サドル、クリップ、ハンガ等を使用し、その取付け間隔は 1ｍ以下とする。" }] },
+  // CD管 cannot be run exposed (解釈 第158条第3項第七号), so the exposed row is PF only
+  pf_exposed: { label: "PF管（露出）", limit: 1, basis: [{ lawId: "shiyo-2.3.4", quote: "管の支持は、サドル、クリップ、ハンガ等を使用し、その取付け間隔は 1ｍ以下とする。" }, { lawId: "kaishaku-158", quote: "CD管は、次のいずれかにより施設すること。" }] },
   vinyl: { label: "硬質ビニル管（VE管）", limit: 1.5, basis: [{ lawId: "shiyo-2.4.3", quote: "管の支持は、サドル、ハンガ等を使用し、その取付け間隔は、1.5ｍ以下とする。" }, { lawId: "kaishaku-158", quote: "支持点間の距離は1.5m以下とし" }] },
   flexible: { label: "金属製可とう電線管", limit: 1, basis: [{ lawId: "shiyo-2.5.3", quote: "取付け間隔は、1ｍ以下とする。" }] },
   cable: { label: "ケーブル（造営材の下面・側面）", limit: 2, basis: [{ lawId: "kaishaku-164", quote: "支持点間の距離をケーブルにあっては2m" }] },
@@ -171,7 +173,12 @@ export const support: Calc = {
       verdict: x === null ? `${s.limit}m以下` : `${ok ? "OK" : "NG"}（予定 ${fmt(x)}m ${ok ? "≦" : "＞"} 上限 ${s.limit}m）`,
       steps: [`種類: ${s.label}`, `上限: ${s.limit}m以下`, ...(x === null ? [] : [`予定: ${fmt(x)}m`])],
       basis: [...s.basis],
-      notes: ["ボックスとの接続点・管端・管相互の接続点の近くでも支持・固定します。", "標準仕様書は公共工事の基準です。現場の仕様書も確認してください。"],
+      notes: [
+        "ボックスとの接続点・管端・管相互の接続点の近くでも支持・固定します。",
+        ...(k === "pf_exposed" ? ["CD管は露出では使えません（コンクリートに埋め込むか、専用の不燃性・自消性の管やダクトに収める）。"] : []),
+        ...(k === "flexible" ? ["垂直で人が触れるおそれのない場合などは 2m 以下にできます（原文を確認）。"] : []),
+        "標準仕様書は公共工事の基準です。現場の仕様書も確認してください。",
+      ],
     };
   },
 };

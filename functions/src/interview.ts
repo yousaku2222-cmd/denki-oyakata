@@ -141,12 +141,18 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
     triggerQuestionId,
     triggerAskerName,
     triggerQuestionText,
-    transcript,
+    // Published cards are readable by every signed-in device, so the raw interview and the real name live in a
+    // server-only document (cardPrivate is closed to clients by firestore.rules).
+    transcript: [],
     createdAt: now,
     updatedAt: now,
     publishedAt: null,
   };
-  const ref = await db.collection("cards").add(card);
+  const ref = db.collection("cards").doc();
+  const batch = db.batch();
+  batch.set(ref, card);
+  batch.set(db.collection("cardPrivate").doc(ref.id), { authorId, authorName, transcript, createdAt: now });
+  await batch.commit();
   return { cardId: ref.id, draft, mode };
 }
 
@@ -163,9 +169,15 @@ export async function publishCard(data: Record<string, unknown>, uid: string) {
   const authorId = uid;
   const e = (data.edits ?? {}) as Record<string, unknown>;
   const { ref, card } = await ownCard(cardId, authorId);
-  const authorName = str(data.authorName, "authorName", 30, false) || card.authorName;
+  const privRef = db.collection("cardPrivate").doc(cardId);
+  const priv = await privRef.get();
+  const authorName = str(data.authorName, "authorName", 30, false) || (priv.get("authorName") as string | undefined) || card.authorName;
+  const showAuthorName = data.showAuthorName !== false;
+  // The card itself is public: keep the name out of it unless the veteran chose to show it.
+  const shownName = showAuthorName ? authorName : "";
   const now = Timestamp.now();
 
+  await privRef.set({ authorId, authorName }, { merge: true });
   await ref.update({
     title: str(e.title, "title", 60),
     scene: str(e.scene, "scene", 500, false),
@@ -173,10 +185,11 @@ export async function publishCard(data: Record<string, unknown>, uid: string) {
     reason: str(e.reason, "reason", 1000, false),
     caution: str(e.caution, "caution", 1000, false),
     tags: strList(e.tags, "tags"),
-    authorName,
-    showAuthorName: data.showAuthorName !== false,
+    authorName: shownName,
+    showAuthorName,
     status: "published",
-    confirmations: FieldValue.arrayUnion({ by: authorId, name: authorName, at: now }),
+    // replace (not append) this veteran's entry, so a name shown on an earlier publish does not stay behind
+    confirmations: [...(card.confirmations ?? []).filter((c) => c.by !== authorId), { by: authorId, name: shownName, at: now }],
     updatedAt: now,
     publishedAt: card.publishedAt ?? now,
   });

@@ -33,7 +33,7 @@
 | text | string | 質問の原文 |
 | askerId / askerName / askerRole | string | 聞いた人（端末ID・表示名・young/veteran） |
 | excludeVeteranId | string\|null | ベテランが聞いた質問は本人の箱に入れない |
-| photoUrl | string\|null | 段階4: 写真ごと質問 |
+| photo | string\|null | 段階4: 写真ごと質問（1024px 程度の JPEG の data URL、30万字まで。photoUrl は未使用） |
 | status | 'open'\|'answered' | |
 | goodBy | string[] | 「いい質問」を押したベテラン |
 | answeredCardId | string\|null | 答えになったカード |
@@ -56,6 +56,9 @@
 - law: 段階2。quote が法令原文に実在するとプログラムが確かめたら verified=true
 - wisdom: cardId が実在する公開カードを指す時だけ（プログラムで確認。無ければ general に落とす）
 - general: AI の一般知識。「要確認」を付けて表示
+
+### cardPrivate（サーバーだけが読む。firestore.rules で画面からは読めない）
+`{ authorId, authorName, transcript, createdAt }` — 本名と聞き取りのやりとりの原文。公開カード（cards）には、名前を出すと選んだ時だけ authorName を入れ、transcript は空にする。
 
 ### users（端末ごと。ログインなし）
 `{ displayName, roleHistory: {role, at}[], askedCount, answeredFromMyQuestions, helpedCount, createdAt }`

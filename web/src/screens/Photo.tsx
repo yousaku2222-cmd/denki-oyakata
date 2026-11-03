@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { call } from "../firebase";
+import { call, errorText } from "../firebase";
 import { addPart, getName } from "../local";
 import { LawSheet } from "../LawSheet";
 
@@ -31,12 +31,16 @@ const SAY = {
 /** Shrinks a photo on the device before sending: the long side to `size` px, as a JPEG data URL. */
 async function shrink(file: Blob, size: number, quality: number): Promise<string> {
   const bmp = await createImageBitmap(file);
-  const k = Math.min(1, size / Math.max(bmp.width, bmp.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bmp.width * k);
-  canvas.height = Math.round(bmp.height * k);
-  canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", quality);
+  try {
+    const k = Math.min(1, size / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bmp.width * k);
+    canvas.height = Math.round(bmp.height * k);
+    canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", quality);
+  } finally {
+    bmp.close(); // a full-size camera bitmap is large; free it now, not at GC
+  }
 }
 
 /** ⑤ 撮る: photo of a part → name, use, and the way on to cards, rules and a calculation. */
@@ -59,7 +63,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
       setRes(r);
       if (r.name && r.verdict !== "unknown") addPart({ name: r.name, use: r.use, at: Date.now(), thumb: thumbFrom ? await shrink(thumbFrom, 160, 0.7) : "" });
     } catch (e) {
-      setErr((e as { message?: string }).message || "調べられませんでした。もう一度撮ってください");
+      setErr(errorText(e, "調べられませんでした。電波の良い所で、もう一度撮ってください"));
     } finally {
       setBusy(false);
     }
@@ -67,9 +71,17 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
 
   async function picked(f: File | undefined) {
     if (!f) return;
-    setFile(f);
     setSent(false);
-    const small = await shrink(f, 1600, 0.85);
+    setErr("");
+    let small: string;
+    try {
+      small = await shrink(f, 1600, 0.85);
+    } catch {
+      // e.g. a HEIC file the browser cannot open
+      setErr("この写真は開けませんでした。カメラで撮り直すか、別の写真を選んでください");
+      return;
+    }
+    setFile(f);
     setPreview(small);
     await identify({ image: small }, f);
   }
@@ -78,11 +90,13 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
     if (!file) return;
     setBusy(true);
     try {
-      const photo = await shrink(file, 1024, 0.7);
+      // the box takes up to 300,000 characters: step the size down for busy photos
+      let photo = await shrink(file, 1024, 0.7);
+      if (photo.length > 290_000) photo = await shrink(file, 800, 0.6);
       await call("sendToBox", { text: res?.name ? `これは「${res.name}」で合っていますか？使い方も教えてください。` : "これは何という部材ですか？使い方も教えてください。", photo, askerName: getName("young"), askerRole: "young" });
       setSent(true);
     } catch (e) {
-      setErr((e as { message?: string }).message || "送れませんでした");
+      setErr(errorText(e, "送れませんでした。もう一度お試しください"));
     } finally {
       setBusy(false);
     }
@@ -91,7 +105,10 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
   return (
     <section className="screen">
       <h1 className="screen-title">撮って調べる</h1>
-      <input ref={input} type="file" accept="image/*" capture="environment" hidden onChange={(e) => picked(e.target.files?.[0])} />
+      <input ref={input} type="file" accept="image/*" capture="environment" hidden onChange={(e) => {
+          picked(e.target.files?.[0]);
+          e.target.value = ""; // so choosing the same photo again still fires onChange
+        }} />
       <button className="mic" disabled={busy} onClick={() => input.current?.click()}>
         📷 {preview ? "もう一度撮る" : "部材を撮る"}
       </button>

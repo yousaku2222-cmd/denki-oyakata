@@ -38,6 +38,14 @@ export const signedIn: Promise<string> = new Promise((resolve, reject) => {
 
 export const myId = () => auth.currentUser?.uid ?? "";
 
+/** The message to show for a failed call: the server's own words for limits and bad input, otherwise `fallback`. */
+export function errorText(e: unknown, fallback: string): string {
+  const code = (e as { code?: string })?.code ?? "";
+  const message = (e as { message?: string })?.message ?? "";
+  // only our Japanese messages are shown as they are (not "internal" etc.)
+  return (code === "functions/resource-exhausted" || code === "functions/invalid-argument") && /[ぁ-んァ-ン一-龥]/.test(message) ? message : fallback;
+}
+
 export async function call<T>(name: string, data: unknown): Promise<T> {
   const fn = httpsCallable(functions, name);
   const res = await fn(data);

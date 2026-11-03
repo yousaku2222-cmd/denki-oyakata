@@ -89,6 +89,30 @@ const SYSTEM = `電気工事の若手（資格なし〜第二種電気工事士�
 const RECHECK = `前の判定と、写真から切り出して拡大した印字を渡します。拡大した印字を読み直して、判定を同じ形で返し直してください。印字で確かめられたら verdict を上げてよい。読めない文字は推測で補わない。regions は空にしてください。`;
 
 const MAX_IMAGE = 6_000_000; // base64 characters
+const MAX_PIXELS = 40_000_000; // a 48MP phone photo is already shrunk on the device; this stops "zip bomb" images
+const FORMATS = new Set(["jpeg", "png", "webp", "heif"]);
+
+/**
+ * Checks and normalises an uploaded photo before anything expensive happens: only real photos (JPEG/PNG/WebP/HEIF),
+ * within a pixel limit (sharp would otherwise decode up to 268M pixels), rotated by EXIF, long side ≤ 1568px.
+ */
+export async function preparePhoto(base64: string): Promise<Buffer> {
+  const bad = () => new HttpsError("invalid-argument", "写真が大きすぎるか、形式が違います");
+  if (!base64 || base64.length > MAX_IMAGE || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw bad();
+  const buf = Buffer.from(base64, "base64");
+  try {
+    const meta = await sharp(buf, { limitInputPixels: MAX_PIXELS }).metadata();
+    if (!meta.format || !FORMATS.has(meta.format) || !meta.width || !meta.height || meta.width * meta.height > MAX_PIXELS) throw bad();
+    return await sharp(buf, { limitInputPixels: MAX_PIXELS })
+      .rotate()
+      .resize({ width: 1568, height: 1568, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 88 })
+      .toBuffer();
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    throw bad(); // broken or unsupported data
+  }
+}
 
 const imageBlock = (buf: Buffer): Anthropic.ContentBlockParam => ({
   type: "image",
@@ -117,7 +141,7 @@ function calcLink(spec: Judged["spec"]) {
     const size = c.sizes[String(spec.conduitSize)] ? String(spec.conduitSize) : undefined;
     return { name: "conduit_fill", label: `${c.short}${size ?? ""}に何本入るか計算する`, params: { conduitType: spec.conduitType, ...(size ? { conduitSize: size } : {}) } };
   }
-  if (spec.breakerAmps > 0) {
+  if (Number.isInteger(spec.breakerAmps) && spec.breakerAmps > 0 && spec.breakerAmps <= 400) {
     const t = thinnest("IV", 1, { install: "air", ambient: null, inConduit: 3 }, spec.breakerAmps);
     return {
       name: "wire_ampacity",
@@ -131,7 +155,9 @@ function calcLink(spec: Judged["spec"]) {
 export async function identifyPart(data: Record<string, unknown>, _uid: string) {
   const image = typeof data.image === "string" ? data.image.replace(/^data:image\/\w+;base64,/, "") : "";
   const name = image ? "" : str(data.name, "name", 60);
-  if (image && (image.length > MAX_IMAGE || !/^[A-Za-z0-9+/=]+$/.test(image.slice(0, 2000)))) throw new HttpsError("invalid-argument", "写真が大きすぎるか、形式が違います");
+  // check (and shrink) the photo before any Claude call
+  const photo = image && getClient() ? await preparePhoto(image) : null;
+  if (image && !photo && (image.length > MAX_IMAGE || !/^[A-Za-z0-9+/]+={0,2}$/.test(image))) throw new HttpsError("invalid-argument", "写真が大きすぎるか、形式が違います");
 
   // Claude picks the related cards and rules from these lists; the ids are checked against the data afterwards.
   const all = await publishedCards();
@@ -156,17 +182,17 @@ export async function identifyPart(data: Record<string, unknown>, _uid: string) 
       cardIds: [],
       lawIds: ["kaishaku-158"],
     };
-  } else if (image) {
-    // normalise: honour the camera's rotation, keep the long side within what the model looks at
-    const photo = await sharp(Buffer.from(image, "base64")).rotate().resize({ width: 1568, height: 1568, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 88 }).toBuffer();
+  } else if (photo) {
     const meta = await sharp(photo).metadata();
     j = await judge([imageBlock(photo), { type: "text", text: "この写真の部材は何ですか。" }]);
-    const crops = (await Promise.all(j.regions.slice(0, 2).map((r) => crop(photo, meta.width ?? 0, meta.height ?? 0, r)))).filter((b): b is Buffer => !!b);
+    // keep each crop with its own label (a skipped region must not shift the labels of the next)
+    const crops = (await Promise.all(j.regions.slice(0, 2).map(async (r) => ({ buf: await crop(photo, meta.width ?? 0, meta.height ?? 0, r), what: r.what }))))
+      .flatMap((c) => (c.buf ? [{ buf: c.buf, what: c.what }] : []));
     if (crops.length) {
       zoomed = crops.length;
       j = await judge([
         imageBlock(photo),
-        ...crops.flatMap((b, i) => [{ type: "text" as const, text: `拡大した印字${i + 1}（${j.regions[i]?.what ?? ""}）:` }, imageBlock(b)]),
+        ...crops.flatMap((c, i) => [{ type: "text" as const, text: `拡大した印字${i + 1}（${c.what}）:` }, imageBlock(c.buf)]),
         { type: "text", text: `${RECHECK}\n前の判定: ${JSON.stringify({ ...j, regions: [] })}` },
       ]);
     }

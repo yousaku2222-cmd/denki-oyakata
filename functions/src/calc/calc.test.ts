@@ -124,3 +124,37 @@ test("grounding B: 150/Ig, Ig by formula 17-2", () => {
   assert.equal(grounding.run({ type: "B", cutoff: "none", ig: 10, measured: 16 }).ok, false); // 15Ω
   basisOk(r);
 });
+
+test("sizes sent as numbers by Claude's tool call: 2 means IV 2.0mm", () => {
+  // JSON has no 2.0, so the model's { size: 2.0 } arrives as 2
+  assert.match(ampacity.run({ wireType: "IV", size: 2, inConduit: 3 }).verdict, /IV 2\.0mm：許容電流 24\.5A/);
+  assert.match(voltageDrop.run({ system: "single2", length: 30, current: 15, wireType: "IV", size: 2, inConduit: 3 }).verdict, /IV 14sq/);
+});
+
+test("a value that was not a number (null after JSON) is an error, not the default", () => {
+  assert.throws(() => loadToWire.run({ kw: 10, phase: "three", voltage: 200, pf: null, wireType: "CVT", install: "air" }), /力率/);
+});
+
+test("boundaries: 以上 / 以下 are inclusive", () => {
+  assert.equal(insulation.run({ voltage: "other300", measured: 0.2 }).ok, true); // 0.2MΩ以上
+  assert.equal(grounding.run({ type: "D", measured: 100 }).ok, true); // 100Ω以下
+  assert.equal(grounding.run({ type: "C", measured: 10.01 }).ok, false);
+  assert.equal(support.run({ kind: "vinyl", spacing: 1.5 }).ok, true);
+  assert.match(engineer.run({ prime: true, subTotal: 4999.99, contract: 4499.99, public: true }).verdict, /^主任技術者（専任は不要）/);
+  // motor feeders: exactly 50A is still ×1.25
+  const r = loadToWire.run({ kw: 50 * Math.sqrt(3) * 200 * 0.8 / 1000, phase: "three", voltage: 200, pf: 0.8, motor: true, wireType: "CVT", install: "air" });
+  assert.ok(r.steps.some((s) => /× 1\.25/.test(s)), r.steps.join("\n"));
+  basisOk(r);
+  // 146-4表: 4 wires 0.63, 7 wires 0.49
+  assert.match(ampacity.run({ wireType: "IV", size: "2.0", inConduit: 4 }).verdict, /22\.1A/); // 35×0.63 = 22.05
+  assert.match(ampacity.run({ wireType: "IV", size: "2.0", inConduit: 7 }).verdict, /17\.1A/); // 35×0.49 = 17.15 (toFixed rounds the binary value down)
+});
+
+test("CD管 is not offered for exposed runs; mixed racks cite 第168条", () => {
+  const r = support.run({ kind: "pf_exposed" });
+  assert.match(r.title, /^PF管（露出）/);
+  assert.ok(r.notes.some((n) => /CD管は露出では使えません/.test(n)));
+  basisOk(r);
+  basisOk(cableRack.run({ cable1: "HVCVT-38", count1: 2, cable2: "CVT-38", count2: 3, tiers: "1", margin: 20, gap: 0 }));
+  basisOk(cableRack.run({ cable1: "HVCVT-38", count1: 2, cable2: "CVT-38", count2: 3, tiers: "1", margin: 20, gap: 0, barrier: true }));
+});

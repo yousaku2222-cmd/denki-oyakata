@@ -56,6 +56,8 @@ export interface Calc {
 export class CalcInputError extends Error {}
 
 export function num(p: Record<string, unknown>, f: Field): number {
+  // null means the form sent something that was not a number (NaN becomes null in JSON): never fall back to the default then
+  if (p[f.key] === null) throw new CalcInputError(`${f.label}を数字で入れてください`);
   const v = p[f.key] ?? f.default;
   const n = typeof v === "string" ? Number(v) : v;
   if (typeof n !== "number" || !Number.isFinite(n)) throw new CalcInputError(`${f.label}を数字で入れてください`);

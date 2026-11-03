@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { call } from "../firebase";
+import { call, errorText } from "../firebase";
 import { getName, setName } from "../local";
 import { MicInput, Notice } from "../components";
 
@@ -58,8 +58,8 @@ export function Talk({ topic, onDone }: { topic: Topic | null; onDone: () => voi
         setDraft(d.draft);
         setTagsText(d.draft.tags.join("、"));
       }
-    } catch {
-      setErr("うまく送れませんでした。もう一度お試しください。");
+    } catch (e) {
+      setErr(errorText(e, "うまく送れませんでした。もう一度お試しください。"));
     } finally {
       setBusy(false);
     }
