@@ -20,6 +20,7 @@ interface PartResult {
   cards: { id: string; title: string; body: string; reason: string; caution: string; author: string }[];
   laws: { id: string; label: string; summary: string }[];
   calc: ({ label: string } & CalcStart) | null;
+  safetyNote?: string | null;
 }
 
 const SAY = {
@@ -192,6 +193,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
         </>
       )}
 
+      {res?.safetyNote && <p className="notice">⚠️ {res.safetyNote}</p>}
       {res && file && (
         <button className="secondary" disabled={busy || sent} onClick={askVeteran}>
           {sent ? "📮 親方の質問箱に届けました" : "❓ 写真ごと親方に聞く"}

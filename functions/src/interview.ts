@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER } from "./models";
 import { CATEGORIES, COMPANY, CardDoc, LOCATIONS, Turn, db, str, strList, turns } from "./common";
+import { takeQuota } from "./limits";
 
 const MAX_FOLLOW_UPS = 3;
 const DUMMY_FOLLOW_UPS = ["なぜそうするんですか？", "新人がよく間違えるのは、どんなところですか？"];
@@ -164,11 +165,13 @@ async function ownCard(cardId: string, authorId: string) {
   return { ref, card: snap.data() as CardDoc };
 }
 
-export async function publishCard(data: Record<string, unknown>, uid: string) {
+export async function publishCard(data: Record<string, unknown>, uid: string, ctx?: { ip: string }) {
   const cardId = str(data.cardId, "cardId", 64);
   const authorId = uid;
   const e = (data.edits ?? {}) as Record<string, unknown>;
   const { ref, card } = await ownCard(cardId, authorId);
+  // Anyone can act as a veteran (no login by design), so first publications per device are capped.
+  if (card.status === "draft") await takeQuota(authorId, "publish", ctx?.ip);
   const privRef = db.collection("cardPrivate").doc(cardId);
   const priv = await privRef.get();
   const authorName = str(data.authorName, "authorName", 30, false) || (priv.get("authorName") as string | undefined) || card.authorName;
@@ -184,7 +187,7 @@ export async function publishCard(data: Record<string, unknown>, uid: string) {
     body: str(e.body, "body", 1500),
     reason: str(e.reason, "reason", 1000, false),
     caution: str(e.caution, "caution", 1000, false),
-    tags: strList(e.tags, "tags"),
+    tags: strList(e.tags, "tags", 15, 30), // a short list: long ones would match every question
     authorName: shownName,
     showAuthorName,
     status: "published",
@@ -235,4 +238,31 @@ export async function myCards(data: Record<string, unknown>, uid: string) {
       })
       .sort((a, b) => b.updatedAt - a.updatedAt),
   };
+}
+
+/** One of my cards, to go on editing it (a draft left behind, or a published card to fix). */
+export async function myCard(data: Record<string, unknown>, uid: string) {
+  const cardId = str(data.cardId, "cardId", 64);
+  const { card } = await ownCard(cardId, uid);
+  const priv = await db.collection("cardPrivate").doc(cardId).get();
+  return {
+    cardId,
+    status: card.status,
+    draft: { title: card.title, scene: card.scene, body: card.body, reason: card.reason, caution: card.caution, tags: card.tags },
+    authorName: (priv.get("authorName") as string | undefined) ?? card.authorName,
+    showAuthorName: card.showAuthorName,
+    topic: card.triggerQuestionText ? { text: card.triggerQuestionText, askerName: card.triggerAskerName ?? "若手" } : null,
+  };
+}
+
+/** A draft that will not be published: remove it (published cards are hidden with setCardStatus instead). */
+export async function deleteDraft(data: Record<string, unknown>, uid: string) {
+  const cardId = str(data.cardId, "cardId", 64);
+  const { ref, card } = await ownCard(cardId, uid);
+  if (card.status !== "draft") throw new HttpsError("failed-precondition", "公開したカードは消さずに「非公開にする」を使ってください。");
+  const batch = db.batch();
+  batch.delete(ref);
+  batch.delete(db.collection("cardPrivate").doc(cardId));
+  await batch.commit();
+  return { ok: true };
 }

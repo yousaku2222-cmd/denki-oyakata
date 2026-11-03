@@ -32,6 +32,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(role === "veteran" ? "talk" : "ask");
   const [topic, setTopic] = useState<Topic | null>(null);
   const [talkKey, setTalkKey] = useState(0);
+  const [resumeId, setResumeId] = useState<string | null>(null);
   const [theme, setThemeState] = useState(getTheme());
   const [calcStart, setCalcStart] = useState<CalcStart | null>(null);
 
@@ -54,8 +55,9 @@ export default function App() {
 
   if (!role) return <Entry onChoose={choose} />;
 
-  const startTalk = (t: Topic | null) => {
+  const startTalk = (t: Topic | null, resume: string | null = null) => {
     setTopic(t);
+    setResumeId(resume);
     setTalkKey((k) => k + 1);
     setTab("talk");
   };
@@ -86,9 +88,14 @@ export default function App() {
           />
         )}
         {tab === "me" && <Me />}
-        {tab === "talk" && <Talk key={talkKey} topic={topic} onDone={() => startTalk(null)} />}
+        {/* kept mounted while other tabs are open, so a half-told story is not lost */}
+        {role === "veteran" && (
+          <div hidden={tab !== "talk"}>
+            <Talk key={talkKey} topic={topic} resumeCardId={resumeId} onDone={() => startTalk(null)} />
+          </div>
+        )}
         {tab === "box" && <Box onAnswer={startTalk} />}
-        {tab === "mycards" && <MyCards />}
+        {tab === "mycards" && <MyCards onEdit={(id) => startTalk(null, id)} />}
         <p className="disclaimer">最終判断は、有資格者・責任者が行ってください。</p>
       </main>
 
@@ -99,8 +106,7 @@ export default function App() {
             className={tab === t.id ? "on" : ""}
             onClick={() => {
               if (t.id === "calc") setCalcStart(null);
-              if (t.id === "talk" && tab !== "talk") startTalk(null);
-              else setTab(t.id);
+              setTab(t.id); // 話す keeps what was being told; 「続けて話す」 starts a new one
             }}
           >
             <span className="tab-icon">{t.icon}</span>

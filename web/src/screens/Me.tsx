@@ -3,6 +3,7 @@ import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/fire
 import { COMPANY, db, myId } from "../firebase";
 import { getName, getParts, setName } from "../local";
 import { fmtDate } from "../components";
+import { Transfer } from "../Transfer";
 
 interface Q {
   id: string;
@@ -38,8 +39,9 @@ export function Me() {
       const id = q.answeredCardId;
       if (id && !titles[id]) {
         getDoc(doc(db, "cards", id))
-          .then((d) => d.exists() && setTitles((t) => ({ ...t, [id]: d.get("title") as string })))
-          .catch(() => undefined);
+          .then((d) => setTitles((t) => ({ ...t, [id]: d.exists() ? (d.get("title") as string) : "（いまは非公開のカード）" })))
+          // a card the veteran has since hidden cannot be read: say so instead of "…" forever
+          .catch(() => setTitles((t) => ({ ...t, [id]: "（いまは非公開のカード）" })));
       }
     }
   }, [items, titles]);
@@ -77,6 +79,7 @@ export function Me() {
           )}
         </div>
       ))}
+      <Transfer what="あなたの質問" />
       <h2 className="sub-title">📷 わたしの部材帳</h2>
       {parts.length === 0 && <p className="empty">「撮る」で調べた部材が、ここにたまります。</p>}
       <div className="parts-book">

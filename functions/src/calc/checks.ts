@@ -279,7 +279,8 @@ const sup2 = {
   subTotal: { key: "subTotal", label: "下請けに出す金額の合計（税込）", type: "number", unit: "万円", min: 0, default: 0 },
   contract: { key: "contract", label: "この工事の請負代金（税込）", type: "number", unit: "万円", min: 0 },
   building: { key: "building", label: "建築一式工事", type: "boolean", default: false },
-  public: { key: "public", label: "公共工事・学校・病院・共同住宅・事務所など（施行令第27条の施設）", type: "boolean", default: false },
+  // 第27条 covers nearly every building but private houses, so the safe default is on
+  public: { key: "public", label: "施行令第27条の施設（公共工事・学校・病院・共同住宅・事務所・工場・倉庫など。個人の住宅は外す）", type: "boolean", default: true },
 } satisfies Record<string, Field>;
 
 export const engineer: Calc = {

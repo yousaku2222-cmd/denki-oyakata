@@ -49,7 +49,8 @@ test("license scope", () => {
 });
 
 test("engineer: 5,000万 subcontract makes a 監理技術者; 4,500万 public makes it dedicated", () => {
-  assert.match(engineer.run({ prime: true, subTotal: 5000, contract: 9000 }).verdict, /^監理技術者（専任は不要）/);
+  assert.match(engineer.run({ prime: true, subTotal: 5000, contract: 9000, public: false }).verdict, /^監理技術者（専任は不要）/);
+  assert.match(engineer.run({ prime: true, subTotal: 0, contract: 4500 }).verdict, /^主任技術者（専任が必要）/); // 第27条 by default
   assert.match(engineer.run({ prime: true, subTotal: 4999, contract: 4500, public: true }).verdict, /^主任技術者（専任が必要）/);
   assert.match(engineer.run({ prime: true, subTotal: 7000, contract: 8000, building: true }).verdict, /^主任技術者/);
   basisOk(engineer.run({ prime: true, subTotal: 0, contract: 1 }));
@@ -147,7 +148,7 @@ test("boundaries: 以上 / 以下 are inclusive", () => {
   basisOk(r);
   // 146-4表: 4 wires 0.63, 7 wires 0.49
   assert.match(ampacity.run({ wireType: "IV", size: "2.0", inConduit: 4 }).verdict, /22\.1A/); // 35×0.63 = 22.05
-  assert.match(ampacity.run({ wireType: "IV", size: "2.0", inConduit: 7 }).verdict, /17\.1A/); // 35×0.49 = 17.15 (toFixed rounds the binary value down)
+  assert.match(ampacity.run({ wireType: "IV", size: "2.0", inConduit: 7 }).verdict, /17\.2A/); // 35×0.49 = 17.15
 });
 
 test("CD管 is not offered for exposed runs; mixed racks cite 第168条", () => {
@@ -157,4 +158,23 @@ test("CD管 is not offered for exposed runs; mixed racks cite 第168条", () => 
   basisOk(r);
   basisOk(cableRack.run({ cable1: "HVCVT-38", count1: 2, cable2: "CVT-38", count2: 3, tiers: "1", margin: 20, gap: 0 }));
   basisOk(cableRack.run({ cable1: "HVCVT-38", count1: 2, cable2: "CVT-38", count2: 3, tiers: "1", margin: 20, gap: 0, barrier: true }));
+});
+
+import { branchWire } from "./electrical";
+test("branch circuit wire by 149-1表: 20A配線用遮断器 is 1.6mm, no conduit derating", () => {
+  assert.match(branchWire.run({ amps: 20, breakerKind: "mccb" }).verdict, /^1\.6mm 以上/);
+  assert.equal(branchWire.run({ amps: 20, breakerKind: "mccb", size: "1.6" }).ok, true);
+  assert.match(branchWire.run({ amps: 20, breakerKind: "other" }).verdict, /^2\.0mm 以上/);
+  assert.match(branchWire.run({ amps: 15, breakerKind: "other" }).verdict, /^1\.6mm 以上/); // 15A以下
+  assert.match(branchWire.run({ amps: 30 }).verdict, /^2\.6mm 以上/);
+  assert.equal(branchWire.run({ amps: 30, size: "5.5" }).ok, true); // 49A ≧ 48A: same or more
+  assert.match(branchWire.run({ amps: 40 }).verdict, /^8sq 以上/);
+  assert.equal(branchWire.run({ amps: 40, size: "5.5" }).ok, false);
+  assert.match(branchWire.run({ amps: 50 }).verdict, /^14sq 以上/);
+  assert.throws(() => branchWire.run({ amps: 60 }), /50以下/);
+  basisOk(branchWire.run({ amps: 20 }));
+});
+
+test("conduit fill uses 電線1's default when the model leaves it out", () => {
+  assert.match(conduitFill.run({ conduitType: "VE", conduitSize: 22 }).verdict, /^入ります/); // IV 2.0 ×3
 });

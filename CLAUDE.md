@@ -7,7 +7,7 @@
 - `functions/` Firebase Functions (TypeScript)。Claude API はここからだけ呼ぶ。APIキーは Secret `ANTHROPIC_API_KEY`、未設定ならダミー応答で動く。呼び出しは匿名ログイン必須、uid はトークンからだけ取る。Claude の呼び出しは1日の上限あり（`limits.ts`）
 - Firestore。クライアントは読むだけ、書き込みはすべて Functions 経由（firestore.rules）
 
-## コマンド（Node は PATH に `/c/Program Files/nodejs`、firebase は `/c/Users/優作（積算用）/AppData/Roaming/npm` を足す）
+## コマンド（Node は PATH に `/c/Program Files/nodejs`、firebase は `$APPDATA/npm` を足す）
 - `cd functions && npm run build` / `npm test`
 - `cd web && npm run build` / `npm run dev`
 - `firebase emulators:start --project demo-denki-oyakata`（ルートで。Functions は先に build。Java 21 が要る: `JAVA_HOME=/c/dev/tools/jdk-21.0.12.1+1`）
@@ -19,3 +19,5 @@
 - 法令の引用は原文との照合を通ったものだけ「✔」を付ける
 - 画面の文言は日本語。コメント・コミットは英語可
 - 個人情報（お客様名・住所）や他社の資料本文をリポジトリに入れない
+- 公開カード（cards）は誰の端末からも読める。本名（名前を出さない時）と聞き取りの原文は `cardPrivate` にだけ置く
+- 回数制限は `takeQuota(uid, 種類, ip)`。Claude を呼ぶ・書き込みが増える呼び出し口を足したら上限も足す

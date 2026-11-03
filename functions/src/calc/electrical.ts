@@ -47,6 +47,13 @@ const STRANDED: [number, number, number][] = [
   [0.9, 1.25, 17], [1.25, 2, 19], [2, 3.5, 27], [3.5, 5.5, 37], [5.5, 8, 49], [8, 14, 61], [14, 22, 88], [22, 30, 115], [30, 38, 139],
   [38, 50, 162], [50, 60, 190], [60, 80, 217], [80, 100, 257], [100, 125, 298], [125, 150, 344], [150, 200, 395], [200, 250, 469], [250, 325, 556], [325, 400, 650],
 ];
+/** 146-1表・146-2表 (soft copper) before any correction: the measure of "同等以上の許容電流" in 149-1表. */
+export function ivBaseAmps(s: string): number | null {
+  const solid = ["1.6", "2.0", "2.6"].includes(s);
+  const row = (solid ? SOLID : STRANDED).find(([lo, hi]) => Number(s) >= lo && Number(s) < hi);
+  return row ? row[2] : null;
+}
+
 const IV_T = 60; // 146-3表: ビニル混合物（耐熱性を有するものを除く）
 // 146-4表: 同一管内の電線数 → 電流減少係数
 export function reductionFactor(n: number): number {
@@ -242,7 +249,7 @@ export const voltageDrop: Calc = {
       basis: amp.basis,
       notes: [
         "銅線の簡略式です（力率・リアクタンスは考えていません）。",
-        "電圧降下の目安は内線規程の考え方です（幹線と分岐の合計、本文は載せていません）。設計図書・電力会社の指定があればそちらに従ってください。",
+        "電圧降下の目安は内線規程の考え方です（本文は載せていません）。こう長60m以下は幹線・分岐回路それぞれ2%、60mを超えると幹線と分岐回路の合計で4%・5%・6%（電力会社から低圧で受電する場合。構内に変圧器がある場合は少し緩い値）。設計図書・電力会社の指定があればそちらに従ってください。",
         `許容電流は ${amp.source} の条件です。`,
         ...(n > 1 ? [parallelNote] : []),
       ],
@@ -352,6 +359,65 @@ export const loadToWire: Calc = {
         `${TYPES[t].label}の条件: ${a?.source ?? "—"}。ほかの種類の IV は同じ管に3本で計算しています。`,
         ...(motor ? ["電動機以外の負荷もつながる幹線は、その定格電流の合計を足してください。始動電流・保護装置との協調も確認してください。"] : []),
         ...(n > 1 ? [parallelNote] : []),
+      ],
+    };
+  },
+};
+
+// ---------- 分岐回路の電線の太さ（電技解釈 第149条 149-1表） ----------
+// The size a branch circuit needs is set by its breaker (149-1表), not by the ampacity in a conduit:
+// 146-4表's reduction factor does not apply here (第146条第2項第二号ロ ただし書).
+const BRANCH: { max: number; mccbOnly?: boolean; size: string; label: string }[] = [
+  { max: 15, size: "1.6", label: "定格電流が15A以下" },
+  { max: 20, mccbOnly: true, size: "1.6", label: "15Aを超え20A以下の配線用遮断器" },
+  { max: 20, size: "2.0", label: "15Aを超え20A以下（配線用遮断器を除く）" },
+  { max: 30, size: "2.6", label: "20Aを超え30A以下" },
+  { max: 40, size: "8", label: "30Aを超え40A以下" },
+  { max: 50, size: "14", label: "40Aを超え50A以下" },
+];
+const BRANCH_SIZES = ["1.6", "2.0", "2.6", "5.5", "8", "14", "22"];
+const br = {
+  amps: { key: "amps", label: "分岐回路のブレーカー（過電流遮断器）の定格電流", type: "number", unit: "A", default: 20, min: 1, max: 50 },
+  breakerKind: { key: "breakerKind", label: "ブレーカーの種類", type: "select", default: "mccb", options: [{ value: "mccb", label: "配線用遮断器" }, { value: "other", label: "ヒューズなど（配線用遮断器以外）" }] },
+  size: { key: "size", label: "使う電線の太さ（軟銅線）", type: "select", emptyLabel: "選ばない", options: BRANCH_SIZES.map((s) => ({ value: s, label: sizeLabel("IV", s) })) },
+} satisfies Record<string, Field>;
+
+export const branchWire: Calc = {
+  name: "branch_wire",
+  label: "分岐回路の電線の太さ（ブレーカーから）",
+  description:
+    "低圧の分岐回路のブレーカーの定格電流（50A以下）から、電技解釈第149条の149-1表で必要な電線（軟銅線）の太さを出し、使う電線が足りるか判定する（同等以上の許容電流かは146-1表・146-2表の値で比べる）。配線用遮断器20Aなら1.6mm。電動機だけの回路は対象外。",
+  fields: Object.values(br),
+  run(p) {
+    const A = num(p, br.amps);
+    const kind = pick<"mccb" | "other">(p, br.breakerKind);
+    const row = BRANCH.find((r) => A <= r.max && (!r.mccbOnly || kind === "mccb"))!;
+    const need = ivBaseAmps(row.size)!;
+    const given = p.size === undefined || p.size === null || p.size === "" ? null : pick<string>(p, br.size);
+    const have = given === null ? null : ivBaseAmps(given)!;
+    const ok = have === null ? null : have >= need;
+    const needName = sizeLabel("IV", row.size);
+    return {
+      title: `分岐回路の電線の太さ（${A}A・${kind === "mccb" ? "配線用遮断器" : "配線用遮断器以外"}）`,
+      ok,
+      verdict:
+        given === null
+          ? `${needName} 以上（149-1表）`
+          : `${ok ? "OK" : "NG"}（${sizeLabel("IV", given)} ${ok ? "≧" : "＜"} 必要 ${needName}）`,
+      steps: [
+        `149-1表: ${row.label} → 軟銅線 ${needName}`,
+        `${needName} の許容電流（146表の値）: ${need}A`,
+        ...(given === null ? [] : [`${sizeLabel("IV", given)} の許容電流（146表の値）: ${have}A → ${ok ? "同等以上" : "足りない"}`]),
+        "この表で選ぶ時は、管に入れる本数による電流減少係数（146-4表）は掛けません。",
+      ],
+      basis: [
+        { lawId: "kaishaku-149", quote: "イ 第1項第一号の規定により施設する過電流遮断器の定格電流は、50A以下であること。" },
+        { lawId: "kaishaku-149", quote: "太さが149-1表の中欄に規定する値の軟銅線若しくはこれと同等以上の許容電流のあるもの" },
+        { lawId: "kaishaku-146", quote: "ただし、第148条第1項第五号ただし書並びに第149条第2項第一号ロ及び第二号イに規定する場合においては、この限りでない。" },
+      ],
+      notes: [
+        "電動機だけにつながる分岐回路は、第149条第2項第二号（電線の許容電流は電動機の定格電流の1.25倍・1.1倍以上）で選びます。",
+        "コンセントの定格もブレーカーに合わせて決まります（149-3表）。長い配線は電圧降下も確かめてください。",
       ],
     };
   },

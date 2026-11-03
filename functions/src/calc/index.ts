@@ -1,6 +1,6 @@
 import { logger } from "firebase-functions";
 import { getLawById, lawLabel, quoteIsInOriginal } from "../laws";
-import { ampacity, loadToWire, voltageDrop } from "./electrical";
+import { ampacity, branchWire, loadToWire, voltageDrop } from "./electrical";
 import { engineer, grounding, insulation, license, rack, support } from "./checks";
 import { conduitFill } from "./fill";
 import { cableRack } from "./rack";
@@ -9,7 +9,7 @@ import { Calc, CalcInputError, CalcResult } from "./types";
 import { CONDUITS } from "./conduitData";
 
 // conduit_fill appears once its dimension table is filled in.
-export const CALCS: Calc[] = [...(Object.keys(CONDUITS).length ? [conduitFill] : []), voltageDrop, loadToWire, ampacity, cableRack, insulation, grounding, support, rack, license, engineer];
+export const CALCS: Calc[] = [...(Object.keys(CONDUITS).length ? [conduitFill] : []), voltageDrop, loadToWire, ampacity, branchWire, cableRack, insulation, grounding, support, rack, license, engineer];
 const byName = new Map(CALCS.map((c) => [c.name, c]));
 
 export type CalcOutput = CalcResult & {

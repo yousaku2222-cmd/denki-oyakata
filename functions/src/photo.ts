@@ -3,11 +3,10 @@ import sharp from "sharp";
 import { HttpsError } from "firebase-functions/v2/https";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER } from "./models";
-import { displayAuthor, str } from "./common";
+import { displayAuthor, safetyNote, str } from "./common";
 import { publishedCards } from "./ask";
 import { LAWS, getLawById, lawLabel } from "./laws";
 import { CONDUITS } from "./calc/conduitData";
-import { thinnest } from "./calc/electrical";
 
 // ⑤ 撮る: a photo of a part → its name, what it is for, and where to go next (the veteran's cards, the rules, a calculation).
 // Small print and nameplates are cut out of the photo and enlarged, then read again: the model misreads small text
@@ -88,6 +87,7 @@ const SYSTEM = `電気工事の若手（資格なし〜第二種電気工事士�
 
 const RECHECK = `前の判定と、写真から切り出して拡大した印字を渡します。拡大した印字を読み直して、判定を同じ形で返し直してください。印字で確かめられたら verdict を上げてよい。読めない文字は推測で補わない。regions は空にしてください。`;
 
+const MAX_LISTED_CARDS = 80;
 const MAX_IMAGE = 6_000_000; // base64 characters
 const MAX_PIXELS = 40_000_000; // a 48MP phone photo is already shrunk on the device; this stops "zip bomb" images
 const FORMATS = new Set(["jpeg", "png", "webp", "heif"]);
@@ -141,13 +141,9 @@ function calcLink(spec: Judged["spec"]) {
     const size = c.sizes[String(spec.conduitSize)] ? String(spec.conduitSize) : undefined;
     return { name: "conduit_fill", label: `${c.short}${size ?? ""}に何本入るか計算する`, params: { conduitType: spec.conduitType, ...(size ? { conduitSize: size } : {}) } };
   }
-  if (Number.isInteger(spec.breakerAmps) && spec.breakerAmps > 0 && spec.breakerAmps <= 400) {
-    const t = thinnest("IV", 1, { install: "air", ambient: null, inConduit: 3 }, spec.breakerAmps);
-    return {
-      name: "wire_ampacity",
-      label: `${spec.breakerAmps}Aの回路の電線の太さを確かめる`,
-      params: { wireType: "IV", size: t?.s ?? "5.5", inConduit: 3, load: spec.breakerAmps },
-    };
+  // a branch-circuit breaker: the wire size comes from 149-1表 (20A配線用遮断器 → 1.6mm), not from ampacity in a conduit
+  if (Number.isInteger(spec.breakerAmps) && spec.breakerAmps > 0 && spec.breakerAmps <= 50) {
+    return { name: "branch_wire", label: `${spec.breakerAmps}Aのブレーカーの回路に要る電線の太さを見る`, params: { amps: spec.breakerAmps, breakerKind: "mccb" } };
   }
   return null;
 }
@@ -161,7 +157,11 @@ export async function identifyPart(data: Record<string, unknown>, _uid: string) 
 
   // Claude picks the related cards and rules from these lists; the ids are checked against the data afterwards.
   const all = await publishedCards();
-  const catalog = ["社内の知恵カード:", ...all.map((c) => `[${c.id}] ${c.title}`), "法令・基準:", ...LAWS.map((l) => `[${l.id}] ${lawLabel(l)}`)].join("\n");
+  // The list goes into every photo request: keep it bounded however many cards there are (most helpful first).
+  const listed = [...all]
+    .sort((a, b) => b.helpedCount - a.helpedCount || (b.publishedAt?.toMillis() ?? 0) - (a.publishedAt?.toMillis() ?? 0))
+    .slice(0, MAX_LISTED_CARDS);
+  const catalog = ["社内の知恵カード:", ...listed.map((c) => `[${c.id}] ${c.title.slice(0, 40)}`), "法令・基準:", ...LAWS.map((l) => `[${l.id}] ${lawLabel(l)}`)].join("\n");
   const judge = (content: Anthropic.ContentBlockParam[]) =>
     jsonCall<Judged>({ model: MODEL_ANSWER, system: `${SYSTEM}\n\n${catalog}`, user: content, schema: SCHEMA, maxTokens: 6000 });
   let j: Judged;
@@ -201,7 +201,7 @@ export async function identifyPart(data: Record<string, unknown>, _uid: string) 
   }
 
   // keep only ids that really exist
-  const byId = new Map(all.map((c) => [c.id, c]));
+  const byId = new Map(listed.map((c) => [c.id, c]));
   const cards = [...new Set(j.cardIds)]
     .flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
     .slice(0, 3)
@@ -225,6 +225,7 @@ export async function identifyPart(data: Record<string, unknown>, _uid: string) 
     cards,
     laws,
     calc: calcLink(j.spec),
+    safetyNote: safetyNote(`${j.name} ${j.use}`),
     model: getClient() ? MODEL_ANSWER : "dummy",
   };
 }

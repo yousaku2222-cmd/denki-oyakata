@@ -35,10 +35,10 @@ let t = [{ role: "veteran", text: "PF管はな、床の埋設配管で90度の�
 let n = await call("interviewNext", { transcript: t }, vet);
 check("interview asks a follow-up", !n.done && n.question.length > 0, `[${n.mode}] ${n.question}`);
 t = [...t, { role: "ai", text: n.question }, { role: "veteran", text: "曲げすぎると摩擦で通線できんようになるけん。" }];
-const d = await call("draftCard", { transcript: t, authorName: "溝上（親方）" }, vet);
+const d = await call("draftCard", { transcript: t, authorName: "山田（親方）" }, vet);
 check("draft card created", !!d.cardId, d.draft.title);
 check("draft is hidden from clients", (await clientGet(`cards/${d.cardId}`)) === 403);
-await call("publishCard", { cardId: d.cardId, authorName: "溝上（親方）", showAuthorName: true, edits: { ...d.draft, tags: ["PF", "合成樹脂可とう電線管", "曲げ"] } }, vet);
+await call("publishCard", { cardId: d.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...d.draft, tags: ["PF", "合成樹脂可とう電線管", "曲げ"] } }, vet);
 check("published card is readable", (await fetch(`${FS}/cards/${d.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).status === 200);
 
 // 2. Someone else cannot publish or hide it.
@@ -56,14 +56,14 @@ const u = await call("ask", { text: "新しい現場の朝礼は何時からで�
 check("ungrounded question detected", !u.grounded);
 const { questionId } = await call("sendToBox", { text: "新しい現場の朝礼は何時からですか？", askerName: "テスト若手", askerRole: "young" }, young);
 const t2 = [{ role: "veteran", text: "（テスト用の文）新しい現場の朝礼は、だいたい8時から。前の日に職長に確認しておく。" }];
-const d2 = await call("draftCard", { transcript: t2, authorName: "溝上（親方）", triggerQuestionId: questionId }, vet);
-await call("publishCard", { cardId: d2.cardId, authorName: "溝上（親方）", showAuthorName: false, edits: { ...d2.draft, tags: ["朝礼", "集合時間", "新規入場"] } }, vet);
+const d2 = await call("draftCard", { transcript: t2, authorName: "山田（親方）", triggerQuestionId: questionId }, vet);
+await call("publishCard", { cardId: d2.cardId, authorName: "山田（親方）", showAuthorName: false, edits: { ...d2.draft, tags: ["朝礼", "集合時間", "新規入場"] } }, vet);
 if (u.mode === "claude") for (const s of u.sentences) console.log(`     [${s.source}] ${s.text}`);
 const q = await (await fetch(`${FS}/questions/${questionId}`, { headers: { Authorization: `Bearer ${young}` } })).json();
 check("question marked answered", q.fields?.status?.stringValue === "answered");
 // The veteran chose not to show the name: the public card must not carry it (nor the raw interview).
 const hidden = await (await fetch(`${FS}/cards/${d2.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).json();
-check("hidden name is not in the public card", hidden.fields?.authorName?.stringValue === "" && !JSON.stringify(hidden).includes("溝上"), hidden.fields?.authorName?.stringValue);
+check("hidden name is not in the public card", hidden.fields?.authorName?.stringValue === "" && !JSON.stringify(hidden).includes("山田"), hidden.fields?.authorName?.stringValue);
 check("raw interview is not in the public card", !(hidden.fields?.transcript?.arrayValue?.values ?? []).length);
 check("cards and questions need a signed-in device", (await clientGet(`cards/${d.cardId}`)) === 403 && (await clientGet(`questions/${questionId}`)) === 403);
 const a2 = await call("ask", { text: "新しい現場の朝礼は何時からですか？", askerRole: "young" }, young);
@@ -71,12 +71,33 @@ check("same question now answered from the new card", a2.grounded && a2.cards.so
 
 // 5. Veteran's own view.
 await call("markGoodQuestion", { questionId }, vet);
+try { await call("markGoodQuestion", { questionId }, young); check("no いい質問 on your own question", false); }
+catch (e) { check("no いい質問 on your own question", /FAILED_PRECONDITION|failed-precondition/.test(String(e))); }
 const mine = await call("myCards", {}, vet);
 const pf = mine.cards.find((c) => c.id === d.cardId);
 check("helped count reached the veteran", pf?.helpedCount === 1, `cards=${mine.cards.length}`);
 check("clients cannot write directly", (await fetch(`${FS}/cards?documentId=x`, { method: "POST", body: JSON.stringify({ fields: { title: { stringValue: "x" } } }) })).status === 403);
 
-// 6. The question box has its own daily cap per device (it costs no Claude call, but every veteran downloads it).
+// 6. A draft left behind can be opened again or removed; it never shows to others.
+const left = await call("draftCard", { transcript: [{ role: "veteran", text: "（テスト用）下書きのまま置いておく話。" }], authorName: "山田（親方）" }, vet);
+const opened = await call("myCard", { cardId: left.cardId }, vet);
+check("a draft can be opened again", opened.status === "draft" && opened.authorName === "山田（親方）");
+try { await call("myCard", { cardId: left.cardId }, young); check("someone else cannot open my draft", false); }
+catch (e) { check("someone else cannot open my draft", /permission-denied|PERMISSION_DENIED/.test(String(e))); }
+await call("deleteDraft", { cardId: left.cardId }, vet);
+check("a draft can be removed", !(await call("myCards", {}, vet)).cards.some((c) => c.id === left.cardId));
+
+// 7. Moving to a new phone: the code moves the cards over, once.
+const { code } = await call("makeTransferCode", {}, vet);
+const newPhone = await signUp();
+const moved = await call("useTransferCode", { code: code.toLowerCase() }, newPhone);
+check("transfer code moves the cards", moved.cards === 2 && (await call("myCards", {}, newPhone)).cards.length === 2, JSON.stringify(moved));
+try { await call("useTransferCode", { code }, await signUp()); check("transfer code works once", false); }
+catch (e) { check("transfer code works once", /NOT_FOUND|not-found/.test(String(e))); }
+try { await call("setCardStatus", { cardId: d.cardId, status: "private" }, vet); check("old phone no longer owns the cards", false); }
+catch (e) { check("old phone no longer owns the cards", /permission-denied|PERMISSION_DENIED/.test(String(e))); }
+
+// 8. The question box has its own daily cap per device (it costs no Claude call, but every veteran downloads it).
 const spammer = await signUp();
 let accepted = 0;
 for (let i = 0; i < 21; i++) {

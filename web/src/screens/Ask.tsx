@@ -116,7 +116,8 @@ export function Ask({ role }: { role: Role }) {
                     </span>
                   </button>
                 )}
-                {s.verified && <span className="stamp">✔ 原文と一致</span>}
+                {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
+                {s.verified && <span className="stamp">✔ 引用は原文と一致</span>}
               </div>
             );
           })}

@@ -61,8 +61,13 @@
 `{ authorId, authorName, transcript, createdAt }` — 本名と聞き取りのやりとりの原文。公開カード（cards）には、名前を出すと選んだ時だけ authorName を入れ、transcript は空にする。
 
 ### users（端末ごと。ログインなし）
-`{ displayName, roleHistory: {role, at}[], askedCount, answeredFromMyQuestions, helpedCount, createdAt }`
-将来の「若手→ベテランへの移行」「成長の記録」の土台。
+`{ askedCount, answeredFromMyQuestions }`（いまは数だけ。displayName・roleHistory は将来の「若手→ベテランへの移行」「成長の記録」の土台として予定）
+
+### usage（回数制限の数。サーバーだけ）
+`{日付}_{種類}{uid}`・`{日付}_{種類}ip_{回線のハッシュ}`・`{日付}_{種類}all_{0〜9}`（全体の数は10か所に分けて数える）。種類は AI（なし）／質問箱 `box_`／公開 `pub_`／引き継ぎ `tr_`。
+
+### transfers（引き継ぎコード。サーバーだけ）
+`{ uid, createdAt, expiresAt }` — 24時間・1回だけ。使うと、古い端末IDのカード・質問・答えの記録が新しい端末IDに移る。
 
 ### laws（段階2: 法令カード）
 `{ lawName, edition, article, heading, text(原文), summary, keywords[], scenes[], sourceUrl }`
@@ -78,10 +83,13 @@ Opus が条文ごとに要約・キーワード・場面を付ける（ナレッ
 | ask | 1 | 振り分け → 知恵カード検索 → 3色の答え。根拠なしなら grounded=false |
 | sendToBox | 1 | 質問を質問箱へ |
 | markHelped / markGoodQuestion | 1 | 貢献の見える化 |
-| calc* | 3 | 計算・判定（プログラム） |
-| identifyPhoto | 4 | 写真の判定 |
+| myCard / deleteDraft | 1 | 自分のカード（下書き）を開いて直す／下書きを消す |
+| listCalcs / calc | 3 | 計算・判定（プログラム）。calc は name で計算を選ぶ |
+| listLaws / getLaw | 2 | 法令カードの一覧・全文 |
+| identifyPart | 4 | 写真の判定 |
+| makeTransferCode / useTransferCode | 締め | 端末の引き継ぎ |
 
-回数制限（締め）: 端末ごと・全体の1日上限を Functions で数える。
+回数制限（締め）: 端末ごと・回線ごと・全体の1日上限を Functions で数える（`functions/src/limits.ts`）。先に数を足してから読み、上限を超えていれば断る（トランザクションを使わないので、同時に呼ばれてもロック待ちで失敗しない。上限を超えて通ることはない）。
 
 ## 3. 画面
 入り口（初回だけ）: ロゴ・キャッチコピー・使い方3コマ・「ベテランとして使う／若手として使う」・「審査員の方はこちら（デモ）」。役割は端末に保存、右上からいつでも切り替え。

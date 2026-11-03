@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { call, errorText } from "../firebase";
 import { getName, setName } from "../local";
 import { MicInput, Notice } from "../components";
@@ -18,12 +18,13 @@ export interface Topic {
   askerName: string;
 }
 
-export function Talk({ topic, onDone }: { topic: Topic | null; onDone: () => void }) {
+export function Talk({ topic: topicIn, resumeCardId, onDone }: { topic: Topic | null; resumeCardId?: string | null; onDone: () => void }) {
+  const [topic, setTopic] = useState(topicIn);
   const [listenerMode, setListenerMode] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState("");
   const [aiQuestion, setAiQuestion] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(!!resumeCardId); // opening a saved card
   const [err, setErr] = useState("");
   const [cardId, setCardId] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -32,20 +33,41 @@ export function Talk({ topic, onDone }: { topic: Topic | null; onDone: () => voi
   const [name, setNameState] = useState(getName("veteran"));
   const [published, setPublished] = useState(false);
 
+  // opened from わたしのカード: go on with a draft (or fix a published card)
+  useEffect(() => {
+    if (!resumeCardId) return;
+    call<{ cardId: string; draft: Draft; authorName: string; showAuthorName: boolean; topic: { text: string; askerName: string } | null }>("myCard", { cardId: resumeCardId })
+      .then((r) => {
+        setCardId(r.cardId);
+        setDraft(r.draft);
+        setTagsText(r.draft.tags.join("、"));
+        setShowName(r.showAuthorName);
+        if (r.authorName) setNameState(r.authorName);
+        if (r.topic) setTopic({ questionId: "", ...r.topic });
+      })
+      .catch((e) => setErr(errorText(e, "カードを開けませんでした。もう一度お試しください。")))
+      .finally(() => setBusy(false));
+  }, [resumeCardId]);
+
   async function next(finish = false) {
     const t: Turn[] = text.trim()
       ? [...turns, ...(aiQuestion ? [{ role: "ai" as const, text: aiQuestion }] : []), { role: "veteran", text: text.trim() }]
       : turns;
     if (!t.some((x) => x.role === "veteran")) return;
+    if (text.trim().length > 3000) {
+      setErr("1回に送れるのは3000字までです。分けて送ってください。");
+      return;
+    }
     setBusy(true);
     setErr("");
     try {
-      setTurns(t);
-      setText("");
-      setAiQuestion("");
       const r = finish
         ? { done: true, question: "" }
         : await call<{ done: boolean; question: string }>("interviewNext", { transcript: t, questionText: topic?.text });
+      // only now: if the call failed, what was said stays in the box and can be sent again
+      setTurns(t);
+      setText("");
+      setAiQuestion("");
       if (!r.done) {
         setAiQuestion(r.question);
       } else {
@@ -78,8 +100,8 @@ export function Talk({ topic, onDone }: { topic: Topic | null; onDone: () => voi
         edits: { ...draft, tags: tagsText.split(/[、,\s]+/).filter(Boolean) },
       });
       setPublished(true);
-    } catch {
-      setErr("公開できませんでした。題名とやり方が入っているか確かめてください。");
+    } catch (e) {
+      setErr(errorText(e, "公開できませんでした。題名とやり方が入っているか、長すぎないか確かめてください。"));
     } finally {
       setBusy(false);
     }
@@ -123,7 +145,7 @@ export function Talk({ topic, onDone }: { topic: Topic | null; onDone: () => voi
           <label className="radio">
             <input type="radio" checked={showName} onChange={() => setShowName(true)} /> 名前を出す
           </label>
-          {showName && <input placeholder="例: 溝上（親方）" value={name} onChange={(e) => setNameState(e.target.value)} />}
+          {showName && <input placeholder="例: 山田（親方）" value={name} onChange={(e) => setNameState(e.target.value)} />}
           <label className="radio">
             <input type="radio" checked={!showName} onChange={() => setShowName(false)} /> 出さない（「社内のベテラン」と表示）
           </label>

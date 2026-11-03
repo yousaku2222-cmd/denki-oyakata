@@ -12,6 +12,7 @@ export interface LawRef {
 }
 interface LawFull extends Required<LawRef> {
   text: string;
+  note: string | null; // where tables of the PDF did not come out cleanly
   summary: string;
   scenes: string[];
 }
@@ -54,6 +55,7 @@ export function LawSheet({ id, highlight, onClose }: { id: string; highlight?: s
               <p>{law.summary}</p>
             </div>
             <span className="field-label">原文</span>
+            {law.note && <p className="hint">※ {law.note}</p>}
             <pre className="law-text">{highlightQuote(law.text, highlight)}</pre>
           </>
         )}

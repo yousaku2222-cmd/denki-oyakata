@@ -43,7 +43,7 @@ export function errorText(e: unknown, fallback: string): string {
   const code = (e as { code?: string })?.code ?? "";
   const message = (e as { message?: string })?.message ?? "";
   // only our Japanese messages are shown as they are (not "internal" etc.)
-  return (code === "functions/resource-exhausted" || code === "functions/invalid-argument") && /[ぁ-んァ-ン一-龥]/.test(message) ? message : fallback;
+  return (code === "functions/resource-exhausted" || code === "functions/invalid-argument" || code === "functions/not-found" || code === "functions/failed-precondition") && /[ぁ-んァ-ン一-龥]/.test(message) ? message : fallback;
 }
 
 export async function call<T>(name: string, data: unknown): Promise<T> {

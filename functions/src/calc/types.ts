@@ -77,4 +77,6 @@ export function flag(p: Record<string, unknown>, f: Field): boolean {
   return v === true || v === "true";
 }
 
-export const fmt = (n: number, digits = 2) => Number(n.toFixed(digits)).toLocaleString("ja-JP");
+// 17.15 is stored as 17.149999…: round on the decimal string so it shows as 17.2, as it would on paper
+const round = (n: number, digits: number) => Number(`${Math.round(Number(`${n}e${digits}`))}e-${digits}`);
+export const fmt = (n: number, digits = 2) => (Number.isFinite(round(n, digits)) ? round(n, digits) : Number(n.toFixed(digits))).toLocaleString("ja-JP");

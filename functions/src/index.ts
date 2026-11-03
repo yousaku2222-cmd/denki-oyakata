@@ -3,17 +3,28 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { logger } from "firebase-functions";
 import { anthropicKey, getClient } from "./claude";
 import { takeQuota } from "./limits";
-import { interviewNext as interviewNextImpl, draftCard as draftCardImpl, publishCard as publishCardImpl, setCardStatus as setCardStatusImpl, myCards as myCardsImpl } from "./interview";
+import { interviewNext as interviewNextImpl, draftCard as draftCardImpl, publishCard as publishCardImpl, setCardStatus as setCardStatusImpl, myCards as myCardsImpl, myCard as myCardImpl, deleteDraft as deleteDraftImpl } from "./interview";
 import { ask as askImpl, markHelped as markHelpedImpl } from "./ask";
 import { sendToBox as sendToBoxImpl, markGoodQuestion as markGoodQuestionImpl } from "./box";
 import { identifyPart as identifyPartImpl } from "./photo";
+import { makeTransferCode as makeTransferCodeImpl, useTransferCode as useTransferCodeImpl } from "./transfer";
 import { listLaws as listLawsImpl, getLaw as getLawImpl } from "./laws";
 import { listCalcs as listCalcsImpl, runCalc } from "./calc";
 import { CalcInputError } from "./calc/types";
 
 setGlobalOptions({ region: "asia-northeast1", maxInstances: 5 });
 
-type Handler = (data: Record<string, unknown>, uid: string) => Promise<unknown>;
+export interface Ctx {
+  ip: string; // the caller's network address, for the per-address daily caps
+}
+type Handler = (data: Record<string, unknown>, uid: string, ctx: Ctx) => Promise<unknown>;
+
+/** Google's front end appends the address it saw to X-Forwarded-For, so the last entry is the one a client cannot forge. */
+function callerIp(req: CallableRequest): string {
+  const xff = req.rawRequest?.headers?.["x-forwarded-for"];
+  const list = (Array.isArray(xff) ? xff.join(",") : xff ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return list.at(-1) ?? req.rawRequest?.ip ?? "";
+}
 
 // Every call needs a signed-in user (anonymous sign-in, invisible to the user).
 // The uid comes from the verified token, never from the request body.
@@ -22,8 +33,9 @@ function callable(fn: Handler, useClaude = false) {
     const uid = req.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "もう一度アプリを開き直してください。");
     try {
-      if (useClaude && getClient()) await takeQuota(uid);
-      return await fn((req.data ?? {}) as Record<string, unknown>, uid);
+      const ctx: Ctx = { ip: callerIp(req) };
+      if (useClaude && getClient()) await takeQuota(uid, "claude", ctx.ip);
+      return await fn((req.data ?? {}) as Record<string, unknown>, uid, ctx);
     } catch (e) {
       if (e instanceof HttpsError) throw e;
       logger.error(e);
@@ -37,11 +49,15 @@ export const draftCard = callable(draftCardImpl, true);
 export const publishCard = callable(publishCardImpl);
 export const setCardStatus = callable(setCardStatusImpl);
 export const myCards = callable(myCardsImpl);
+export const myCard = callable(myCardImpl);
+export const deleteDraft = callable(deleteDraftImpl);
 export const ask = callable(askImpl, true);
 export const markHelped = callable(markHelpedImpl);
 export const sendToBox = callable(sendToBoxImpl);
 export const markGoodQuestion = callable(markGoodQuestionImpl);
 export const identifyPart = callable(identifyPartImpl, true);
+export const makeTransferCode = callable(makeTransferCodeImpl);
+export const useTransferCode = callable(useTransferCodeImpl);
 export const listLaws = callable(listLawsImpl);
 export const getLaw = callable(getLawImpl);
 export const listCalcs = callable(listCalcsImpl);

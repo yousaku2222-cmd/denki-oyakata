@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { call } from "../firebase";
+import { call, errorText } from "../firebase";
 import { fmtDate } from "../components";
+import { Transfer } from "../Transfer";
 
 interface Mine {
   id: string;
@@ -13,8 +14,10 @@ interface Mine {
 
 const STATUS = { draft: "下書き", published: "公開中", private: "非公開" };
 
-export function MyCards() {
+export function MyCards({ onEdit }: { onEdit: (cardId: string) => void }) {
   const [cards, setCards] = useState<Mine[] | null>(null);
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
   const load = useCallback(() => {
     call<{ cards: Mine[] }>("myCards", {})
       .then((r) => setCards(r.cards))
@@ -24,9 +27,17 @@ export function MyCards() {
 
   const total = cards?.reduce((n, c) => n + (c.status === "published" ? c.helpedCount : 0), 0) ?? 0;
 
-  async function toggle(c: Mine) {
-    await call("setCardStatus", { cardId: c.id, status: c.status === "published" ? "private" : "published" });
-    load();
+  async function act(c: Mine, name: string, data: Record<string, unknown>) {
+    setBusy(c.id);
+    setErr("");
+    try {
+      await call(name, { cardId: c.id, ...data });
+      load();
+    } catch (e) {
+      setErr(errorText(e, "うまくいきませんでした。電波の良い所で、もう一度お試しください。"));
+    } finally {
+      setBusy("");
+    }
   }
 
   return (
@@ -37,6 +48,7 @@ export function MyCards() {
         <span>回、あなたの知恵が若手を助けました</span>
       </div>
       {cards === null && <p className="hint">読み込み中…</p>}
+      {err && <p className="hint error">{err}</p>}
       {cards?.length === 0 && <p className="empty">まだカードがありません。「話す」から始めましょう。</p>}
       {cards?.map((c) => (
         <div key={c.id} className="qcard">
@@ -45,13 +57,23 @@ export function MyCards() {
             {STATUS[c.status]}・👍 {c.helpedCount}・{fmtDate(c.updatedAt)}
             {c.triggerAskerName ? `・きっかけ: ${c.triggerAskerName}さんの質問` : ""}
           </p>
-          {c.status !== "draft" && (
-            <button className="secondary" onClick={() => toggle(c)}>
-              {c.status === "published" ? "非公開にする" : "もう一度公開する"}
+          <div className="row">
+            <button className="secondary" disabled={!!busy} onClick={() => onEdit(c.id)}>
+              {c.status === "draft" ? "続きを直して公開する" : "直す"}
             </button>
-          )}
+            {c.status === "draft" ? (
+              <button className="secondary" disabled={!!busy} onClick={() => confirm("この下書きを消しますか？") && act(c, "deleteDraft", {})}>
+                下書きを消す
+              </button>
+            ) : (
+              <button className="secondary" disabled={!!busy} onClick={() => act(c, "setCardStatus", { status: c.status === "published" ? "private" : "published" })}>
+                {c.status === "published" ? "非公開にする" : "もう一度公開する"}
+              </button>
+            )}
+          </div>
         </div>
       ))}
+      <Transfer what="あなたのカード" onMoved={load} />
     </section>
   );
 }

@@ -50,7 +50,7 @@ export const conduitFill: Calc = {
     if (p.maxCount === true || p.maxCount === "true") return maxCount(p, conduit, route);
     const wires: { key: string; count: number }[] = [];
     for (const [w, c] of [[f.wire1, f.count1], [f.wire2, f.count2], [f.wire3, f.count3]] as const) {
-      if (!p[w.key]) continue;
+      if (!(p[w.key] ?? (w as Field).default)) continue; // 電線1 has a default (IV 2.0) when the model leaves it out
       const count = Math.round(num(p, c));
       if (count > 0) wires.push({ key: pick<string>(p, w), count });
     }

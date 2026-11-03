@@ -57,7 +57,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
               <button
                 className={`secondary ${good ? "done" : ""}`}
                 disabled={good}
-                onClick={() => call("markGoodQuestion", { questionId: q.id, veteranId: me })}
+                onClick={() => call("markGoodQuestion", { questionId: q.id }).catch(() => undefined)}
               >
                 {good ? "⭐ いい質問！" : "⭐ いい質問"}
               </button>
