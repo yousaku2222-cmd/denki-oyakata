@@ -7,6 +7,7 @@ import { LawSheet, type LawRef } from "../LawSheet";
 import { CalcCard, type CalcOutput } from "../CalcCard";
 import { AskWaiting, CheckedLine } from "../AskWaiting";
 import { useFlyToMe } from "../FlyToMe";
+import { AnswerSample } from "../AnswerSample";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
 // The list starts moving when it scrolls into view (a calculation card above can push it below the fold).
@@ -212,6 +213,7 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
               {q}
             </button>
           ))}
+          <AnswerSample onAsk={(q) => void submit(q)} />
         </div>
       )}
 

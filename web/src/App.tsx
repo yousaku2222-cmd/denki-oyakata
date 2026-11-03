@@ -88,11 +88,11 @@ export default function App() {
   };
 
   return (
-    <div className="app">
+    <div className="app" data-role={role}>
       <div className="top-wrap">
       <header className="top">
         <span className="logo">⚡ でんきの親方</span>
-        <span className="role-badge">{role === "veteran" ? "ベテラン" : "若手"}</span>
+        <span className="role-badge">{role === "veteran" ? "🧰ベテラン" : "🔰若手"}</span>
         <button className="icon-btn" aria-label="明るさの切り替え" onClick={toggleTheme}>
           ◐
         </button>
