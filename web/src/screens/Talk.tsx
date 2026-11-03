@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { CardBirth, IntoTheBag } from "../CardMotion";
 import { call, errorText } from "../firebase";
 import { getName, setName } from "../local";
 import { MicInput, Notice } from "../components";
@@ -44,6 +45,8 @@ export function Talk({
   const [showName, setShowName] = useState(true);
   const [name, setNameState] = useState(getName("veteran"));
   const [published, setPublished] = useState(false);
+  const [birth, setBirth] = useState(false); // a new draft is shown being made before it can be edited
+  const endBirth = useCallback(() => setBirth(false), []);
   const [status, setStatus] = useState<"draft" | "published" | "private">("draft");
   const [savedStatus, setSavedStatus] = useState<"published" | "private">("published");
   // the card as last saved on the server (a new draft is saved when made): only changes since then would be lost
@@ -100,6 +103,7 @@ export function Talk({
         });
         setCardId(d.cardId);
         setDraft(d.draft);
+        setBirth(true);
         setTagsText(d.draft.tags.join("、"));
         setSaved(JSON.stringify([d.draft, d.draft.tags.join("、"), showName, name]));
       }
@@ -135,7 +139,7 @@ export function Talk({
   if (published) {
     return (
       <section className="screen center">
-        <div className="big-emoji">🗂️</div>
+        {savedStatus === "published" && status === "draft" && draft ? <IntoTheBag title={draft.title} /> : <div className="big-emoji">🗂️</div>}
         <h1 className="screen-title">{savedStatus === "private" ? "直しました（非公開のまま）" : status === "draft" ? "知恵袋に入りました" : "直しました"}</h1>
         {savedStatus !== "private" && <p>若手が聞けば、あなたの話が答えに出てきます。{status === "draft" && topic && `${topic.askerName}さんにも届きます。`}</p>}
         <button className="primary" onClick={onDone}>
@@ -143,6 +147,10 @@ export function Talk({
         </button>
       </section>
     );
+  }
+
+  if (draft && birth) {
+    return <CardBirth said={turns.filter((t) => t.role === "veteran").map((t) => t.text)} draft={draft} onDone={endBirth} />;
   }
 
   if (draft) {

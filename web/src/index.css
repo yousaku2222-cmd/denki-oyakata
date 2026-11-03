@@ -1060,3 +1060,114 @@ input[inputmode="decimal"] {
 .trial-note .link {
   flex: none;
 }
+
+/* ---- the moment a card is born / goes into the 知恵袋 (CardMotion.tsx) ---- */
+:root {
+  --bag: #8a5a2b;
+  --bag-tie: #f5c400;
+}
+.birth {
+  cursor: pointer;
+  overflow: hidden;
+}
+.birth-lead {
+  text-align: center;
+  font-weight: 700;
+}
+.birth-stage {
+  position: relative;
+  padding-top: 220px; /* the words float above, then fall into the card */
+}
+.birth-word {
+  position: absolute;
+  top: 0;
+  left: calc(50% - 8em);
+  width: 16em;
+  text-align: center;
+  white-space: nowrap;
+  font-weight: 800;
+  color: var(--text);
+  text-shadow: 0 0 10px rgba(255, 196, 0, 0.9), 0 0 2px rgba(255, 196, 0, 1);
+  pointer-events: none;
+}
+.birth-card {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  background: var(--wisdom-bg, var(--surface));
+  border: 2px solid var(--wisdom);
+  border-left-width: 6px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.birth-card .src-tag {
+  color: var(--wisdom);
+}
+.birth-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+.birth-row {
+  border-radius: 6px;
+  padding: 2px 4px;
+}
+.birth-row span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.birth-row p {
+  margin: 0;
+  font-size: 0.9rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bag-scene {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  padding-top: 56px;
+}
+.bag-card {
+  position: absolute;
+  top: 40px;
+  max-width: 80%;
+  background: var(--surface);
+  border: 2px solid var(--wisdom);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 1;
+}
+.bag {
+  width: 140px;
+  height: 128px;
+  transform-origin: 50% 100%;
+}
+.bag-label {
+  fill: #fff;
+  font-size: 15px;
+  font-weight: 800;
+}
+.bag-count {
+  position: relative;
+  margin: 4px 0 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+.bag-num {
+  display: inline-grid;
+  min-width: 1.4em;
+  text-align: center;
+  color: var(--wisdom);
+}
+.bag-num span {
+  grid-area: 1 / 1;
+}
