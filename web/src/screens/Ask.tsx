@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { getName, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
@@ -47,6 +47,9 @@ interface Answer {
   cached?: boolean;
 }
 
+/** Fired when a question went into the 質問箱: App puts a dot on わたし, where the answer will come back. */
+export const SENT_TO_BOX = "oyakata:sent-to-box";
+
 const TICK_MS = 450; // every step shows ✓ for this long before the list folds into one line
 
 const EXAMPLES = ["資格が無くても出来る作業はありますか？", "PF管って何回まで曲げていい？", "圧着端子の2とか3.5って何の数字？"];
@@ -61,6 +64,9 @@ export function Ask({ role }: { role: Role }) {
   const [sent, setSent] = useState(false);
   const [openLaw, setOpenLaw] = useState<{ id: string; quote?: string } | null>(null);
   const [finished, setFinished] = useState(false);
+  const [plusOne, setPlusOne] = useState(0);
+  const [flight, setFlight] = useState<{ from: DOMRect; to: DOMRect } | null>(null);
+  const reduceMotion = useReducedMotion();
 
   async function submit(q = text) {
     if (!q.trim() || busy) return;
@@ -90,15 +96,30 @@ export function Ask({ role }: { role: Role }) {
   async function helpedClick() {
     if (!answer) return;
     setHelped(true);
+    setPlusOne((n) => n + 1);
     await call("markHelped", { answerId: answer.answerId }).catch(() => setHelped(false));
   }
 
-  async function sendToBox() {
+  async function sendToBox(e: React.MouseEvent<HTMLButtonElement>) {
+    const from = e.currentTarget.getBoundingClientRect(); // fly from the button that was pressed (always on screen)
     setSent(true);
-    await call("sendToBox", { text: asked, askerName: getName(role), askerRole: role }).catch((e) => {
+    try {
+      await call("sendToBox", { text: asked, askerName: getName(role), askerRole: role });
+    } catch (e) {
       setSent(false);
       setErr(errorText(e, "質問箱に送れませんでした。もう一度お試しください。"));
-    });
+      return;
+    }
+    // only once it is really in the box: the question flies to わたし, where the answer will come back
+    const to = document.querySelector('[data-tab="me"]')?.getBoundingClientRect();
+    if (to && !reduceMotion) setFlight({ from, to });
+    else landed();
+  }
+
+  function landed() {
+    setFlight(null);
+    window.dispatchEvent(new Event(SENT_TO_BOX));
+    document.querySelector('[data-tab="me"] .tab-icon')?.animate([{ transform: "scale(1)" }, { transform: "scale(1.35)" }, { transform: "scale(1)" }], { duration: 380, easing: "ease-out" });
   }
 
   const [openGeneral, setOpenGeneral] = useState(false);
@@ -229,14 +250,45 @@ export function Ask({ role }: { role: Role }) {
 
           <div className="row">
             {answer.grounded && (
-              <button className={`secondary ${helped ? "done" : ""}`} disabled={helped} onClick={helpedClick}>
-                {helped ? "👍 親方に届きました" : "👍 助かった"}
+              <button className={`secondary helped-btn ${helped ? "done" : ""}`} disabled={helped} onClick={helpedClick}>
+                <motion.span key={plusOne} className="helped-thumb" animate={plusOne ? { scale: [1, 1.5, 0.9, 1], rotate: [0, -15, 8, 0] } : {}} transition={{ duration: 0.45 }}>
+                  👍
+                </motion.span>{" "}
+                {helped ? "親方に届きました" : "助かった"}
+                {plusOne > 0 && (
+                  <motion.span key={`plus-${plusOne}`} className="plus-one" aria-hidden initial={{ opacity: 0, y: 0 }} animate={{ opacity: [0, 1, 0], y: -38 }} transition={{ duration: 0.9, ease: "easeOut" }}>
+                    👍 +1
+                  </motion.span>
+                )}
               </button>
             )}
             <button className={answer.grounded ? "secondary" : "primary"} disabled={sent} onClick={sendToBox}>
               {sent ? "📮 質問箱に入れました" : answer.grounded ? "📮 親方にも聞く" : "📮 親方に聞いてみる"}
             </button>
           </div>
+          {sent && (
+            <motion.p className="hint sent-note" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
+              親方が答えると、「わたし」に届きます。
+            </motion.p>
+          )}
+        </motion.div>
+      )}
+      {flight && (
+        <motion.div
+          className="envelope"
+          aria-hidden
+          style={{ left: flight.from.left + flight.from.width / 2 - 16, top: flight.from.top + flight.from.height / 2 - 16 }}
+          initial={{ x: 0, y: 0, scale: 1, rotate: 0 }}
+          animate={{
+            x: [0, (flight.to.left + flight.to.width / 2 - (flight.from.left + flight.from.width / 2)) * 0.5, flight.to.left + flight.to.width / 2 - (flight.from.left + flight.from.width / 2)],
+            y: [0, -70, flight.to.top - flight.from.top - flight.from.height / 2 + 8],
+            scale: [1, 1.25, 0.45],
+            rotate: [0, -12, 10],
+          }}
+          transition={{ duration: 0.95, ease: "easeInOut", times: [0, 0.4, 1] }}
+          onAnimationComplete={landed}
+        >
+          ✉️
         </motion.div>
       )}
     </section>

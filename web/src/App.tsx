@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getRole, getTheme, getTrial, setRole as saveRole, setTheme as saveTheme, setTrial, type Role } from "./local";
-import { Ask } from "./screens/Ask";
+import { Ask, SENT_TO_BOX } from "./screens/Ask";
 import { Talk, type Topic } from "./screens/Talk";
 import { Box } from "./screens/Box";
 import { MyCards } from "./screens/MyCards";
@@ -30,6 +30,13 @@ const TABS: Record<Role, { id: Tab; icon: string; label: string }[]> = {
 export default function App() {
   const [role, setRoleState] = useState<Role | null>(getRole());
   const [tab, setTab] = useState<Tab>(role === "veteran" ? "talk" : "ask");
+  // a question sent to the 質問箱 lands on わたし (where the answer will come back): a dot until it is opened
+  const [meDot, setMeDot] = useState(false);
+  useEffect(() => {
+    const on = () => setMeDot(true);
+    window.addEventListener(SENT_TO_BOX, on);
+    return () => window.removeEventListener(SENT_TO_BOX, on);
+  }, []);
   const [topic, setTopic] = useState<Topic | null>(null);
   const [talkKey, setTalkKey] = useState(0);
   const [resumeId, setResumeId] = useState<string | null>(null);
@@ -118,13 +125,18 @@ export default function App() {
         {TABS[role].map((t) => (
           <button
             key={t.id}
+            data-tab={t.id}
             className={tab === t.id ? "on" : ""}
             onClick={() => {
               if (t.id === "calc") setCalcStart(null);
+              if (t.id === "me") setMeDot(false);
               setTab(t.id); // 話す keeps what was being told; 「続けて話す」 starts a new one
             }}
           >
-            <span className="tab-icon">{t.icon}</span>
+            <span className="tab-icon">
+              {t.icon}
+              {t.id === "me" && meDot && <span className="tab-dot" aria-label="新しい知らせ" />}
+            </span>
             <span className="tab-label">{t.label}</span>
           </button>
         ))}

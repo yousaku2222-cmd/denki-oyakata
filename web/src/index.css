@@ -1281,3 +1281,45 @@ input[inputmode="decimal"] {
   color: var(--muted);
   background: var(--surface);
 }
+
+/* ---- 助かった / 親方にも聞く ---- */
+.helped-btn {
+  position: relative;
+  overflow: visible;
+}
+.helped-thumb {
+  display: inline-block;
+}
+.plus-one {
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  translate: -50% 0;
+  font-weight: 800;
+  color: var(--wisdom);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.envelope {
+  position: fixed;
+  z-index: 50;
+  font-size: 2rem;
+  pointer-events: none;
+}
+.tab-icon {
+  position: relative;
+  display: inline-block;
+}
+.tab-dot {
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  border: 2px solid var(--surface);
+}
+.sent-note {
+  margin: 0;
+}
