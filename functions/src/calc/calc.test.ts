@@ -99,9 +99,12 @@ test("conduit fill: VE22 with IV2.0 x3, and auto size", () => {
   assert.ok(r.steps.some((s) => /VE22に IV 2\.0mm は 11本まで/.test(s))); // 0.32×380.1/10.18 = 11.9
   const auto = conduitFill.run({ conduitType: "VE", wire1: "CV3-38", count1: 1, wire2: "IV-14", count2: 1 });
   assert.match(auto.verdict, /^VE54 以上/); // (490.9+45.4)/2042.8 = 26.3%
-  assert.equal(conduitFill.run({ conduitType: "PF", wire1: "CV3-38", count1: 1, wire2: "IV-14", count2: 1 }).ok, false);
+  assert.match(conduitFill.run({ conduitType: "PF", wire1: "CV3-38", count1: 1, wire2: "IV-14", count2: 1 }).verdict, /^PF54 以上/); // 536.3/2123.7 = 25.3%
+  assert.equal(conduitFill.run({ conduitType: "PF", wire1: "CV3-60", count1: 2 }).ok, false);
   assert.match(conduitFill.run({ conduitType: "VE", conduitSize: 22, wire1: "IV-2.0", maxCount: true }).verdict, /^11本まで/);
   assert.throws(() => conduitFill.run({ conduitType: "PF", conduitSize: 99, wire1: "IV-2.0", count1: 1 }));
+  // 直線・短い距離は48%: 0.48×380.1/10.18 = 17.9 → 17本
+  assert.match(conduitFill.run({ conduitType: "VE", conduitSize: 22, wire1: "IV-2.0", maxCount: true, route: "easy" }).verdict, /^17本まで（占有率48%以下）/);
 });
 
 import { cableRack } from "./rack";
