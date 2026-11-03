@@ -23,7 +23,7 @@ const TABS: Record<Role, { id: Tab; icon: string; label: string }[]> = {
   veteran: [
     { id: "talk", icon: "🎙️", label: "話す" },
     { id: "box", icon: "📮", label: "質問箱" },
-    { id: "ask", icon: "🔎", label: "聞く・探す" },
+    { id: "ask", icon: "🔎", label: "調べる" },
     { id: "mycards", icon: "🗂️", label: "わたしの\nカード" },
   ],
 };
@@ -156,8 +156,9 @@ export default function App() {
   );
 }
 
+// Veterans keep four big tabs: 聞く, 探す and 計算 share one (they use calculations for estimates and checks too).
 function VeteranAsk({ role }: { role: Role }) {
-  const [view, setView] = useState<"ask" | "browse">("ask");
+  const [view, setView] = useState<"ask" | "browse" | "calc">("ask");
   return (
     <>
       <div className="segmented">
@@ -167,8 +168,11 @@ function VeteranAsk({ role }: { role: Role }) {
         <button className={view === "browse" ? "on" : ""} onClick={() => setView("browse")}>
           探す
         </button>
+        <button className={view === "calc" ? "on" : ""} onClick={() => setView("calc")}>
+          計算
+        </button>
       </div>
-      {view === "ask" ? <Ask role={role} /> : <Browse />}
+      {view === "ask" ? <Ask role={role} /> : view === "browse" ? <Browse /> : <Calc start={null} />}
     </>
   );
 }
