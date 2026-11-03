@@ -17,6 +17,7 @@ export interface Topic {
   questionId: string;
   text: string;
   askerName: string;
+  hasPhoto?: boolean; // false: no photo to load (unknown when a draft is opened again: then asked)
 }
 
 export function Talk({
@@ -60,7 +61,7 @@ export function Talk({
   // opened from わたしのカード: go on with a draft (or fix a published card)
   useEffect(() => {
     if (!resumeCardId) return;
-    call<{ cardId: string; status: "draft" | "published" | "private"; draft: Draft; authorName: string; showAuthorName: boolean; topic: { text: string; askerName: string } | null }>("myCard", { cardId: resumeCardId })
+    call<{ cardId: string; status: "draft" | "published" | "private"; draft: Draft; authorName: string; showAuthorName: boolean; topic: { questionId: string; text: string; askerName: string } | null }>("myCard", { cardId: resumeCardId })
       .then((r) => {
         setCardId(r.cardId);
         setStatus(r.status);
@@ -69,11 +70,37 @@ export function Talk({
         setShowName(r.showAuthorName);
         if (r.authorName) setNameState(r.authorName);
         setSaved(JSON.stringify([r.draft, r.draft.tags.join("、"), r.showAuthorName, r.authorName || name]));
-        if (r.topic) setTopic({ questionId: "", ...r.topic });
+        if (r.topic) setTopic(r.topic);
       })
       .catch((e) => setErr(errorText(e, "カードを開けませんでした。もう一度お試しください。")))
       .finally(() => setBusy(false));
   }, [resumeCardId]);
+
+  // the young worker's photo, to look at again while telling and while checking the draft
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoBig, setPhotoBig] = useState(false);
+  const photoQuestion = topic?.hasPhoto === false ? "" : (topic?.questionId ?? "");
+  useEffect(() => {
+    if (!photoQuestion) return;
+    let live = true;
+    call<{ photo: string | null }>("questionPhoto", { questionId: photoQuestion })
+      .then((r) => live && setPhoto(r.photo))
+      .catch(() => {}); // the question still shows; only the photo is missing
+    return () => {
+      live = false;
+    };
+  }, [photoQuestion]);
+  const topicNote = topic && (
+    <Notice>
+      📮 {topic.askerName}さんの質問に答えます：<strong>{topic.text}</strong>
+      {photo && (
+        <button className={`topic-photo ${photoBig ? "big" : ""}`} onClick={() => setPhotoBig((b) => !b)} aria-label={photoBig ? "写真を小さくする" : "写真を大きくする"}>
+          <img src={photo} alt={`${topic.askerName}さんが撮った写真`} />
+          <span>{photoBig ? "押すと小さくなります" : "押すと大きくなります"}</span>
+        </button>
+      )}
+    </Notice>
+  );
 
   async function next(finish = false) {
     const t: Turn[] = text.trim()
@@ -166,6 +193,7 @@ export function Talk({
     return (
       <section className="screen">
         <h1 className="screen-title">{status === "draft" ? "知恵カードの下書き" : "知恵カードを直す"}</h1>
+        {topicNote}
         <p className="hint">
           {status === "draft"
             ? "中身を確かめてください。直してから公開できます。公開するまで、誰にも見えません。"
@@ -219,11 +247,7 @@ export function Talk({
   return (
     <section className="screen">
       <p className="catch">あなたの一言が、業界の未来へつながる</p>
-      {topic && (
-        <Notice>
-          📮 {topic.askerName}さんの質問に答えます：<strong>{topic.text}</strong>
-        </Notice>
-      )}
+      {topicNote}
 
 
       {turns.length > 0 && (

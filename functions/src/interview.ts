@@ -286,7 +286,7 @@ export async function myCard(data: Record<string, unknown>, uid: string) {
     draft: { title: card.title, scene: card.scene, body: card.body, reason: card.reason, caution: card.caution, tags: card.tags },
     authorName: (priv.get("authorName") as string | undefined) ?? card.authorName,
     showAuthorName: card.showAuthorName,
-    topic: card.triggerQuestionText ? { text: card.triggerQuestionText, askerName: card.triggerAskerName ?? "若手" } : null,
+    topic: card.triggerQuestionText ? { questionId: card.triggerQuestionId ?? "", text: card.triggerQuestionText, askerName: card.triggerAskerName ?? "若手" } : null,
   };
 }
 

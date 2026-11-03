@@ -142,7 +142,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
           </p>
           {q.askers > 1 && <span className="same-chip">👥 同じ質問：{q.askers}人</span>}
           <div className="row">
-            <button className="primary" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName })}>
+            <button className="primary" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto })}>
               🎤 話して答える
             </button>
             <button className={`secondary good-btn ${q.good ? "done" : ""}`} disabled={q.good} onClick={() => good(q)}>
