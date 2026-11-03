@@ -20,7 +20,7 @@ interface Q {
 
 // When this device last saw its answers, so the ones that came back since then are announced at the top.
 const SEEN_KEY = "oyakata.meSeen";
-function lastSeen(): number {
+export function lastSeen(): number {
   try {
     return Number(localStorage.getItem(SEEN_KEY)) || 0;
   } catch {
@@ -104,7 +104,9 @@ export function Me({ onAskAgain }: { onAskAgain: (text: string) => void }) {
           </p>
           {q.good > 0 && <p className="good-note">⭐ 親方が「いい質問」と言ってくれました{q.good > 1 ? `（${q.good}人）` : ""}</p>}
           {q.askers > 1 && <p className="src-meta">👥 {q.askers}人が同じことを聞いています</p>}
-          {q.status === "answered" ? (
+          {q.status === "answered" && q.answeredAt > seenBefore ? (
+            <p className="born">🎉 答えが届きました（上の知らせ）</p>
+          ) : q.status === "answered" ? (
             <>
               <p className="born">
                 🎉 {q.answeredBy ?? "社内のベテラン"}が答えてくれました：「{q.answeredCardTitle ?? "…"}」

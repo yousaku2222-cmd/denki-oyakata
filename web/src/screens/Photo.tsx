@@ -125,6 +125,17 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
         📷 {preview ? "もう一度撮る" : "部材を撮る"}
       </button>
       <p className="hint">印字や型番が写るように撮ると、読み取って確かめます。写真の一覧からも選べます。</p>
+      {!preview && (
+        <div className="photo-sample">
+          <p className="part-sub">撮ると、こんなことが分かります</p>
+          <ul>
+            <li>部材の名前と、現場での呼び名（例：ねじなしボックスコネクタ ＝「ねじなしコネクタ」）</li>
+            <li>何に使うか、一緒に使う物、間違えやすい部材</li>
+            <li>関係する親方の知恵カードと条文、そのまま使える計算</li>
+            <li>分からない時は、写真ごと親方に聞けます</li>
+          </ul>
+        </div>
+      )}
 
       {preview && (
         <div className="photo-frame">

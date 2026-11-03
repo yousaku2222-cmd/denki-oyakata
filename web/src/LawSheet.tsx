@@ -14,6 +14,7 @@ interface LawFull extends Required<LawRef> {
   text: string;
   note: string | null; // where tables of the PDF did not come out cleanly
   summary: string;
+  plain?: { points: string[]; words: { term: string; plain: string }[] }; // the gist for a beginner (scripts/laws/plain.mjs)
   scenes: string[];
 }
 
@@ -52,7 +53,30 @@ export function LawSheet({ id, highlight, onClose }: { id: string; highlight?: s
             </p>
             <div className="law-summary">
               <span>かんたんに言うと（AIの要約）</span>
-              <p>{law.summary}</p>
+              {law.plain?.points.length ? (
+                <>
+                  <ul>
+                    {law.plain.points.map((x) => (
+                      <li key={x}>{x}</li>
+                    ))}
+                  </ul>
+                  {law.plain.words.length > 0 && (
+                    <p className="law-words">
+                      {law.plain.words.map((w) => (
+                        <span key={w.term}>
+                          <strong>{w.term}</strong>：{w.plain}
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                  <details>
+                    <summary>くわしい要約</summary>
+                    <p>{law.summary}</p>
+                  </details>
+                </>
+              ) : (
+                <p>{law.summary}</p>
+              )}
             </div>
             <span className="field-label">原文</span>
             {law.note && <p className="hint">※ {law.note}</p>}

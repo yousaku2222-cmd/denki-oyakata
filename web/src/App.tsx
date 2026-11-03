@@ -5,10 +5,11 @@ import { SENT_TO_BOX } from "./FlyToMe";
 import { Talk, type Topic } from "./screens/Talk";
 import { Box } from "./screens/Box";
 import { MyCards } from "./screens/MyCards";
-import { Me } from "./screens/Me";
+import { Me, lastSeen as meLastSeen } from "./screens/Me";
 import { Browse } from "./screens/Browse";
 import { Calc } from "./screens/Calc";
 import { Photo, type CalcStart } from "./screens/Photo";
+import { call } from "./firebase";
 
 type Tab = "ask" | "browse" | "calc" | "photo" | "me" | "talk" | "box" | "mycards";
 
@@ -35,6 +36,13 @@ export default function App() {
   const [meDot, setMeDot] = useState(false);
   // わたし →「答えを聞く」: the question is asked again on 聞く (now the veteran's card is there to answer it)
   const [askSeed, setAskSeed] = useState<{ text: string; n: number } | null>(null);
+  // an answer that came back since わたし was last opened: dot on わたし when the app opens
+  useEffect(() => {
+    if (role !== "young") return;
+    call<{ questions: { answeredAt: number }[] }>("myQuestions", {})
+      .then((r) => r.questions.some((q) => q.answeredAt > meLastSeen()) && setMeDot(true))
+      .catch(() => {}); // only a hint: without it, わたし still shows the news when opened
+  }, [role]);
   useEffect(() => {
     const on = () => setMeDot(true);
     window.addEventListener(SENT_TO_BOX, on);
@@ -81,6 +89,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <div className="top-wrap">
       <header className="top">
         <span className="logo">⚡ でんきの親方</span>
         <span className="role-badge">{role === "veteran" ? "ベテラン" : "若手"}</span>
@@ -99,6 +108,7 @@ export default function App() {
           </button>
         </p>
       )}
+      </div>
 
       <main>
         {tab === "ask" && (role === "veteran" ? <VeteranAsk role={role} /> : <Ask key={askSeed?.n ?? 0} role={role} seed={askSeed?.text} />)}
@@ -203,9 +213,13 @@ function Entry({ onChoose }: { onChoose: (r: Role, trial?: boolean) => void }) {
         若手として使う
         <small>現場の疑問に、根拠つきで答えます</small>
       </button>
-      <button className="link" onClick={() => onChoose("young", true)}>
-        審査員の方はこちら（デモ）
-      </button>
+      {getTrial() ? (
+        <p className="trial-note entry-trial">🧪 審査員モード中です。役割を選ぶと、そのまま続きます。</p>
+      ) : (
+        <button className="link" onClick={() => onChoose("young", true)}>
+          審査員の方はこちら（デモ）
+        </button>
+      )}
     </div>
   );
 }

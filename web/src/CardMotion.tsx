@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { collection, getCountFromServer, query, where } from "firebase/firestore";
 import { db, spaces } from "./firebase";
@@ -44,6 +44,8 @@ const CARD_Y = 236;
 export function CardBirth({ said, draft, onDone }: { said: string[]; draft: DraftLike; onDone: () => void }) {
   const reduce = useReducedMotion();
   const bits = useMemo(() => (reduce ? [] : phrases(said)), [said, reduce]);
+  const [made, setMade] = useState(false); // the card is filled: say so, and bring the button into view
+  const next = useRef<HTMLButtonElement>(null);
   const rows: [string, string][] = [
     ["場面", draft.scene],
     ["やり方", draft.body],
@@ -53,7 +55,7 @@ export function CardBirth({ said, draft, onDone }: { said: string[]; draft: Draf
   const cardAt = 0.35 + bits.length * 0.08 + 0.75; // after the words have flown in
   return (
     <section className="screen birth" onClick={onDone} aria-label="知恵カードができました（押すと次へ）">
-      <p className="birth-lead">あなたの話から、知恵カードを作っています</p>
+      <p className="birth-lead">{made ? "🎉 知恵カードができました" : "あなたの話から、知恵カードを作っています"}</p>
       <div className="birth-stage">
         {bits.map((b, i) => {
           const s = SPOTS[i % SPOTS.length];
@@ -105,6 +107,11 @@ export function CardBirth({ said, draft, onDone }: { said: string[]; draft: Draf
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: cardAt + 0.3 + rows.length * 0.22 + 0.3 }}
+        ref={next}
+        onAnimationComplete={() => {
+          setMade(true);
+          next.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+        }}
       >
         中身を確かめる →
       </motion.button>
@@ -140,7 +147,7 @@ export function IntoTheBag({ title }: { title: string }) {
       />
       {count !== null && (
         <p className="bag-count">
-          これで{" "}
+          みんなの知恵袋が{" "}
           <span className="bag-num">
           <motion.span key="before" initial={{ opacity: 1, y: 0 }} animate={{ opacity: 0, y: -14 }} transition={{ delay: 1.5, duration: 0.3 }}>
             {count - 1}
@@ -149,7 +156,7 @@ export function IntoTheBag({ title }: { title: string }) {
             {count}
           </motion.span>
           </span>{" "}
-          枚
+          枚に
         </p>
       )}
     </div>

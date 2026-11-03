@@ -24,6 +24,22 @@ interface CalcDef {
 }
 
 /** The 計算 tab: pick one, fill the form, the server computes. */
+// What each calculation tells you, in words for the list (the descriptions are written for the AI and carry formulas)
+const LEAD: Record<string, string> = {
+  conduit_fill: "電線管に電線が何本入るか、どの太さの管が要るか",
+  voltage_drop: "電線が長い時に電圧がどれだけ下がるか、その太さで足りるか",
+  wire_ampacity: "電線にどれだけ電流を流してよいか",
+  wire_for_load: "機器の kW から、要る電線の太さ",
+  branch_wire: "分岐回路のブレーカに合う電線の太さ",
+  cable_rack_layout: "ケーブルラックにケーブルがどう並ぶか、必要な幅",
+  insulation_check: "絶縁抵抗の測った値が、基準を満たすか",
+  grounding_check: "接地抵抗の測った値が、基準を満たすか",
+  support_spacing: "電線管やケーブルを何mごとに留めるか",
+  rack_support_spacing: "ケーブルラックを何mごとに支えるか",
+  license_scope: "持っている資格で、その工事ができるか",
+  engineer_requirement: "工事の金額で、監理技術者や専任が要るか",
+};
+
 export function Calc({ start }: { start?: { name: string; params: Record<string, string | number | boolean> } | null }) {
   const [defs, setDefs] = useState<CalcDef[] | null>(null);
   const [cur, setCur] = useState<CalcDef | null>(null);
@@ -47,7 +63,7 @@ export function Calc({ start }: { start?: { name: string; params: Record<string,
       {defs?.map((d) => (
         <button key={d.name} className="card-row" onClick={() => setCur(d)}>
           <strong>🧮 {d.label}</strong>
-          <span className="src-meta">{d.description.split("。")[0]}。</span>
+          <span className="src-meta">{LEAD[d.name] ?? d.description.split("。")[0] + "。"}</span>
         </button>
       ))}
     </section>

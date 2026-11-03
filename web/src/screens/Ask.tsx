@@ -50,14 +50,25 @@ interface Answer {
 
 const TICK_MS = 450; // every step shows ✓ for this long before the list folds into one line
 
-const EXAMPLES = ["資格が無くても出来る作業はありますか？", "PF管って何回まで曲げていい？", "圧着端子の2とか3.5って何の数字？"];
+// examples that show every kind of source (law, a veteran's card): the first thing a judge taps
+const EXAMPLES = ["資格が無くても出来る作業はありますか？", "PF管って何回まで曲げていい？", "VE管とPF管のサドルの違いは？"];
+const GENERAL_PREVIEW = 2; // general sentences shown before 「もっと見る」 when a checked source comes first
+
+// the last answer stays while other tabs are open (this screen unmounts), until the app is reloaded
+let last: { asked: string; answer: Answer } | null = null;
 
 export function Ask({ role, seed }: { role: Role; seed?: string }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [answer, setAnswer] = useState<Answer | null>(null);
-  const [asked, setAsked] = useState("");
+  const [answer, setAnswerState] = useState<Answer | null>(seed ? null : (last?.answer ?? null));
+  const [asked, setAsked] = useState(seed ? "" : (last?.asked ?? ""));
+  const setAnswer = (a: Answer | null, q = asked) => {
+    setAnswerState(a);
+    last = a ? { asked: q, answer: a } : last;
+  };
+  // asked again from わたし: the veteran already answered it, so no 「親方にも聞く」
+  const fromMe = !!seed;
   const [helped, setHelped] = useState(false);
   const [sent, setSent] = useState(false);
   const [sentNote, setSentNote] = useState("");
@@ -90,7 +101,7 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
         setFinished(true);
         await new Promise((r) => setTimeout(r, TICK_MS));
       }
-      setAnswer(a);
+      setAnswer(a, q.trim());
       setText("");
     } catch (e) {
       setErr(errorText(e, "答えを取得できませんでした。電波の良い所で、もう一度お試しください。"));
@@ -144,7 +155,15 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
       {folded ? (
         <div className="ask-bar">
           <span className="ask-bar-q">🎤 {asked}</span>
-          <button className="secondary" disabled={busy} onClick={() => setAnswer(null)}>
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={() => {
+              setText(asked); // to fix the words and ask again
+              setAnswerState(null);
+              last = null;
+            }}
+          >
             聞き直す
           </button>
         </div>
@@ -197,22 +216,18 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
             {SOURCES.map((src) => {
               const rows = answer.sentences.filter((s) => s.source === src);
               if (!rows.length) return null;
-              // general knowledge waits behind a tap when there is a checked source to read first
-              const folded = src === "general" && answer.sentences.some((s) => s.source !== "general") && !openGeneral;
+              // when a checked source comes first, general knowledge shows its first sentences and the rest waits behind a tap
+              const partial = src === "general" && answer.sentences.some((s) => s.source !== "general") && rows.length > GENERAL_PREVIEW;
+              const shownRows = partial && !openGeneral ? rows.slice(0, GENERAL_PREVIEW) : rows;
+              const count = src === "wisdom" ? `カード${new Set(rows.map((r) => r.cardId)).size}枚から` : `${rows.length}件`;
               return (
                 <motion.div key={src} className={`src-group src-${src}`} variants={GROUP}>
                   <div className="src-head">
                     <span className="src-tag">
-                      {SOURCE_LABEL[src].icon} {SOURCE_LABEL[src].label} {rows.length}件
+                      {SOURCE_LABEL[src].icon} {SOURCE_LABEL[src].label} {count}
                     </span>
-                    {folded && (
-                      <button className="link" onClick={() => setOpenGeneral(true)}>
-                        ▶ 開く
-                      </button>
-                    )}
                   </div>
-                  {!folded &&
-                    rows.map((s, i) => {
+                  {shownRows.map((s, i) => {
                       const c = s.source === "wisdom" ? cardOf(s.cardId) : undefined;
                       const law = s.source === "law" ? answer.laws.find((l) => l.id === s.lawId) : undefined;
                       // say whose story it is once per run of sentences from the same card
@@ -229,7 +244,7 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
                           {law && (
                             <div className="cite-line">
                               <button className="cite-chip" onClick={() => setOpenLaw({ id: law.id, quote: s.quote })} title={s.quote}>
-                                📜 {law.short} {law.article} ›
+                                📜 引用元：{law.short} {law.article} ›
                               </button>
                               {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
                               {s.verified && <Stamp />}
@@ -238,6 +253,11 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
                         </motion.div>
                       );
                     })}
+                  {partial && (
+                    <button className="link more" onClick={() => setOpenGeneral(!openGeneral)}>
+                      {openGeneral ? "▲ 閉じる" : `▼ もっと見る（あと${rows.length - GENERAL_PREVIEW}件）`}
+                    </button>
+                  )}
                 </motion.div>
               );
             })}
@@ -271,9 +291,11 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
                 )}
               </button>
             )}
+            {!fromMe && (
             <button className={answer.grounded ? "secondary" : "primary"} disabled={sent} onClick={sendToBox}>
               {sent ? "📮 質問箱に入れました" : answer.grounded ? "📮 親方にも聞く" : "📮 親方に聞いてみる"}
             </button>
+            )}
           </div>
           {sent && (
             <motion.p className="hint sent-note" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>

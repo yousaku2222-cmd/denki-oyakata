@@ -85,10 +85,13 @@ button {
 }
 
 /* header */
-.top {
+/* the header and the 審査員モード strip stay on screen together */
+.top-wrap {
   position: sticky;
   top: 0;
   z-index: 5;
+}
+.top {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -233,7 +236,11 @@ button {
   background: var(--surface);
   border: 2px solid var(--line);
 }
-.primary:disabled,
+.primary:disabled {
+  /* grey, so a button that cannot be pressed never looks yellow and ready (also in the dark theme) */
+  background: var(--line);
+  color: var(--muted);
+}
 .secondary:disabled {
   opacity: 0.55;
 }
@@ -1050,8 +1057,10 @@ input[inputmode="decimal"] {
   margin: 0;
   padding: 6px 16px;
   font-size: 13px;
-  background: var(--general-bg);
-  color: var(--text);
+  font-weight: 700;
+  background: #fff1b3;
+  color: #4a3b00;
+  border-bottom: 2px solid var(--bag-tie);
   display: flex;
   gap: 8px;
   align-items: center;
@@ -1439,4 +1448,50 @@ input[inputmode="decimal"] {
   :root:not([data-theme="light"]) .good-note {
     color: var(--bag-tie);
   }
+}
+.link.more {
+  justify-self: start;
+  font-size: 0.9rem;
+}
+.wait-slow {
+  margin-left: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.toggle.small {
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-height: 36px;
+}
+.entry-trial {
+  border-radius: 8px;
+  border: 2px solid var(--bag-tie);
+}
+.photo-sample {
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+.photo-sample ul {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+}
+.photo-sample p {
+  margin: 0;
+}
+.law-summary ul {
+  margin: 4px 0;
+  padding-left: 1.2em;
+}
+.law-summary li {
+  margin: 2px 0;
+}
+.law-words {
+  display: grid;
+  gap: 2px;
+  font-size: 0.85rem;
+  color: var(--muted);
 }

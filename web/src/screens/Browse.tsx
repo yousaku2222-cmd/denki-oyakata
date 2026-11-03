@@ -35,7 +35,7 @@ function LawList() {
   return (
     <section className="screen">
       <h1 className="screen-title">法令・基準</h1>
-      <p className="hint">電技解釈・電技省令・電気工事士法・建設業法施行令・公共建築工事標準仕様書から、現場でよく使う条文を収めています。</p>
+      <p className="hint">電気設備の技術基準の解釈（電技解釈）・電気設備に関する技術基準を定める省令（電技省令）・電気工事士法・建設業法施行令・公共建築工事標準仕様書（標準仕様書）から、現場でよく使う条文を収めています。</p>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="例: PF 支持 / 接地 / 軽微" />
       {laws === null && <p className="hint">読み込み中…</p>}
       {shown.map((l) => (
@@ -69,7 +69,14 @@ function CardList() {
     [],
   );
 
-  const shown = cards?.filter((c) => !filter || c[filter.kind] === filter.value) ?? [];
+  const [q, setQ] = useState("");
+  const words = q.normalize("NFKC").trim().split(/s+/).filter(Boolean);
+  const shown =
+    cards?.filter(
+      (c) =>
+        (!filter || c[filter.kind] === filter.value) &&
+        words.every((w) => [c.title, c.scene, c.body, c.reason, c.caution, ...(c.tags ?? [])].join(" ").normalize("NFKC").includes(w)),
+    ) ?? [];
 
   if (open) {
     return (
@@ -94,7 +101,8 @@ function CardList() {
 
   return (
     <section className="screen">
-      <h1 className="screen-title">知恵袋を探す</h1>
+      <h1 className="screen-title">知恵カードを探す</h1>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="言葉で探す（例: PF 曲げ / 脚立）" />
       <p className="hint">場所</p>
       <div className="tiles">
         {Object.entries(LOCATION_LABEL).map(([k, v]) => (
@@ -108,7 +116,7 @@ function CardList() {
         ))}
       </div>
       {cards === null && <p className="hint">読み込み中…</p>}
-      {cards && shown.length === 0 && <p className="empty">まだカードがありません。</p>}
+      {cards && shown.length === 0 && <p className="empty">{cards.length ? "合う知恵カードがありません。言葉や絞り込みを変えてみてください。" : "まだカードがありません。"}</p>}
       {shown.map((c) => (
         <button key={c.id} className="card-row" onClick={() => setOpen(c)}>
           <strong>{c.title}</strong>

@@ -11,12 +11,16 @@ const STEPS: { icon: string; text: string; at: number }[] = [
   { icon: "✔", text: "引用を条文の原文と照らしています", at: 8000 },
 ];
 
+const SLOW_MS = 13000;
+
 /** finished: the answer is in, so every step shows as done for a moment before the list folds away. */
 export function AskWaiting({ question, finished = false }: { question: string; finished?: boolean }) {
   const [timed, setTimed] = useState(0);
+  const [slow, setSlow] = useState(false); // the last step can take a while: say so, so it does not look stuck
   const step = finished ? STEPS.length : timed;
   useEffect(() => {
     const timers = STEPS.slice(1).map((s, i) => setTimeout(() => setTimed(i + 1), s.at));
+    timers.push(setTimeout(() => setSlow(true), SLOW_MS));
     return () => timers.forEach(clearTimeout);
   }, []);
   return (
@@ -50,6 +54,7 @@ export function AskWaiting({ question, finished = false }: { question: string; f
                 {s.text}
                 {i === 0 && question ? `：「${question.length > 24 ? question.slice(0, 23) + "…" : question}」` : ""}
                 {i === step && i > 0 && <Dots />}
+                {i === step && i === STEPS.length - 1 && slow && <span className="wait-slow">もう少しです</span>}
               </span>
             </motion.li>
           ))}

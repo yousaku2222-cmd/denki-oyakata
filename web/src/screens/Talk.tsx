@@ -42,8 +42,9 @@ export function Talk({
   const [cardId, setCardId] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [tagsText, setTagsText] = useState("");
-  const [showName, setShowName] = useState(true);
   const [name, setNameState] = useState(getName("veteran"));
+  // with no name to show, 「出さない」 is the honest default (an empty name is shown as 社内のベテラン anyway)
+  const [showName, setShowName] = useState(!!getName("veteran").trim());
   const [published, setPublished] = useState(false);
   const [birth, setBirth] = useState(false); // a new draft is shown being made before it can be edited
   const endBirth = useCallback(() => setBirth(false), []);
@@ -187,6 +188,7 @@ export function Talk({
             <input type="radio" checked={showName} onChange={() => setShowName(true)} /> 名前を出す
           </label>
           {showName && <input placeholder="例: 山田（親方）" maxLength={30} value={name} onChange={(e) => setNameState(e.target.value)} />}
+          {showName && !name.trim() && <p className="hint">名前が空のままだと「社内のベテラン」と表示されます。</p>}
           <label className="radio">
             <input type="radio" checked={!showName} onChange={() => setShowName(false)} /> 出さない（「社内のベテラン」と表示）
           </label>
@@ -223,10 +225,6 @@ export function Talk({
         </Notice>
       )}
 
-      <label className="toggle">
-        <input type="checkbox" checked={listenerMode} onChange={(e) => setListenerMode(e.target.checked)} />
-        若手が聞き役（若手がスマホを持ち、質問を読み上げる）
-      </label>
 
       {turns.length > 0 && (
         <ol className="transcript">
@@ -257,7 +255,7 @@ export function Talk({
       {err && <p className="hint error">{err}</p>}
       <div className="row">
         <button className="primary" disabled={busy || !text.trim()} onClick={() => next(false)}>
-          {busy ? "考えています…" : turns.length ? "次へ" : "話した内容を送る"}
+          {busy ? "考えています…" : turns.length ? "答えを送る" : "話した内容を送る"}
         </button>
         {turns.length > 0 && (
           <button className="secondary" disabled={busy} onClick={() => next(true)}>
@@ -265,6 +263,11 @@ export function Talk({
           </button>
         )}
       </div>
+
+      <label className="toggle small">
+        <input type="checkbox" checked={listenerMode} onChange={(e) => setListenerMode(e.target.checked)} />
+        若手と2人で使う（若手がスマホを持ち、AIの質問を読み上げる）
+      </label>
 
       <ul className="promise">
         <li>声は残しません。文字だけを使います</li>

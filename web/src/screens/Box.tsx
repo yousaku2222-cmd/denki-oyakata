@@ -93,7 +93,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
   return (
     <section className="screen">
       <h1 className="screen-title">答えてほしい質問</h1>
-      <p className="hint">若手が答えを見つけられなかった質問です。押すと、そのまま話して答えられます。</p>
+      <p className="hint">若手が親方に聞きたい質問です。「話して答える」を押すと、そのまま話して答えられ、答えは知恵カードになります。「⭐ いい質問」を押すと、聞いた若手に届きます。</p>
       {!!items?.length && (
         <p className="box-count">
           📮 {items.length}件の質問が届いています

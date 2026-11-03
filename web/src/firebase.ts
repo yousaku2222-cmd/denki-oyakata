@@ -42,7 +42,8 @@ export const myId = () => auth.currentUser?.uid ?? "";
 /** The message to show for a failed call: the server's own words for limits and bad input, otherwise `fallback`. */
 export function errorText(e: unknown, fallback: string): string {
   const code = (e as { code?: string })?.code ?? "";
-  const message = (e as { message?: string })?.message ?? "";
+  // the SDK may add the HTTP status ("…ください [400]"): the person only needs the words
+  const message = ((e as { message?: string })?.message ?? "").replace(/s*[d{3}]s*$/, "");
   // only our Japanese messages are shown as they are (not "internal" etc.)
   return (code === "functions/resource-exhausted" || code === "functions/invalid-argument" || code === "functions/not-found" || code === "functions/failed-precondition" || code === "functions/permission-denied") && /[ぁ-んァ-ン一-龥]/.test(message) ? message : fallback;
 }
