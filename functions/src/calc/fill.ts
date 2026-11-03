@@ -5,8 +5,8 @@ import { Calc, CalcInputError, Field, fmt, num, pick } from "./types";
 // 基準（内線規程の考え方。本文は載せない）: 管の曲がりが少なく短い、電線を楽に引き入れ・引き替えできる配管は48%以下、
 // 曲がりが多い・長い配管は32%以下。
 const ROUTES = {
-  long: { label: "曲がりが多い・長い配管", limit: 32 },
-  easy: { label: "直線・短い距離（曲がりが少なく、楽に引き入れ・引き替えできる）", limit: 48 },
+  long: { label: "曲がりが多い・長い配管", short: "曲がり多い・長い", limit: 32 },
+  easy: { label: "直線・短い距離（曲がりが少なく、楽に引き入れ・引き替えできる）", short: "直線・短い", limit: 48 },
 } as const;
 type Route = keyof typeof ROUTES;
 
@@ -14,8 +14,8 @@ export const wireArea = (w: { d?: number; long?: number; short?: number }) => (w
 const conduitArea = (inner: number) => (Math.PI * inner ** 2) / 4;
 
 const wireOptions = () => Object.entries(WIRES).map(([value, w]) => ({ value, label: w.label }));
-const conduitTypeOptions = () => Object.entries(CONDUITS).map(([value, c]) => ({ value, label: c.label }));
-const sizeOptions = (c: (typeof CONDUITS)[string]) => Object.keys(c.sizes).map((s) => ({ value: s, label: `${c.short}${s}（内径${c.sizes[s]}mm）` }));
+const conduitTypeOptions = () => Object.entries(CONDUITS).map(([value, c]) => ({ value, label: c.label, short: c.short }));
+const sizeOptions = (c: (typeof CONDUITS)[string]) => Object.keys(c.sizes).map((s) => ({ value: s, label: `${c.short}${s}（内径${c.sizes[s]}mm）`, short: s }));
 
 const f = {
   conduitType: { key: "conduitType", label: "管の種類", type: "select", default: "VE", options: conduitTypeOptions() },
@@ -23,11 +23,11 @@ const f = {
     key: "conduitSize",
     label: "管の呼び",
     type: "select",
-    emptyLabel: "（自動で入る太さを探す）",
+    emptyLabel: "自動",
     options: [...new Set(Object.values(CONDUITS).flatMap((c) => Object.keys(c.sizes)))].map((s) => ({ value: s, label: s })),
     optionsBy: { key: "conduitType", map: Object.fromEntries(Object.entries(CONDUITS).map(([k, c]) => [k, sizeOptions(c)])) },
   },
-  route: { key: "route", label: "配管の条件", type: "select", default: "long", options: Object.entries(ROUTES).map(([value, r]) => ({ value, label: `${r.label}（${r.limit}%以下）` })) },
+  route: { key: "route", label: "配管の条件", type: "select", default: "long", options: Object.entries(ROUTES).map(([value, r]) => ({ value, label: `${r.label}（${r.limit}%以下）`, short: `${r.short}（${r.limit}%）` })) },
   maxCount: { key: "maxCount", label: "何本まで入るかを求める（管の呼びと電線1だけで計算）", type: "boolean", default: false },
   wire1: { key: "wire1", label: "電線1", type: "select", default: "IV-2.0", options: wireOptions() },
   count1: { key: "count1", label: "電線1の本数", type: "number", unit: "本", default: 3, min: 1, max: 100 },

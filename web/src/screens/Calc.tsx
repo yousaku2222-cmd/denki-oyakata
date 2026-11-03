@@ -7,10 +7,12 @@ interface Field {
   label: string;
   type: "number" | "select" | "boolean";
   unit?: string;
-  options?: { value: string; label: string }[];
+  options?: { value: string; label: string; short?: string }[];
   default?: number | string | boolean;
+  min?: number;
+  max?: number;
   help?: string;
-  optionsBy?: { key: string; map: Record<string, { value: string; label: string }[]> };
+  optionsBy?: { key: string; map: Record<string, { value: string; label: string; short?: string }[]> };
   emptyLabel?: string;
   showIf?: { key: string; values: string[] };
 }
@@ -47,6 +49,17 @@ export function Calc() {
   );
 }
 
+const slotNo = (key: string) => {
+  const m = key.match(/\D(\d+)$/);
+  return m ? Number(m[1]) : null;
+};
+// A slot is an optional select numbered 2 or more (wire2, cable3 …); the fields with the same number go with it.
+function slotOf(f: Field) {
+  const n = slotNo(f.key);
+  return f.type === "select" && f.default === undefined && n !== null && n >= 2 ? n : null;
+}
+const isCount = (f: Field) => f.type === "number" && (f.unit === "本" || f.unit === "条");
+
 function CalcForm({ def, onBack }: { def: CalcDef; onBack: () => void }) {
   const [values, setValues] = useState<Record<string, string | boolean>>(() =>
     Object.fromEntries(def.fields.map((f) => [f.key, f.default === undefined ? "" : typeof f.default === "boolean" ? f.default : String(f.default)])),
@@ -54,6 +67,17 @@ function CalcForm({ def, onBack }: { def: CalcDef; onBack: () => void }) {
   const [result, setResult] = useState<CalcOutput | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // "あれば" fields (電線2・ケーブル3 …) stay hidden until 追加 is pressed
+  const slots = [...new Set(def.fields.map(slotOf).filter((n): n is number => n !== null))].sort((a, b) => a - b);
+  const [opened, setOpened] = useState(0);
+
+  const hiddenSlot = (f: Field) => {
+    const n = slotNo(f.key);
+    return n !== null && slots.includes(n) && slots.indexOf(n) >= opened;
+  };
+  const shown = (f: Field) => (!f.showIf || f.showIf.values.includes(String(values[f.showIf.key]))) && !hiddenSlot(f);
+  const nextSlot = slots[opened];
+  const slotName = (def.fields.find((f) => slotOf(f) === slots[0])?.label ?? "").replace(/\d.*$/, "");
 
   // changing a field clears the fields whose options depend on it
   function change(key: string, v: string | boolean) {
@@ -61,18 +85,30 @@ function CalcForm({ def, onBack }: { def: CalcDef; onBack: () => void }) {
     for (const f of def.fields) if (f.optionsBy?.key === key) next[f.key] = "";
     setValues(next);
   }
+  function openSlot() {
+    const next = { ...values };
+    for (const f of def.fields) if (slotNo(f.key) === nextSlot && f.type === "number" && next[f.key] === "") next[f.key] = "1";
+    setValues(next);
+    setOpened(opened + 1);
+  }
+  function closeSlot() {
+    const n = slots[opened - 1];
+    const next = { ...values };
+    for (const f of def.fields) if (slotNo(f.key) === n) next[f.key] = "";
+    setValues(next);
+    setOpened(opened - 1);
+  }
+  const step = (f: Field, d: number) => {
+    const n = (Number(values[f.key]) || 0) + d;
+    setValues({ ...values, [f.key]: String(Math.min(f.max ?? 999, Math.max(f.min ?? 0, n))) });
+  };
 
   async function run() {
     setBusy(true);
     setErr("");
     setResult(null);
     const params = Object.fromEntries(
-      Object.entries(values)
-        .filter(([k, v]) => {
-          const f = def.fields.find((x) => x.key === k);
-          return v !== "" && (!f?.showIf || f.showIf.values.includes(String(values[f.showIf.key])));
-        })
-        .map(([k, v]) => [k, def.fields.find((f) => f.key === k)?.type === "number" ? Number(v) : v]),
+      def.fields.filter((f) => shown(f) && values[f.key] !== "").map((f) => [f.key, f.type === "number" ? Number(values[f.key]) : values[f.key]]),
     );
     try {
       setResult((await call<{ result: CalcOutput }>("calc", { name: def.name, params })).result);
@@ -89,41 +125,93 @@ function CalcForm({ def, onBack }: { def: CalcDef; onBack: () => void }) {
         ← 一覧へ
       </button>
       <h1 className="screen-title">🧮 {def.label}</h1>
-      {def.fields.filter((f) => !f.showIf || f.showIf.values.includes(String(values[f.showIf.key]))).map((f) => (
-        <label key={f.key} className={f.type === "boolean" ? "toggle" : "field"}>
-          {f.type === "boolean" ? (
-            <>
-              <input type="checkbox" checked={values[f.key] === true} onChange={(e) => setValues({ ...values, [f.key]: e.target.checked })} />
+      {def.fields.filter(shown).map((f) =>
+        f.type === "boolean" ? (
+          <label key={f.key} className="toggle">
+            <input type="checkbox" checked={values[f.key] === true} onChange={(e) => setValues({ ...values, [f.key]: e.target.checked })} />
+            {f.label}
+          </label>
+        ) : (
+          <div key={f.key} className="field">
+            <span>
               {f.label}
-            </>
-          ) : (
-            <>
-              <span>
-                {f.label}
-                {f.unit ? `（${f.unit}）` : ""}
-              </span>
-              {f.type === "select" ? (
-                <select value={String(values[f.key] ?? "")} onChange={(e) => change(f.key, e.target.value)}>
-                  {f.default === undefined && <option value="">{f.emptyLabel ?? "（なし）"}</option>}
-                  {(f.optionsBy?.map[String(values[f.optionsBy.key])] ?? f.options!).map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input inputMode="decimal" value={String(values[f.key] ?? "")} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} />
-              )}
-            </>
+              {f.unit && !isCount(f) ? `（${f.unit}）` : ""}
+            </span>
+            {f.type === "select" ? (
+              <Chips f={f} noEmpty={slotOf(f) !== null} value={String(values[f.key] ?? "")} parent={f.optionsBy ? String(values[f.optionsBy.key]) : undefined} onPick={(v) => change(f.key, v)} />
+            ) : isCount(f) ? (
+              <div className="stepper">
+                <button type="button" aria-label="減らす" onClick={() => step(f, -1)}>
+                  −
+                </button>
+                <input inputMode="numeric" value={String(values[f.key] ?? "")} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} />
+                <span>{f.unit}</span>
+                <button type="button" aria-label="増やす" onClick={() => step(f, 1)}>
+                  ＋
+                </button>
+              </div>
+            ) : (
+              <input inputMode="decimal" value={String(values[f.key] ?? "")} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} />
+            )}
+            {f.help && <small className="hint">{f.help}</small>}
+          </div>
+        ),
+      )}
+      {slots.length > 0 && (
+        <div className="slot-buttons">
+          {nextSlot !== undefined && (
+            <button type="button" className="opt add" onClick={openSlot}>
+              ＋ {slotName}を追加
+            </button>
           )}
-          {f.help && <small className="hint">{f.help}</small>}
-        </label>
-      ))}
+          {opened > 0 && (
+            <button type="button" className="opt" onClick={closeSlot}>
+              × 最後の{slotName}を外す
+            </button>
+          )}
+        </div>
+      )}
       {err && <p className="hint error">{err}</p>}
       <button className="primary" disabled={busy} onClick={run}>
         {busy ? "計算しています…" : "計算する"}
       </button>
       {result && <CalcCard c={result} />}
     </section>
+  );
+}
+
+// Wire and cable lists are long: pick the kind first, then the size.
+const KINDS: Record<string, string> = { IV: "IV", VVF: "VVF", CV1: "CV 単心", CV3: "CV 3心", CVT: "CVT", HVCVT: "6600V CVT" };
+const kindOf = (value: string) => {
+  const k = value.split("-")[0];
+  return KINDS[k] ? k : null;
+};
+
+/** A select drawn as tap buttons. */
+function Chips({ f, value, parent, onPick, noEmpty }: { f: Field; value: string; parent?: string; onPick: (v: string) => void; noEmpty?: boolean }) {
+  const opts = (f.optionsBy && parent !== undefined ? f.optionsBy.map[parent] : undefined) ?? f.options!;
+  const twoStep = opts.length > 12 && opts.every((o) => kindOf(o.value));
+  const [kind, setKind] = useState(() => (value ? kindOf(value) : null) ?? (twoStep ? kindOf(opts[0].value) : null));
+  const empty = f.default === undefined && !noEmpty ? [{ value: "", label: f.emptyLabel?.replace(/[（）]/g, "") ?? "なし" }] : [];
+  const text = (o: { label: string; short?: string }) => o.short ?? o.label;
+  const chip = (o: { value: string; label: string; short?: string }, shown = text(o), extra = "") => (
+    <button type="button" key={o.value || "none"} className={`opt${extra}${o.value === value ? " on" : ""}`} onClick={() => onPick(o.value)}>
+      {shown}
+    </button>
+  );
+  if (!twoStep) return <div className={`opts-row${opts.some((o) => text(o).length > 14) ? " wide" : ""}`}>{[...empty, ...opts].map((o) => chip(o))}</div>;
+  const kinds = [...new Set(opts.map((o) => kindOf(o.value)!))];
+  return (
+    <>
+      <div className="opts-row">
+        {empty.map((o) => chip(o))}
+        {kinds.map((k) => (
+          <button type="button" key={k} className={`opt kind${k === kind ? (kindOf(value) === k ? " on" : " sel") : ""}`} onClick={() => setKind(k)}>
+            {KINDS[k]}
+          </button>
+        ))}
+      </div>
+      <div className="opts-row sizes">{opts.filter((o) => kindOf(o.value) === kind).map((o) => chip(o, o.value.slice(o.value.indexOf("-") + 1)))}</div>
+    </>
   );
 }

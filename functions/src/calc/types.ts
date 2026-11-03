@@ -5,13 +5,13 @@ export interface Field {
   label: string;
   type: "number" | "select" | "boolean";
   unit?: string;
-  options?: { value: string; label: string }[];
+  options?: { value: string; label: string; short?: string }[]; // short: the text on the tap button
   default?: number | string | boolean;
   min?: number;
   max?: number;
   help?: string;
   // the options change with another field (e.g. the sizes of the chosen conduit type); "" means "none / auto"
-  optionsBy?: { key: string; map: Record<string, { value: string; label: string }[]> };
+  optionsBy?: { key: string; map: Record<string, { value: string; label: string; short?: string }[]> };
   emptyLabel?: string;
   showIf?: { key: string; values: string[] }; // the form shows the field only for these values
 }

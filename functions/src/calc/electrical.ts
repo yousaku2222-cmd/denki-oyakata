@@ -127,7 +127,7 @@ export function ampsOf(t: WireType, s: string, c: Conditions): { amps: number; s
 
 // ---------- 入力欄（電線まわりは3つの計算で共通） ----------
 const wf = {
-  wireType: { key: "wireType", label: "電線の種類", type: "select", default: "CVT", options: Object.entries(TYPES).map(([value, t]) => ({ value, label: t.label })) },
+  wireType: { key: "wireType", label: "電線の種類", type: "select", default: "CVT", options: Object.entries(TYPES).map(([value, t]) => ({ value, label: t.label, short: t.label.replace(/（.*）/, "") })) },
   size: {
     key: "size",
     label: "太さ",

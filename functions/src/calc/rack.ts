@@ -10,7 +10,7 @@ const HV_GAP = 150;
 const cableOptions = () => Object.entries(WIRES).map(([value, w]) => ({ value, label: w.label }));
 const SLOTS = 5;
 const f = {
-  width: { key: "width", label: "ラックの幅", type: "select", default: "600", emptyLabel: "（自動で必要な幅を探す）", options: WIDTHS.map((w) => ({ value: String(w), label: `${w}mm` })) },
+  width: { key: "width", label: "ラックの幅", type: "select", default: "600", emptyLabel: "自動", options: WIDTHS.map((w) => ({ value: String(w), label: `${w}mm` })) },
   tiers: { key: "tiers", label: "ラックの段数", type: "select", default: "1", options: [{ value: "1", label: "1段" }, { value: "2", label: "2段" }] },
   margin: { key: "margin", label: "将来の増設のための空き", type: "number", unit: "%", default: 20, min: 0, max: 80 },
   gap: { key: "gap", label: "ケーブルとケーブルの間隔", type: "number", unit: "mm", default: 0, min: 0, max: 200, help: "0なら密着して並べます" },

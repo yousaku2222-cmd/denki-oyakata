@@ -797,3 +797,71 @@ input[inputmode="decimal"] {
   border-radius: 12px;
   padding: 8px 12px;
 }
+
+/* calc form: tap buttons instead of drop-downs */
+.opts-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.opts-row.wide {
+  flex-direction: column;
+}
+.opts-row.sizes {
+  margin-top: 2px;
+  padding-left: 8px;
+  border-left: 3px solid var(--line);
+}
+.opt {
+  min-height: 44px;
+  min-width: 48px;
+  padding: 0 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.opts-row.wide .opt {
+  border-radius: 12px;
+  padding: 8px 14px;
+  text-align: left;
+}
+.opt.kind {
+  font-weight: 700;
+}
+.opt.sel {
+  border-color: var(--text);
+}
+.opt.on {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: #1b2a4a;
+  font-weight: 700;
+}
+.opt.add {
+  border-style: dashed;
+}
+.slot-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stepper button {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.4rem;
+}
+.stepper input {
+  width: 80px;
+  text-align: center;
+}
