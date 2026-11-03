@@ -1147,14 +1147,18 @@ input[inputmode="decimal"] {
   z-index: 1;
 }
 .bag {
-  width: 140px;
-  height: 128px;
+  width: 150px;
+  height: auto;
   transform-origin: 50% 100%;
 }
-.bag-label {
-  fill: #fff;
-  font-size: 15px;
-  font-weight: 800;
+/* the pouch is navy: give it a soft light rim on the dark theme */
+:root[data-theme="dark"] .bag {
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.25));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bag {
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.25));
+  }
 }
 .bag-count {
   position: relative;

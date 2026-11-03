@@ -125,25 +125,19 @@ export function IntoTheBag({ title }: { title: string }) {
       <motion.div
         className="bag-card"
         initial={{ y: -40, scale: 1, opacity: 1, rotate: -3 }}
-        animate={{ y: [-40, -50, 70], scale: [1, 1.04, 0.35], opacity: [1, 1, 0], rotate: [-3, -3, 0] }}
+        animate={{ y: [-40, -50, 62], scale: [1, 1.04, 0.3], opacity: [1, 1, 0], rotate: [-3, -3, 0] }}
         transition={{ duration: 1.1, times: [0, 0.3, 1], ease: "easeIn", delay: 0.3 }}
       >
         🧰 {title}
       </motion.div>
-      <motion.svg
+      <motion.img
         className="bag"
-        viewBox="0 0 120 110"
+        src="/bag.png"
+        alt=""
         initial={{ scaleY: 1, scaleX: 1 }}
-        animate={{ scaleY: [1, 1, 0.88, 1.05, 1], scaleX: [1, 1, 1.08, 0.97, 1] }}
+        animate={{ scaleY: [1, 1, 0.9, 1.05, 1], scaleX: [1, 1, 1.07, 0.97, 1] }}
         transition={{ duration: 0.6, delay: 1.3 }}
-      >
-        <path d="M30 34 Q60 24 90 34 L104 88 Q106 104 88 104 L32 104 Q14 104 16 88 Z" fill="var(--bag)" />
-        <path d="M38 34 Q60 46 82 34" fill="none" stroke="var(--bag-tie)" strokeWidth="5" strokeLinecap="round" />
-        <path d="M40 22 Q60 34 80 22" fill="none" stroke="var(--bag-tie)" strokeWidth="4" strokeLinecap="round" />
-        <text x="60" y="80" textAnchor="middle" className="bag-label">
-          知恵袋
-        </text>
-      </motion.svg>
+      />
       {count !== null && (
         <p className="bag-count">
           これで{" "}
