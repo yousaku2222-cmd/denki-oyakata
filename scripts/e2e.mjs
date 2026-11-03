@@ -140,6 +140,10 @@ const jt = [{ role: "veteran", text: "（テスト用）脚立は開き止めを
 const jd = await call("draftCard", { transcript: jt, authorName: "審査員", trial: true }, judge);
 await call("publishCard", { cardId: jd.cardId, authorName: "審査員", showAuthorName: true, edits: { ...jd.draft, tags: ["脚立", "開き止め"] }, trial: true }, judge);
 check("judge sees their trial card", (await call("myCards", { trial: true }, judge)).cards.some((c) => c.id === jd.cardId));
+// the same holds for a device reading Firestore directly (the rules, not only the server)
+const otherToken = other;
+check("another device cannot read a judge's trial card", (await fetch(`${FS}/cards/${jd.cardId}`, { headers: { Authorization: `Bearer ${otherToken}` } })).status === 403);
+check("the judge can read their own trial card", (await fetch(`${FS}/cards/${jd.cardId}`, { headers: { Authorization: `Bearer ${judge}` } })).status === 200);
 const ja = await call("ask", { text: "脚立の開き止めは？", askerRole: "young", trial: true }, judge);
 const oa = await call("ask", { text: "脚立の開き止めは？", askerRole: "young" }, other);
 check("judge's answer uses their trial card, others' does not", ja.cards.some((c) => c.id === jd.cardId) && !oa.cards.some((c) => c.id === jd.cardId));
