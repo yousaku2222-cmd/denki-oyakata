@@ -120,7 +120,7 @@ export function Talk({
         cardId,
         authorName: name,
         showAuthorName: showName,
-        edits: { ...draft, tags: tagsText.split(/[、,\s]+/).filter(Boolean) },
+        edits: { ...draft, tags: tagsText.split(/[、,\n]+/).map((x) => x.trim()).filter(Boolean) }, // a word may keep its spaces (「VVF 2.0」)
       });
       // what the card is now (it may have been made public or hidden from わたしのカード meanwhile)
       setSavedStatus(r.status ?? "published");
@@ -190,7 +190,15 @@ export function Talk({
         <button
           className="link"
           disabled={busy}
-          onClick={() => confirm(status === "draft" ? "この下書きは「わたしのカード」に残ります。新しく話しますか？" : "直した所は保存されません。新しく話しますか？") && onDone()}
+          onClick={() =>
+            confirm(
+              dirty
+                ? status === "draft"
+                  ? "直した所は保存されません（下書きは直す前のまま「わたしのカード」に残ります）。新しく話しますか？"
+                  : "直した所は保存されません。新しく話しますか？"
+                : "この下書きは「わたしのカード」に残ります。新しく話しますか？",
+            ) && onDone()
+          }
         >
           {status === "draft" ? "下書きのまま置いて、新しく話す" : "保存しないで、新しく話す"}
         </button>
@@ -231,6 +239,7 @@ export function Talk({
 
       <MicInput
         paused={!active}
+        maxLength={3000}
         value={text}
         onChange={setText}
         micLabel={turns.length ? "答える" : "話す"}

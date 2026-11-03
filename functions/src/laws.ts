@@ -74,9 +74,9 @@ const kanjiRunToNumber = (run: string) => run.split("万").map(kanjiBelowMan).jo
 // Words that only look like numbers (十分 = enough, 一般 = general …) stay words, unless they sit inside a
 // real number (三十分 = 30 minutes, 十分の一 = 1/10, 一時間 = 1 hour).
 const NOT_NUMBERS =
-  /(?<![〇一二三四五六七八九十百千万\d])(?:十分(?![間の])|一般|一部|一つ|一体|一緒|一番|一方|一定|一連|一括|一時(?!間)|一旦|一応|一切|同一|統一|唯一|万一|万全|千葉|一度に|もう一度|一度も)/g;
+  /(?<![〇一二三四五六七八九十百千万\d])(?:十分(?!の[〇一二三四五六七八九十]|間(?!隔))|一般|一部|一つ|一体|一緒|一番|一方|一定|一連|一括|一時(?!間)|一旦|一応|一切|同一|統一|唯一|万一|万全|千葉|一度に|もう一度|一度も)/g;
 // A kanji number counts only before a unit or counter (六百ボルト, 二箇所, 三以上, 三線, 二十A), after 第 (第一種),
-// with a decimal part (〇・一), or as an item number at the start of a line (一 電圧六百ボルト…).
+// or with a decimal part (〇・一).
 const UNIT_AFTER =
   /^(?:ボルト|キロボルト|メガオーム|オーム|アンペア|ミリメートル|センチメートル|メートル|キロメートル|平方|ミリ|センチ|キロワット|ワット|キロ|メガ|ヘルツ|パーセント|割|円|億|箇所|か所|カ所|ケ所|条|項|号|種|年|月|日|時間|時|分間|分|秒|倍|本|回|個|枚|台|人|度|℃|以上|以下|未満|を超え|分の|線|心|芯|つ|階|灯|極|口|路|[A-Za-zΩ%％])/;
 const KANJI_NUMBER = /(第)?([〇一二三四五六七八九十百千万]+)(?:・([〇一二三四五六七八九]+))?/g;
@@ -87,8 +87,7 @@ export function kanjiToArabic(s: string): string {
   const masked = s.replace(NOT_NUMBERS, (w) => `\u0000${kept.push(w) - 1}\u0000`);
   return masked
     .replace(KANJI_NUMBER, (all: string, dai: string | undefined, int: string, frac: string | undefined, at: number, whole: string) => {
-      const itemNumber = (at === 0 || whole[at - 1] === "\n") && /^[\s　]/.test(whole.slice(at + all.length));
-      if (!dai && frac === undefined && !itemNumber && !UNIT_AFTER.test(whole.slice(at + all.length))) return all; // a word
+      if (!dai && frac === undefined && !UNIT_AFTER.test(whole.slice(at + all.length))) return all; // a word
       return `${dai ?? ""}${kanjiRunToNumber(int)}${frac ? "." + [...frac].map((c) => KANJI_DIGITS.indexOf(c)).join("") : ""}`;
     })
     .replace(/\u0000(\d+)\u0000/g, (_, i: string) => kept[Number(i)]);
@@ -105,8 +104,10 @@ const mixedPlaces = (s: string) =>
 
 const plain = (s: string) => kanjiToArabic(mixedPlaces(s.normalize("NFKC"))).replace(/(\d),(?=\d{3}(?!\d))/g, "$1");
 
-// "第149条第2項第1号" points at a place in the law, it is not a value: the card shown with the sentence names the article.
-const REFERENCES = /第\d+(?:条の\d+|条|項|号)/g;
+// "第2項第1号" / "4号" points at a place inside the article, not a value, and item numbers are not reliable
+// numbers in the source (一 二 … at line starts): drop them from the sentence. Article numbers (第178条) stay and
+// must appear in the source (the article's own number is passed with its text).
+const REFERENCES = /第?\d+(?:項|号)/g;
 
 /** The numbers in `text` that do not appear (as whole numbers) anywhere in `source`. */
 export function numbersMissing(text: string, source: string): string[] {

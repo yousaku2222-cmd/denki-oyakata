@@ -133,7 +133,7 @@ function maxCount(p: Record<string, unknown>, conduit: (typeof CONDUITS)[string]
     steps: [
       `${w.label}: ${w.long ? `${w.long}×${w.short}mm（平形）` : `外径${w.d}mm`} → 1本 ${fmt(one, 1)}mm²`,
       `${conduit.short}${size}: 内径${inner}mm → ${fmt(conduitArea(inner), 1)}mm²`,
-      `${fmt(conduitArea(inner), 1)} × ${LIMIT}% ÷ ${fmt(one, 1)} = ${fmt((LIMIT / 100) * conduitArea(inner) / one, 2)} → 切り捨てて ${max}本`,
+      `${fmt(conduitArea(inner), 1)} × ${LIMIT}% ÷ ${fmt(one, 1)} = ${fmt(Math.floor(tidy((LIMIT / 100) * conduitArea(inner) / one) * 100) / 100, 2)}… → 切り捨てて ${max}本`, // cut, never rounded up past the count
       `（参考）${other.label}なら ${other.limit}% → ${maxOther}本`,
     ],
     basis: [],

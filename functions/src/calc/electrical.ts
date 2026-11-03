@@ -177,8 +177,8 @@ export function thinnest(t: WireType, n: number, c: Conditions, current: number,
     } catch {
       continue;
     }
-    if (a < current) continue;
-    if (drop && ((drop.k * drop.L * current) / (1000 * area(t, s) * n) / drop.V) * 100 > drop.limit) continue;
+    if (a < tidy(current)) continue;
+    if (drop && tidy(((drop.k * drop.L * current) / (1000 * area(t, s) * n) / drop.V) * 100) > drop.limit) continue;
     return { s, amps: a };
   }
   return null;
@@ -217,7 +217,7 @@ export const voltageDrop: Calc = {
     const V = given(p, "voltage") ? num(p, vd.voltage) : sys.v;
     const A = area(t, s) * n;
     const e = (sys.k * L * I) / (1000 * A);
-    const pct = (e / V) * 100;
+    const pct = tidy((e / V) * 100); // exactly 2% must pass
     const limit = dropLimit(L);
     const amp = ampsOf(t, s, c);
     const allowed = tidy(amp.amps * n);
@@ -320,10 +320,11 @@ export const loadToWire: Calc = {
     const P = num(p, lw.kw) * 1000;
     const V = ph === PHASES.single3 ? 200 : num(p, lw.voltage);
     const pf = num(p, lw.pf);
-    const I0 = P / ((ph.root3 ? Math.sqrt(3) : 1) * V * pf);
+    // tidy: 7560 ÷ (210 × 0.72) must be 50A (×1.25), not 50.00000000000001A (×1.1, a wire too thin)
+    const I0 = tidy(P / ((ph.root3 ? Math.sqrt(3) : 1) * V * pf));
     const motor = flag(p, lw.motor);
     const factor = motor ? (I0 <= 50 ? 1.25 : 1.1) : 1;
-    const I = I0 * factor;
+    const I = tidy(I0 * factor);
     const { t, n, c } = readWire(p, false);
     const L = given(p, "length") ? num(p, lw.length) : null;
     const drop = L === null ? undefined : { k: ph.k, L, V: ph === PHASES.single3 ? 100 : V, limit: dropLimit(L) };
@@ -336,7 +337,7 @@ export const loadToWire: Calc = {
       let r = thinnest(tt, n, cc, I);
       if (r && drop) {
         const i = TYPES[tt].sizes.indexOf(r.s);
-        const ok = TYPES[tt].sizes.slice(i).find((s) => ((drop.k * drop.L * I0) / (1000 * area(tt, s) * n) / drop.V) * 100 <= drop.limit);
+        const ok = TYPES[tt].sizes.slice(i).find((s) => tidy(((drop.k * drop.L * I0) / (1000 * area(tt, s) * n) / drop.V) * 100) <= drop.limit);
         r = ok ? { s: ok, amps: ampsOf(tt, ok, cc).amps * n } : null;
       }
       return { tt, r };

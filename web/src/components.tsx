@@ -67,6 +67,7 @@ export function MicInput(props: {
   micLabel: string;
   rows?: number;
   paused?: boolean; // the screen is hidden: stop listening, so words said elsewhere do not land here
+  maxLength?: number; // the server's limit for this text
 }) {
   const { value, onChange, paused } = props;
   // several final results can arrive before the next render: append to the latest text, not to this render's copy
@@ -94,6 +95,7 @@ export function MicInput(props: {
         onChange={(e) => onChange(e.target.value)}
         placeholder={props.placeholder}
         rows={props.rows ?? 3}
+        maxLength={props.maxLength}
       />
     </div>
   );

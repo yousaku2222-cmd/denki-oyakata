@@ -199,3 +199,20 @@ test("exact limits pass: no floating-point noise in a verdict", () => {
   assert.match(grounding.run({ type: "C", measured: 10.0000001 }).verdict, /10\.0000001Ω ＞ 基準 10Ω/);
   assert.ok(insulation.run({ voltage: "le150", measured: 0.0999 }).steps.includes("測定値: 0.0999MΩ"));
 });
+
+test("currents exactly at a boundary are not pushed over it by floating-point noise", () => {
+  // 7560 ÷ (210 × 0.72) = 50A exactly: a motor feeder at 50A is ×1.25 (62.5A), not ×1.1
+  const r = loadToWire.run({ kw: 7.56, phase: "single", voltage: 210, pf: 0.72, motor: true, wireType: "CVT", install: "air" });
+  assert.ok(r.steps.some((s) => /50A ≦ 50A → × 1\.25 = 62\.5A/.test(s)), r.steps.join("\n"));
+  assert.match(r.verdict, /CVT 14sq/);
+  // 100A × 1.1 = 110A exactly: CVT 22sq (110A) is enough
+  assert.match(loadToWire.run({ kw: 20, phase: "single", voltage: 200, pf: 1, motor: true, wireType: "CVT", install: "air" }).verdict, /CVT 22sq/);
+  // exactly 2% voltage drop is within the 2% limit
+  assert.doesNotMatch(voltageDrop.run({ system: "single2", voltage: 89, length: 17.6, current: 62.5, wireType: "CV1", size: "22", install: "air" }).verdict, /超えます/);
+  // how many fit: the working line is cut, never rounded up past the count
+  assert.ok(conduitFill.run({ conduitType: "VE", conduitSize: "36", wire1: "VVF-2.0×3C", maxCount: true, route: "easy" }).steps.some((s) => /= 4\.\d+… → 切り捨てて 4本/.test(s)));
+  // B種: the limit in the verdict is the same cut-down figure as in the steps
+  const b = grounding.run({ type: "B", cutoff: "none", ig: 9, measured: 5 });
+  assert.match(b.verdict, /基準 16\.66Ω/);
+  assert.match(grounding.run({ type: "B", cutoff: "none", ig: 7, measured: 21.425 }).verdict, /^合格（測定 21\.425Ω ≦ 基準 21\.428Ω）/);
+});

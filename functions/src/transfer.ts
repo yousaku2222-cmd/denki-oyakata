@@ -39,7 +39,7 @@ async function move(collection: string, field: string, from: string, to: string,
 
 export async function useTransferCode(data: Record<string, unknown>, uid: string, ctx?: { ip: string }) {
   await takeQuota(uid, "transfer", ctx?.ip); // a few tries a day, so codes cannot be guessed
-  const code = normalizeCode(str(data.code, "code", 20));
+  const code = normalizeCode(str(data.code, "引き継ぎコード", 20));
   const ref = db.collection("transfers").doc(code);
   const from = await db.runTransaction(async (tx) => {
     const t = await tx.get(ref);

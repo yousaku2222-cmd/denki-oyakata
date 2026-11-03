@@ -67,7 +67,7 @@ export function Ask({ role }: { role: Role }) {
   return (
     <section className="screen">
       <h1 className="screen-title">現場の疑問を、聞いてみよう</h1>
-      <MicInput value={text} onChange={setText} micLabel="話して聞く" placeholder="例: VE管とPF管の支持の違いは？（話し言葉・方言のままでOK）" />
+      <MicInput value={text} onChange={setText} maxLength={500} micLabel="話して聞く" placeholder="例: VE管とPF管の支持の違いは？（話し言葉・方言のままでOK）" />
       <button className="primary" disabled={!text.trim() || busy} onClick={() => submit()}>
         {busy ? "調べています…" : "聞く"}
       </button>

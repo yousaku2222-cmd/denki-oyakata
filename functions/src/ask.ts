@@ -107,7 +107,7 @@ export function enforceSources(
 }
 
 export async function ask(data: Record<string, unknown>, uid: string) {
-  const text = str(data.text, "text", 500);
+  const text = str(data.text, "質問", 500);
   const askerId = uid;
   const askerRole = data.askerRole === "veteran" ? "veteran" : "young";
   const cards = await publishedCards();
@@ -279,7 +279,7 @@ export async function ask(data: Record<string, unknown>, uid: string) {
 }
 
 export async function markHelped(data: Record<string, unknown>, uid: string) {
-  const answerId = str(data.answerId, "answerId", 64);
+  const answerId = str(data.answerId, "答えの番号", 64);
   const askerId = uid;
   const ref = db.collection("answers").doc(answerId);
   await db.runTransaction(async (tx) => {

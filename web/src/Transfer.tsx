@@ -51,7 +51,7 @@ export function Transfer({ what, onMoved }: { what: string; onMoved?: () => void
         </button>
       )}
       <div className="row">
-        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="前の端末のコード" autoCapitalize="characters" />
+        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="前の端末のコード" autoCapitalize="characters" maxLength={20} />
         <button className="secondary" disabled={busy || input.trim().length < 8} onClick={use}>
           引き継ぐ
         </button>

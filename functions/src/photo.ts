@@ -150,7 +150,7 @@ function calcLink(spec: Judged["spec"]) {
 
 export async function identifyPart(data: Record<string, unknown>, _uid: string) {
   const image = typeof data.image === "string" ? data.image.replace(/^data:image\/\w+;base64,/, "") : "";
-  const name = image ? "" : str(data.name, "name", 60);
+  const name = image ? "" : str(data.name, "部材の名前", 60);
   // check (and shrink) the photo before any Claude call
   const photo = image && getClient() ? await preparePhoto(image) : null;
   if (image && !photo && (image.length > MAX_IMAGE || !/^[A-Za-z0-9+/]+={0,2}$/.test(image))) throw new HttpsError("invalid-argument", "写真が大きすぎるか、形式が違います");

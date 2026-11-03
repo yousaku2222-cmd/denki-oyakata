@@ -121,16 +121,21 @@ function groundingB(p: Record<string, unknown>): CalcResult {
   }
   const lim = numer / ig;
   // shown cut down to 2 decimals (the safe side: a reading at the shown value always passes)
-  const limShown = (Math.floor(tidy(lim) * 100) / 100).toLocaleString("ja-JP", { maximumFractionDigits: 2 });
+  const cutTo = (d: number) => (Math.floor(tidy(lim) * 10 ** d) / 10 ** d).toLocaleString("ja-JP", { maximumFractionDigits: d });
+  const limShown = cutTo(2);
   steps.push(`基準値 = ${numer} ÷ ${fmt(ig)} = ${limShown}Ω${tidy(lim * 100) % 1 ? "（小数第3位以下は切り捨て）" : ""}`);
   const hasM = has(p, "measured");
   const m = hasM ? num(p, gnd.measured) : null;
   const ok = m === null ? null : m <= lim;
+  // the limit in the verdict is cut down like in the steps; only a reading between 21.42 and 21.428… needs more digits
+  let limInVerdict = limShown;
+  for (let d = 3; m !== null && ok && Number(limInVerdict.replace(/,/g, "")) < m && d <= 6; d++) limInVerdict = cutTo(d);
+  if (m !== null && ok && Number(limInVerdict.replace(/,/g, "")) < m) limInVerdict = String(lim);
   if (m !== null) steps.push(`測定値: ${fmtVs(m, lim, 1)[0]}Ω`);
   return {
     title: "B種接地工事の接地抵抗",
     ok,
-    verdict: m === null ? `基準値 ${limShown}Ω以下（${numer}／Ig、Ig = ${fmt(ig)}A）` : `${ok ? "合格" : "不合格"}（測定 ${fmtVs(m!, lim, 1)[0]}Ω ${ok ? "≦" : "＞"} 基準 ${fmtVs(m!, lim, 1)[1]}Ω）`,
+    verdict: m === null ? `基準値 ${limShown}Ω以下（${numer}／Ig、Ig = ${fmt(ig)}A）` : `${ok ? "合格" : "不合格"}（測定 ${fmtVs(m!, lim, 1)[0]}Ω ${ok ? "≦" : "＞"} 基準 ${limInVerdict}Ω）`,
     steps,
     basis: [
       { lawId: "kaishaku-17", quote: "2 B種接地工事は、次の各号によること。" },

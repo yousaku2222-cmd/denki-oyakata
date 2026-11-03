@@ -67,7 +67,8 @@ test("a wisdom sentence may not carry numbers its card does not have", () => {
 
 import { numbersMissing } from "./laws";
 test("numbers are compared as values, not as look-alike words", () => {
-  const text = (id: string) => LAWS.find((l) => l.id === id)!.text;
+  // as enforceSources passes it: the article's text with its own number
+  const text = (id: string) => { const l = LAWS.find((x) => x.id === id)!; return `${l.text} ${l.article} ${l.short}`; };
   const cases: [string, string, string[]][] = [
     // article references are places, not values
     ["電気工事士法施行令第1条第4号により、二次電圧36V以下の小型変圧器の二次側配線工事は軽微な工事です。", text("335CO0000000260-1"), []],
@@ -86,6 +87,13 @@ test("numbers are compared as values, not as look-alike words", () => {
     // counters and letters after kanji numbers
     ["単相3線式の中性線", "単相三線式の中性線", []],
     ["20Aのブレーカ", "二十Aのブレーカ", []],
+    // item numbers are not values: a wrong 5m is caught even though the article has an item 五
+    ["管の長さが5m以下なら、この限りでない。", text("kaishaku-160"), ["5"]],
+    // an article number that is not this article's is caught (第178条 is right, 第187条 is not)
+    ["第187条に規定する火薬庫に施設するものは除きます。", text("kaishaku-147"), ["187"]],
+    // 十分 meaning "enough" before の・間隔 stays a word
+    ["十分の余裕をもった容量の開閉器を選ぶ。", "開閉器を選ぶ", []],
+    ["十分間隔をあけて施設する。", "施設する", []],
     // a number the article really lacks is still caught
     ["三相200Vの電動機回路は0.2MΩ以上です。", text("409M50000400052-58"), ["200"]],
   ];

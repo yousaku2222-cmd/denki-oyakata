@@ -4,9 +4,9 @@ import { COMPANY, db, str } from "./common";
 import { takeQuota } from "./limits";
 
 export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?: { ip: string }) {
-  const text = str(data.text, "text", 500);
+  const text = str(data.text, "質問", 500);
   const askerId = uid;
-  const askerName = str(data.askerName, "askerName", 30, false) || "若手";
+  const askerName = str(data.askerName, "呼び名", 30, false) || "若手";
   const askerRole = data.askerRole === "veteran" ? "veteran" : "young";
   // a small JPEG from ⑤撮る ("これ何ですか？"); kept in the question itself, so no storage bucket is needed
   const photo = typeof data.photo === "string" ? data.photo : "";
@@ -34,7 +34,7 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
 }
 
 export async function markGoodQuestion(data: Record<string, unknown>, uid: string) {
-  const questionId = str(data.questionId, "questionId", 64);
+  const questionId = str(data.questionId, "質問の番号", 64);
   const veteranId = uid;
   const ref = db.collection("questions").doc(questionId);
   const q = await ref.get();
@@ -77,7 +77,7 @@ export async function openQuestions(_data: Record<string, unknown>, uid: string)
 
 /** The photo of one question, when the veteran opens it. */
 export async function questionPhoto(data: Record<string, unknown>) {
-  const q = await db.collection("questions").doc(str(data.questionId, "questionId", 64)).get();
+  const q = await db.collection("questions").doc(str(data.questionId, "質問の番号", 64)).get();
   if (!q.exists || q.get("companyId") !== COMPANY) throw new HttpsError("not-found", "質問が見つかりません。");
   return { photo: (q.get("photo") as string | null) || null };
 }

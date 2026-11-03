@@ -34,6 +34,7 @@
 | askerId / askerName / askerRole | string | 聞いた人（端末ID・表示名・young/veteran） |
 | excludeVeteranId | string\|null | ベテランが聞いた質問は本人の箱に入れない |
 | photo | string\|null | 段階4: 写真ごと質問（1024px 程度の JPEG の data URL、30万字まで。photoUrl は未使用） |
+| hasPhoto | boolean | 写真があるか（一覧は写真を読まずにこれで示す。この項目が無い古い質問は「写真あり」として扱い、開いて確かめる） |
 | status | 'open'\|'answered' | |
 | goodBy | string[] | 「いい質問」を押したベテラン |
 | answeredCardId | string\|null | 答えになったカード |

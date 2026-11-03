@@ -37,6 +37,7 @@ export function Me() {
         <input
           value={name}
           placeholder="例: たろう"
+          maxLength={30}
           onChange={(e) => {
             setNameState(e.target.value);
             setName("young", e.target.value);

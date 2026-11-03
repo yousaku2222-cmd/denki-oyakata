@@ -42,6 +42,7 @@ export default function App() {
   }, [theme]);
 
   function choose(r: Role | null) {
+    setTalkDirty(false); // 話す goes away with the role; nothing is left in progress
     saveRole(r);
     setRoleState(r);
     setTab(r === "veteran" ? "talk" : "ask");
@@ -74,7 +75,7 @@ export default function App() {
         <button className="icon-btn" aria-label="明るさの切り替え" onClick={toggleTheme}>
           ◐
         </button>
-        <button className="icon-btn" onClick={() => (!talkDirty || confirm("「話す」で話している途中の内容は消えます。切り替えますか？")) && choose(null)}>
+        <button className="icon-btn" onClick={() => (role !== "veteran" || !talkDirty || confirm("「話す」で話している途中の内容は消えます。切り替えますか？")) && choose(null)}>
           切替
         </button>
       </header>

@@ -29,7 +29,7 @@ export async function interviewNext(data: Record<string, unknown>) {
     const q = DUMMY_FOLLOW_UPS[asked];
     return { done: !q, question: q ?? "", mode: "dummy" };
   }
-  const topic = str(data.questionText, "questionText", 500, false);
+  const topic = str(data.questionText, "質問", 500, false);
   const r = await jsonCall<{ done: boolean; question: string }>({
     model: MODEL_ANSWER,
     system: INTERVIEW_SYSTEM,
@@ -66,15 +66,18 @@ const DRAFT_SYSTEM = `電気工事のベテランの話を「知恵カード」�
 
 // What a published card may hold (publishCard checks these; drafts are cut to fit so they can be published).
 export const CARD_LIMITS = { title: 60, scene: 500, body: 1500, reason: 1000, caution: 1000, tags: 15, tag: 30 } as const;
+// cut by characters, not UTF-16 units: half an emoji would be saved as "�"
+const cut = (s: string, n: number) => (s.length <= n ? s : Array.from(s).slice(0, n).join("").slice(0, n).replace(/[\uD800-\uDBFF]$/, ""));
 function fitDraft(d: Draft): Draft {
   return {
     ...d,
-    title: d.title.slice(0, CARD_LIMITS.title),
-    scene: d.scene.slice(0, CARD_LIMITS.scene),
-    body: d.body.slice(0, CARD_LIMITS.body),
-    reason: d.reason.slice(0, CARD_LIMITS.reason),
-    caution: d.caution.slice(0, CARD_LIMITS.caution),
-    tags: d.tags.map((x) => x.trim().slice(0, CARD_LIMITS.tag)).filter(Boolean).slice(0, CARD_LIMITS.tags),
+    title: cut(d.title, CARD_LIMITS.title),
+    scene: cut(d.scene, CARD_LIMITS.scene),
+    body: cut(d.body, CARD_LIMITS.body),
+    reason: cut(d.reason, CARD_LIMITS.reason),
+    caution: cut(d.caution, CARD_LIMITS.caution),
+    // the edit screen splits the words at 、 and line breaks only, so a word may keep its spaces
+    tags: d.tags.flatMap((x) => x.split(/[、,\n]+/)).map((x) => cut(x.trim(), CARD_LIMITS.tag)).filter(Boolean).slice(0, CARD_LIMITS.tags),
   };
 }
 
@@ -97,8 +100,8 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
   const transcript = turns(data.transcript);
   if (!transcript.some((t) => t.role === "veteran")) throw new HttpsError("invalid-argument", "nothing was said");
   const authorId = uid;
-  const authorName = str(data.authorName, "authorName", 30, false);
-  const triggerQuestionId = str(data.triggerQuestionId, "triggerQuestionId", 64, false) || null;
+  const authorName = str(data.authorName, "名前", 30, false);
+  const triggerQuestionId = str(data.triggerQuestionId, "質問の番号", 64, false) || null;
 
   let draft: Draft;
   let mode: "claude" | "dummy" = "dummy";
@@ -183,7 +186,7 @@ async function ownCard(cardId: string, authorId: string) {
 }
 
 export async function publishCard(data: Record<string, unknown>, uid: string, ctx?: { ip: string }) {
-  const cardId = str(data.cardId, "cardId", 64);
+  const cardId = str(data.cardId, "カードの番号", 64);
   const authorId = uid;
   const e = (data.edits ?? {}) as Record<string, unknown>;
   const { ref, card } = await ownCard(cardId, authorId);
@@ -237,7 +240,7 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
 }
 
 export async function setCardStatus(data: Record<string, unknown>, uid: string) {
-  const cardId = str(data.cardId, "cardId", 64);
+  const cardId = str(data.cardId, "カードの番号", 64);
   const authorId = uid;
   const status = data.status;
   if (status !== "published" && status !== "private") throw new HttpsError("invalid-argument", "status is invalid");
@@ -273,7 +276,7 @@ export async function myCards(_data: Record<string, unknown>, uid: string) {
 
 /** One of my cards, to go on editing it (a draft left behind, or a published card to fix). */
 export async function myCard(data: Record<string, unknown>, uid: string) {
-  const cardId = str(data.cardId, "cardId", 64);
+  const cardId = str(data.cardId, "カードの番号", 64);
   const { card } = await ownCard(cardId, uid);
   const priv = await db.collection("cardPrivate").doc(cardId).get();
   return {
@@ -288,7 +291,7 @@ export async function myCard(data: Record<string, unknown>, uid: string) {
 
 /** A draft that will not be published: remove it (published cards are hidden with setCardStatus instead). */
 export async function deleteDraft(data: Record<string, unknown>, uid: string) {
-  const cardId = str(data.cardId, "cardId", 64);
+  const cardId = str(data.cardId, "カードの番号", 64);
   const { ref, card } = await ownCard(cardId, uid);
   if (card.status !== "draft") throw new HttpsError("failed-precondition", "公開したカードは消さずに「非公開にする」を使ってください。");
   const batch = db.batch();
