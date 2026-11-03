@@ -1206,7 +1206,7 @@ input[inputmode="decimal"] {
 .ask-waiting ol {
   list-style: none;
   margin: 8px 0 0;
-  padding: 0;
+  padding: 6px; /* room for the spinning ring: the list hides overflow so it can fold */
   display: grid;
   gap: 10px;
 }
