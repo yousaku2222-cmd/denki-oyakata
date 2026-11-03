@@ -1,9 +1,34 @@
 import { useState } from "react";
+import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { getName, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
 import { CalcCard, type CalcOutput } from "../CalcCard";
+
+// Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
+const STAGGER = 0.15;
+const SENTENCE = { hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" as const } } };
+
+function Stamp({ delay }: { delay: number }) {
+  return (
+    <motion.span
+      className="stamp"
+      initial={{ opacity: 0, scale: 1.9, rotate: -16 }}
+      animate={{ opacity: 1, scale: 1, rotate: -4 }}
+      transition={{ delay, type: "spring", stiffness: 520, damping: 18 }}
+    >
+      ✔ 引用は原文と一致
+      <motion.span
+        className="stamp-ring"
+        aria-hidden
+        initial={{ opacity: 0, scale: 1 }}
+        animate={{ opacity: [0, 0.55, 0], scale: [1, 1, 1.7] }}
+        transition={{ delay: delay + 0.12, duration: 0.6, times: [0, 0.05, 1] }}
+      />
+    </motion.span>
+  );
+}
 
 interface Answer {
   answerId: string;
@@ -93,14 +118,19 @@ export function Ask({ role }: { role: Role }) {
           {answer.mode === "dummy" && <p className="hint">※ 試験用のダミー応答です（AIの接続前）</p>}
           {answer.calcs?.map((c, i) => <CalcCard key={i} c={c} />)}
 
+          <motion.div key={answer.answerId} className="sentences" initial="hidden" animate="shown" variants={{ shown: { transition: { staggerChildren: STAGGER } } }}>
           {answer.sentences.map((s, i) => {
             const c = s.source === "wisdom" ? cardOf(s.cardId) : undefined;
             const law = s.source === "law" ? answer.laws.find((l) => l.id === s.lawId) : undefined;
             return (
-              <div key={i} className={`sentence src-${s.source}`}>
-                <span className="src-tag">
-                  {SOURCE_LABEL[s.source].icon} {SOURCE_LABEL[s.source].label}
-                </span>
+              <motion.div key={i} className={`sentence src-${s.source}`} variants={SENTENCE}>
+                <div className="src-head">
+                  <span className="src-tag">
+                    {SOURCE_LABEL[s.source].icon} {SOURCE_LABEL[s.source].label}
+                  </span>
+                  {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
+                  {s.verified && <Stamp delay={i * STAGGER + 0.3} />}
+                </div>
                 <p>{s.text}</p>
                 {c && (
                   <p className="src-meta">
@@ -116,11 +146,10 @@ export function Ask({ role }: { role: Role }) {
                     </span>
                   </button>
                 )}
-                {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
-                {s.verified && <span className="stamp">✔ 引用は原文と一致</span>}
-              </div>
+              </motion.div>
             );
           })}
+          </motion.div>
 
           {answer.safetyNote && <Notice>⚠️ {answer.safetyNote}</Notice>}
           {openLaw && <LawSheet id={openLaw.id} highlight={openLaw.quote} onClose={() => setOpenLaw(null)} />}

@@ -367,15 +367,35 @@ input[type="text"] {
   font-size: 0.85rem;
   margin: 2px 0 0;
 }
+.sentences {
+  display: grid;
+  gap: 10px;
+}
+.src-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .stamp {
+  position: relative;
   display: inline-block;
   margin-top: 4px;
+  white-space: nowrap;
+  font-size: 0.85rem;
   border: 2px solid var(--danger);
   color: var(--danger);
   border-radius: 6px;
   padding: 0 6px;
   font-weight: 800;
   transform: rotate(-4deg);
+}
+.stamp-ring {
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--danger);
+  border-radius: 8px;
+  pointer-events: none;
 }
 .notice {
   background: #fff6d6;

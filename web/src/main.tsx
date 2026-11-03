@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { MotionConfig } from "motion/react";
 import "./index.css";
 import App from "./App.tsx";
 import { signedIn } from "./firebase";
@@ -10,7 +11,10 @@ signedIn
   .then(() =>
     root.render(
       <StrictMode>
-        <App />
+        {/* devices set to reduce motion get the end state without the movement */}
+        <MotionConfig reducedMotion="user">
+          <App />
+        </MotionConfig>
       </StrictMode>,
     ),
   )
