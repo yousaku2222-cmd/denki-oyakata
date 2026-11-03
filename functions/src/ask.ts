@@ -136,7 +136,10 @@ type Composed = Awaited<ReturnType<typeof compose>>;
  * looser cached cap, and adds nothing to the cards' view counts or the asker's count.
  */
 export async function ask(data: Record<string, unknown>, uid: string, ctx?: { charge?: () => Promise<void>; chargeCached?: () => Promise<void> }) {
-  const text = str(data.text, "質問", 500);
+  const asked = str(data.text, "質問", 500);
+  // a follow-up from わたし: asked as the continuation of the earlier question (which is part of the saved answer's key)
+  const after = str(data.after, "前の質問", 500, false);
+  const text = after ? `前の質問「${after}」の続きです。${asked}` : asked;
   const askerId = uid;
   const askerRole = data.askerRole === "veteran" ? "veteran" : "young";
   const cards = await publishedCards(spacesOf(data, uid));
@@ -164,7 +167,8 @@ export async function ask(data: Record<string, unknown>, uid: string, ctx?: { ch
 
   const ref = await db.collection("answers").add({
     companyId: spaceOf(data, uid),
-    question: text,
+    question: asked,
+    after: after || null,
     interpretedAs: out.interpretedAs,
     sentences: out.sentences,
     grounded: out.grounded,

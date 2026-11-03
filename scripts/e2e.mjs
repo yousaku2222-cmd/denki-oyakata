@@ -172,5 +172,20 @@ await call("publishCard", { cardId: jd3.cardId, authorName: "山田（親方）"
 const done2 = (await call("myQuestions", {}, asker2)).questions.find((q) => q.id === s1.questionId);
 check("when it is answered, the one who joined hears it too (with who answered)", done2?.status === "answered" && done2.answeredBy === "山田（親方）" && done2.answeredAt > 0);
 
+console.log("\n11. 続きの質問");
+const f1 = await call("sendToBox", { text: "コネクタは何本用を選ぶ？", askerName: "若手2", askerRole: "young", followUpOf: s1.questionId }, asker2);
+const fBox = (await call("openQuestions", {}, vet2)).questions.find((q) => q.id === f1.questionId);
+check("a follow-up shows the earlier question and its card in the box", fBox?.followUp?.text === "ジョイントボックスの中の結線は何で留める？" && !!fBox.followUp.cardTitle && !("questionId" in fBox.followUp));
+const f2 = await call("sendToBox", { text: "コネクタは何本用を選ぶ？", askerName: "若手1", askerRole: "young", followUpOf: s1.questionId }, asker1);
+check("a follow-up is never merged", !f2.merged && !f2.duplicate && f2.questionId !== f1.questionId);
+const stranger = await signUp();
+let strangerRefused = false;
+try {
+  await call("sendToBox", { text: "コネクタは何本用を選ぶ？", askerName: "他人", askerRole: "young", followUpOf: s1.questionId }, stranger);
+} catch {
+  strangerRefused = true;
+}
+check("only the one who asked can follow a question up", strangerRefused);
+
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);

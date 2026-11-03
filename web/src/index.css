@@ -1578,3 +1578,28 @@ input[inputmode="decimal"] {
   max-height: 70vh;
   object-fit: contain;
 }
+
+/* わたし → 答えを聞く: the next question, under the answer */
+.follow-up {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+.follow-up-head {
+  margin: 0;
+  font-weight: 700;
+}
+.follow-up .src-meta {
+  margin: -6px 0 0;
+}
+/* 質問箱: a follow-up shows what was asked and answered before it */
+.follow-chip {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border-left: 3px solid var(--wisdom);
+  padding-left: 8px;
+}

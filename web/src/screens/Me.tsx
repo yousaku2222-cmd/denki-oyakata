@@ -36,7 +36,7 @@ function markSeen(at: number) {
 }
 
 /** わたし (young): the answers that came back come first; settings go to the bottom. */
-export function Me({ onAskAgain }: { onAskAgain: (text: string) => void }) {
+export function Me({ onAskAgain }: { onAskAgain: (text: string, questionId: string) => void }) {
   const [items, setItems] = useState<Q[] | null>(null);
   const [err, setErr] = useState("");
   const [name, setNameState] = useState(getName("young"));
@@ -80,7 +80,7 @@ export function Me({ onAskAgain }: { onAskAgain: (text: string) => void }) {
             {q.answeredBy ?? "社内のベテラン"}が答えてくれました・あなたの質問「{q.text.length > 30 ? q.text.slice(0, 29) + "…" : q.text}」
           </p>
           {canAsk(q) && (
-            <button className="primary" onClick={() => onAskAgain(q.text)}>
+            <button className="primary" onClick={() => onAskAgain(q.text, q.id)}>
               答えを聞く →
             </button>
           )}
@@ -112,7 +112,7 @@ export function Me({ onAskAgain }: { onAskAgain: (text: string) => void }) {
                 🎉 {q.answeredBy ?? "社内のベテラン"}が答えてくれました：「{q.answeredCardTitle ?? "…"}」
               </p>
               {canAsk(q) && (
-                <button className="secondary" onClick={() => onAskAgain(q.text)}>
+                <button className="secondary" onClick={() => onAskAgain(q.text, q.id)}>
                   答えを聞く →
                 </button>
               )}

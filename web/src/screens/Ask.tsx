@@ -60,7 +60,7 @@ const GENERAL_PREVIEW = 2; // general sentences shown before 「もっと見る�
 type Last = { asked: string; answer: Answer; helped?: boolean; sent?: boolean; sentNote?: string };
 const lastOf: Partial<Record<Role, Last>> = {};
 
-export function Ask({ role, seed }: { role: Role; seed?: string }) {
+export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string; seedQuestionId?: string }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -93,7 +93,8 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening, with the question it came with
   }, [seed]);
 
-  async function submit(q = text) {
+  // after: a follow-up to the question opened from わたし (the AI reads it as the continuation)
+  async function submit(q = text, after?: string) {
     if (!q.trim() || busy) return;
     setBusy(true);
     setErr("");
@@ -104,7 +105,7 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
     setSentNote("");
     setAsked(q.trim());
     try {
-      const a = await call<Answer>("ask", { text: q.trim(), askerRole: role });
+      const a = await call<Answer>("ask", { text: q.trim(), askerRole: role, ...(after ? { after } : {}) });
       if (!a.cached) {
         setFinished(true);
         await new Promise((r) => setTimeout(r, TICK_MS));
@@ -312,6 +313,7 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
             </button>
             )}
           </div>
+          {fromMe && seed && seedQuestionId && <FollowUp role={role} prev={seed} prevId={seedQuestionId} first={asked !== seed ? asked : ""} busy={busy} onAsk={(q) => void submit(q, seed)} />}
           {sent && (
             <motion.p className="hint sent-note" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
               {sentNote}
@@ -321,5 +323,53 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
       )}
       {envelope}
     </section>
+  );
+}
+
+/**
+ * Under an answer opened from わたし (a veteran answered that question): what to ask next. To the AI, as the
+ * continuation of that question, or to the box as a follow-up that shows the veteran the earlier question and card.
+ */
+function FollowUp({ role, prev, prevId, first, busy, onAsk }: { role: Role; prev: string; prevId: string; first: string; busy: boolean; onAsk: (q: string) => void }) {
+  // under the AI's answer to a follow-up, that follow-up is already in the box: one tap sends it on to the veteran
+  const [text, setText] = useState(first);
+  const [sending, setSending] = useState(false);
+  const [note, setNote] = useState("");
+  const [err, setErr] = useState("");
+  const { fly, envelope } = useFlyToMe();
+
+  async function toBox(e: React.MouseEvent<HTMLButtonElement>) {
+    const from = e.currentTarget.getBoundingClientRect();
+    setSending(true);
+    setErr("");
+    try {
+      await call("sendToBox", { text: text.trim(), askerName: getName(role), askerRole: role, followUpOf: prevId });
+      setNote(`「${text.trim()}」を、続きの質問として質問箱に入れました。親方が答えると、「わたし」に届きます。`);
+      setText("");
+      fly(from);
+    } catch (e) {
+      setErr(errorText(e, "質問箱に送れませんでした。もう一度お試しください。"));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="follow-up">
+      <p className="follow-up-head">続けて聞きたいことは？</p>
+      <p className="src-meta">「{prev}」の続きとして聞きます</p>
+      <MicInput value={text} onChange={setText} maxLength={500} micLabel="話す" placeholder="例: ボックスは何個まで入れていい？" />
+      <div className="row">
+        <button className="primary" disabled={!text.trim() || busy} onClick={() => onAsk(text)}>
+          AIに聞く
+        </button>
+        <button className="secondary" disabled={!text.trim() || sending} onClick={toBox}>
+          📮 親方に続けて聞く
+        </button>
+      </div>
+      {err && <p className="hint error">{err}</p>}
+      {note && <p className="hint sent-note">{note}</p>}
+      {envelope}
+    </div>
   );
 }

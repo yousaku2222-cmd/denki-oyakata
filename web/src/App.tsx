@@ -35,7 +35,7 @@ export default function App() {
   // a question sent to the 質問箱 lands on わたし (where the answer will come back): a dot until it is opened
   const [meDot, setMeDot] = useState(false);
   // わたし →「答えを聞く」: the question is asked again on 聞く (now the veteran's card is there to answer it)
-  const [askSeed, setAskSeed] = useState<{ text: string; n: number } | null>(null);
+  const [askSeed, setAskSeed] = useState<{ text: string; questionId: string; n: number } | null>(null);
   // an answer that came back since わたし was last opened: dot on わたし when the app opens
   useEffect(() => {
     if (role !== "young") return;
@@ -111,7 +111,7 @@ export default function App() {
       </div>
 
       <main>
-        {tab === "ask" && (role === "veteran" ? <VeteranAsk role={role} /> : <Ask key={askSeed?.n ?? 0} role={role} seed={askSeed?.text} />)}
+        {tab === "ask" && (role === "veteran" ? <VeteranAsk role={role} /> : <Ask key={askSeed?.n ?? 0} role={role} seed={askSeed?.text} seedQuestionId={askSeed?.questionId} />)}
         {tab === "browse" && <Browse />}
         {tab === "calc" && <Calc key={calcStart ? JSON.stringify(calcStart) : "list"} start={calcStart} />}
         {tab === "photo" && (
@@ -124,8 +124,8 @@ export default function App() {
         )}
         {tab === "me" && (
           <Me
-            onAskAgain={(text) => {
-              setAskSeed({ text, n: Date.now() });
+            onAskAgain={(text, questionId) => {
+              setAskSeed({ text, questionId, n: Date.now() });
               setTab("ask");
             }}
           />

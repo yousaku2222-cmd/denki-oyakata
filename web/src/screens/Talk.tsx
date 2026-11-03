@@ -18,6 +18,7 @@ export interface Topic {
   text: string;
   askerName: string;
   hasPhoto?: boolean; // false: no photo to load (unknown when a draft is opened again: then asked)
+  followUp?: { text: string; cardTitle: string | null } | null; // the earlier question and card it follows
 }
 
 export function Talk({
@@ -92,6 +93,11 @@ export function Talk({
   }, [photoQuestion]);
   const topicNote = topic && (
     <Notice>
+      {topic.followUp && (
+        <span className="follow-chip">
+          🔗 続き：前の質問「{topic.followUp.text}」{topic.followUp.cardTitle ? `→ カード「${topic.followUp.cardTitle}」` : ""}
+        </span>
+      )}
       📮 {topic.askerName}さんの質問に答えます：<strong>{topic.text}</strong>
       {photo && (
         <button className={`topic-photo ${photoBig ? "big" : ""}`} onClick={() => setPhotoBig((b) => !b)} aria-label={photoBig ? "写真を小さくする" : "写真を大きくする"}>
@@ -116,7 +122,7 @@ export function Talk({
     try {
       const r = finish
         ? { done: true, question: "" }
-        : await call<{ done: boolean; question: string }>("interviewNext", { transcript: t, questionText: topic?.text });
+        : await call<{ done: boolean; question: string }>("interviewNext", { transcript: t, questionText: topic?.followUp ? `前の質問「${topic.followUp.text}」の続きです。${topic.text}` : topic?.text });
       // only now: if the call failed, what was said stays in the box and can be sent again
       setTurns(t);
       setText("");

@@ -17,7 +17,20 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
   const companyId = spaceOf(data, uid); // 審査員モードなら本人にだけ見える
   // The same words (spaces and a closing ？ aside) still open in the box: one question, asked by several people.
   // Photo questions are never merged: the photo is the question.
-  const textKey = photo ? null : normalizeQuestion(text);
+  // A follow-up (from わたし, under an answer a veteran gave): it carries the earlier question and its card, so the
+  // veteran knows what was already said. Only the one who asked (or joined) that question can follow it up.
+  const followUpOf = str(data.followUpOf, "前の質問の番号", 64, false);
+  let followUp: { questionId: string; text: string; cardTitle: string | null } | null = null;
+  if (followUpOf) {
+    const prev = await db.collection("questions").doc(followUpOf).get();
+    const mine = prev.exists && (prev.get("askerId") === uid || ((prev.get("alsoAskerIds") as string[] | undefined) ?? []).includes(uid));
+    if (!mine || prev.get("companyId") !== companyId) throw new HttpsError("not-found", "前の質問が見つかりません。");
+    const cardId = prev.get("answeredCardId") as string | null;
+    const card = cardId ? await db.collection("cards").doc(cardId).get() : null;
+    followUp = { questionId: prev.id, text: prev.get("text") as string, cardTitle: card?.exists && card.get("status") === "published" ? (card.get("title") as string) : null };
+  }
+  // Follow-ups are never merged either: the same words after a different answer are a different question.
+  const textKey = photo || followUp ? null : normalizeQuestion(text);
   return db.runTransaction(async (tx) => {
     if (textKey) {
       const same = await tx.get(
@@ -46,6 +59,7 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
       photoUrl: null,
       photo: photo || null,
       hasPhoto: !!photo, // so the list can say so without reading the photo
+      followUp,
       status: "open",
       goodBy: [],
       answeredCardId: null,
@@ -79,7 +93,7 @@ export async function openQuestions(data: Record<string, unknown>, uid: string) 
     .collection("questions")
     .where("companyId", "in", spacesOf(data, uid))
     .where("status", "==", "open")
-    .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "alsoAskerIds", "createdAt", "hasPhoto")
+    .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "alsoAskerIds", "createdAt", "hasPhoto", "followUp")
     .get();
   const list = snap.docs
     .filter((d) => d.get("excludeVeteranId") !== uid)
@@ -94,6 +108,11 @@ export async function openQuestions(data: Record<string, unknown>, uid: string) 
       hasPhoto: d.get("hasPhoto") !== false, // questions from before the flag: offer to look
       good: ((d.get("goodBy") as string[] | undefined) ?? []).includes(uid),
       askers: 1 + ((d.get("alsoAskerIds") as string[] | undefined) ?? []).length,
+      // the earlier question and the card that answered it (no ids of people)
+      followUp: (() => {
+        const f = d.get("followUp") as { text: string; cardTitle: string | null } | null | undefined;
+        return f ? { text: f.text, cardTitle: f.cardTitle } : null;
+      })(),
       createdAt: ms(d.get("createdAt")),
     })),
   };
