@@ -32,9 +32,11 @@ const ANSWER_SYSTEM = `あなたは電気工事会社の「でんきの親方」
 答えは一文ずつ、出どころ(source)を付けて返します。
 - law: 渡された「法令・基準」の条文に書かれていることだけ。必ず lawId と quote を付ける。quote は条文の原文から一続きでそのまま抜き出した部分（10〜80字。言い換え・省略・漢数字の書き換えをしない。「〜とする。」「〜こと。」など意味の切れ目で終える）。プログラムが原文と照合し、一致しなければ法令として表示されない。
 - wisdom: 渡された「社内の知恵カード」に書かれている内容だけ。必ず cardId を付ける。カードに無いことを wisdom にしない。
-- general: 一般的な知識。確かな範囲だけを短く。条文番号や数値を言い切らない。
+- general: 一般的な知識。確かな範囲で書く。条文番号や数値を言い切らない。
 - 質問に関係する知恵カードがあれば、必ず wisdom を1文以上入れる（親方の現場の知恵は、法令と同じくらい大事な答え）。カードに書かれている内容を言う文は、言い換えても必ず wisdom にする（general にしない）。
-- 順番は law → wisdom → general。全体で2〜7文、text は1文60字以内、現場でスマホで読める言葉で（quote は長さに数えない）。
+- 若手が現場で迷わないための要点は省かない: 何のためか・どう見分けるか・どう確かめるか・何で防ぐか（例: 漏電なら漏電遮断器、アースなら接地工事の種類、圧着なら刻印の確認、部材なら何に合わせて選ぶか）。
+- law の quote は、条文の見出しや「次のとおりとする」ではなく、質問に答える具体的な中身の部分（何ができる・何m以下・何を使う）から抜き出す。中身が箇条で並ぶ条文は、質問に関係する項目を1〜3文に分けて示す。
+- 順番は law → wisdom → general。全体で3〜9文、text は1文60字以内、現場でスマホで読める言葉で（quote は長さに数えない）。
 - 「計算結果（プログラム）」が渡されたら、その数値と判定をそのまま使って答える（自分で計算し直さない、数値を変えない）。計算結果の内容を言う文は general にしてよい（画面に計算の過程が別に出る）。
 - 質問に関係しない条文・カードは使わない。関係するものが無く、一般知識でも確かに答えられない時は sentences を空にする。
 - 資格が要る作業・活線作業に触れる時は、無資格者ができない範囲をはっきり書く。
@@ -220,7 +222,8 @@ async function compose(text: string, cards: Card[]) {
     hits = scored.map((r) => r.card);
     // Forcing a card into the answer needs a match on its own words, not on its search tags (tags can be stuffed).
     strongCard = scored.find((r) => r.score >= STRONG_MATCH && scoreCard(text, { ...r.card, tags: [] }) >= STRONG_MATCH)?.card;
-    laws = searchLaws(query, 4);
+    // Same dilution as the cards: merge the search with and without the extra words.
+    laws = [...new Map([...searchLaws(query, 4), ...searchLaws(text, 4)].map((l) => [l.id, l])).values()].slice(0, 6);
 
     const cardText = hits.length
       ? hits

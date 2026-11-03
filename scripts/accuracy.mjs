@@ -3,6 +3,7 @@
 // Usage (from the repo root, needs functions/.secret.local and a build of functions/):
 //   node scripts/accuracy.mjs            # all questions
 //   node scripts/accuracy.mjs 3 15       # only these ids
+//   node scripts/accuracy.mjs --holdout  # the 10 check questions, never looked at while tuning the prompts
 // Writes docs/accuracy.md and scripts/accuracy/result.json. Costs about ¥300 a run (60 Claude calls).
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -20,8 +21,10 @@ const laws = JSON.parse(read("functions/data/laws.json"));
 const lawList = Array.isArray(laws) ? laws : laws.laws;
 const lawById = new Map(lawList.map((l) => [l.id, l]));
 
-const only = process.argv.slice(2).map(Number);
-const questions = JSON.parse(read("scripts/accuracy/questions.json")).filter((q) => !only.length || only.includes(q.id));
+const holdout = process.argv.includes("--holdout");
+const suffix = holdout ? "_holdout" : "";
+const only = process.argv.slice(2).filter((a) => !a.startsWith("--")).map(Number);
+const questions = JSON.parse(read(`scripts/accuracy/${holdout ? "holdout" : "questions"}.json`)).filter((q) => !only.length || only.includes(q.id));
 
 // --- A: the app, as a judge would use it (a fresh anonymous device) ---
 const signUp = await (await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${webKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
@@ -109,7 +112,7 @@ for (let i = 0; i < questions.length; i += 4) {
   );
 }
 results.sort((a, b) => a.id - b.id);
-writeFileSync(new URL("scripts/accuracy/result.json", root), JSON.stringify(results, null, 2));
+writeFileSync(new URL(`scripts/accuracy/result${suffix}.json`, root), JSON.stringify(results, null, 2));
 
 // --- report ---
 const score = { "○": 1, "△": 0.5, "×": 0 };
@@ -127,9 +130,9 @@ function sum(side) {
 }
 const A = sum("app"), B = sum("plain");
 const md = [
-  "# 正答率テスト",
+  holdout ? "# 正答率テスト（確認用の10問）" : "# 正答率テスト",
   "",
-  `若手の本物の質問（記入シート）とベテランの失敗談・法令から ${results.length} 問を、でんきの親方と、同じモデル（${MODEL_ANSWER}）に知恵カードも条文も渡さずに聞いた答えで比べました。採点は ${MODEL_HEAVY} が、どちらの答えかを伏せて「正解の要点」と条文の原文に照らして行い、最後に人（ベテラン）が確かめます。問題と正解の要点は \`scripts/accuracy/questions.json\`、実行は \`node scripts/accuracy.mjs\`。`,
+  `${holdout ? `答えの指示を直す時に見ていない確認用の ${results.length} 問（若手がよく聞くことと法令）を、` : `若手の本物の質問（記入シート）とベテランの失敗談・法令から ${results.length} 問を、`}でんきの親方と、同じモデル（${MODEL_ANSWER}）に知恵カードも条文も渡さずに聞いた答えで比べました。採点は ${MODEL_HEAVY} が、どちらの答えかを伏せて「正解の要点」と条文の原文に照らして行い、最後に人（ベテラン）が確かめます。問題と正解の要点は \`scripts/accuracy/${holdout ? "holdout" : "questions"}.json\`、実行は \`node scripts/accuracy.mjs${holdout ? " --holdout" : ""}\`。`,
   "",
   "| | でんきの親方 | 素の Claude |",
   "|---|---|---|",
@@ -161,5 +164,5 @@ const md = [
     "",
   ]),
 ].join("\n");
-writeFileSync(new URL("docs/accuracy.md", root), md);
-console.log(`\nでんきの親方 ${A.correct}（根拠の誤り ${A.basisWrong}）／素の Claude ${B.correct}（根拠の誤り ${B.basisWrong}）→ docs/accuracy.md`);
+writeFileSync(new URL(`docs/accuracy${suffix}.md`, root), md);
+console.log(`\nでんきの親方 ${A.correct}（根拠の誤り ${A.basisWrong}）／素の Claude ${B.correct}（根拠の誤り ${B.basisWrong}）→ docs/accuracy${suffix}.md`);
