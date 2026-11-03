@@ -4,8 +4,10 @@ service cloud.firestore {
     // Clients only read. Every write goes through Cloud Functions (admin SDK).
     // Signed-in devices only (anonymous sign-in happens before the app renders).
     // The writer's device id, real name and raw interview are kept in cardPrivate, which no client can read.
+    // A judge's trial cards (companyId "trial_<uid>") are for that device only, like the server treats them.
     match /cards/{id} {
-      allow read: if request.auth != null && resource.data.status == 'published';
+      allow read: if request.auth != null && resource.data.status == 'published'
+        && (resource.data.companyId == 'demo' || resource.data.companyId == 'trial_' + request.auth.uid);
     }
     // Questions carry the asker's device id and photos: they are read through Functions only
     // (openQuestions / questionPhoto / myQuestions).
