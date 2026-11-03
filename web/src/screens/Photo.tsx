@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
 import { motion } from "motion/react";
+import { useFlyToMe } from "../FlyToMe";
 import { call, errorText } from "../firebase";
 import { addPart, getName } from "../local";
 import { LawSheet } from "../LawSheet";
+import { MicInput } from "../components";
 
 export interface CalcStart {
   name: string;
@@ -45,6 +47,9 @@ async function shrink(file: Blob, size: number, quality: number): Promise<string
   }
 }
 
+// ready-made ways to ask about a photo (a tap puts one in the box, to send or rewrite)
+const PHOTO_QUESTIONS = ["このつなぎ方で合ってますか？", "これは何に使いますか？", "どっちが200V用ですか？", "この取り付け方で大丈夫ですか？"];
+
 /** ⑤ 撮る: photo of a part → name, use, and the way on to cards, rules and a calculation. */
 export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
   const input = useRef<HTMLInputElement>(null);
@@ -55,6 +60,8 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
   const [res, setRes] = useState<PartResult | null>(null);
   const [openLaw, setOpenLaw] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [q, setQ] = useState(""); // what to ask the veteran about this photo (a draft is put in, free to rewrite)
+  const { fly, envelope } = useFlyToMe();
 
   async function identify(body: { image?: string; name?: string }, thumbFrom: Blob | null) {
     setBusy(true);
@@ -63,6 +70,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
     try {
       const r = await call<PartResult>("identifyPart", body);
       setRes(r);
+      setQ(r.name && r.verdict !== "unknown" ? `これは「${r.name}」で合っていますか？使い方も教えてください。` : "これは何という部材ですか？使い方も教えてください。");
       if (r.name && r.verdict !== "unknown") addPart({ name: r.name, use: r.use, at: Date.now(), thumb: thumbFrom ? await shrink(thumbFrom, 160, 0.7) : "" });
     } catch (e) {
       setErr(errorText(e, "調べられませんでした。電波の良い所で、もう一度撮ってください"));
@@ -88,15 +96,17 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
     await identify({ image: small }, f);
   }
 
-  async function askVeteran() {
-    if (!file) return;
+  async function askVeteran(e: React.MouseEvent<HTMLButtonElement>) {
+    if (!file || !q.trim()) return;
+    const from = e.currentTarget.getBoundingClientRect();
     setBusy(true);
     try {
       // the box takes up to 300,000 characters: step the size down for busy photos
       let photo = await shrink(file, 1024, 0.7);
       if (photo.length > 290_000) photo = await shrink(file, 800, 0.6);
-      await call("sendToBox", { text: res?.name ? `これは「${res.name}」で合っていますか？使い方も教えてください。` : "これは何という部材ですか？使い方も教えてください。", photo, askerName: getName("young"), askerRole: "young" });
+      await call("sendToBox", { text: q.trim(), photo, askerName: getName("young"), askerRole: "young" });
       setSent(true);
+      fly(from);
     } catch (e) {
       setErr(errorText(e, "送れませんでした。もう一度お試しください"));
     } finally {
@@ -210,10 +220,28 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
 
       {res?.safetyNote && <p className="notice">⚠️ {res.safetyNote}</p>}
       {res && file && (
-        <button className="secondary" disabled={busy || sent} onClick={askVeteran}>
-          {sent ? "📮 親方の質問箱に届けました" : "❓ 写真ごと親方に聞く"}
-        </button>
+        <div className="photo-ask">
+          <h2 className="sub">📷 この写真について、親方に聞く</h2>
+          {sent ? (
+            <p className="hint">📮 写真と質問を、親方の質問箱に届けました。親方が答えると「わたし」に届きます。</p>
+          ) : (
+            <>
+              <MicInput value={q} onChange={setQ} maxLength={500} rows={3} micLabel="話して入力" placeholder="例: このつなぎ方で合ってますか？" />
+              <div className="examples">
+                {PHOTO_QUESTIONS.map((x) => (
+                  <button key={x} className="chip" onClick={() => setQ(x)}>
+                    {x}
+                  </button>
+                ))}
+              </div>
+              <button className="primary" disabled={busy || !q.trim()} onClick={askVeteran}>
+                📮 写真ごと親方に聞く
+              </button>
+            </>
+          )}
+        </div>
       )}
+      {envelope}
       {openLaw && <LawSheet id={openLaw} onClose={() => setOpenLaw(null)} />}
     </section>
   );

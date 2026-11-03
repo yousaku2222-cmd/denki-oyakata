@@ -149,5 +149,24 @@ const jd2 = await call("draftCard", { transcript: jt, authorName: "審査員", t
 await call("publishCard", { cardId: jd2.cardId, authorName: "審査員", showAuthorName: true, edits: { ...jd2.draft, tags: ["脚立"] }, trial: true }, judge);
 check("trial card does not close a shared question", (await call("myQuestions", {}, other)).questions.find((q) => q.id === sq.questionId)?.status === "open");
 
+console.log("\n10. 同じ質問・いい質問");
+const asker1 = await signUp(), asker2 = await signUp(), vet2 = await signUp();
+const s1 = await call("sendToBox", { text: "ジョイントボックスの中の結線は何で留める？", askerName: "若手1", askerRole: "young" }, asker1);
+const s1again = await call("sendToBox", { text: "ジョイントボックスの中の結線は何で留める", askerName: "若手1", askerRole: "young" }, asker1);
+check("the same device sending the same question again adds nothing", s1again.duplicate === true && s1again.questionId === s1.questionId);
+const s2 = await call("sendToBox", { text: "ジョイントボックスの 中の結線は何で留める？", askerName: "若手2", askerRole: "young" }, asker2);
+check("another device's same question joins it", s2.merged === true && s2.questionId === s1.questionId && s2.askers === 2);
+const inBox = (await call("openQuestions", {}, vet2)).questions.filter((q) => q.id === s1.questionId);
+check("the box shows it once, asked by 2", inBox.length === 1 && inBox[0].askers === 2);
+await call("markGoodQuestion", { questionId: s1.questionId }, vet2);
+const seen2 = (await call("myQuestions", {}, asker2)).questions.find((q) => q.id === s1.questionId);
+check("the one who joined sees it on わたし, with the いい質問", seen2?.askers === 2 && seen2?.good === 1);
+const photoQ = await call("sendToBox", { text: "ジョイントボックスの中の結線は何で留める？", photo: "data:image/jpeg;base64,/9j/4AAQ", askerName: "若手1", askerRole: "young" }, asker1);
+check("a photo question is never merged", !photoQ.duplicate && !photoQ.merged && photoQ.questionId !== s1.questionId);
+const jd3 = await call("draftCard", { transcript: [{ role: "veteran", text: "（テスト用）ジョイントボックスの結線は差込形コネクタで留める。" }], authorName: "山田（親方）", triggerQuestionId: s1.questionId }, vet2);
+await call("publishCard", { cardId: jd3.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...jd3.draft, tags: ["ジョイントボックス"] } }, vet2);
+const done2 = (await call("myQuestions", {}, asker2)).questions.find((q) => q.id === s1.questionId);
+check("when it is answered, the one who joined hears it too (with who answered)", done2?.status === "answered" && done2.answeredBy === "山田（親方）" && done2.answeredAt > 0);
+
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);

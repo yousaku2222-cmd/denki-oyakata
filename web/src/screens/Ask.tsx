@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { getName, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
 import { LawSheet, type LawRef } from "../LawSheet";
 import { CalcCard, type CalcOutput } from "../CalcCard";
 import { AskWaiting, CheckedLine } from "../AskWaiting";
+import { useFlyToMe } from "../FlyToMe";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
 // The list starts moving when it scrolls into view (a calculation card above can push it below the fold).
@@ -47,14 +48,11 @@ interface Answer {
   cached?: boolean;
 }
 
-/** Fired when a question went into the 質問箱: App puts a dot on わたし, where the answer will come back. */
-export const SENT_TO_BOX = "oyakata:sent-to-box";
-
 const TICK_MS = 450; // every step shows ✓ for this long before the list folds into one line
 
 const EXAMPLES = ["資格が無くても出来る作業はありますか？", "PF管って何回まで曲げていい？", "圧着端子の2とか3.5って何の数字？"];
 
-export function Ask({ role }: { role: Role }) {
+export function Ask({ role, seed }: { role: Role; seed?: string }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -62,11 +60,19 @@ export function Ask({ role }: { role: Role }) {
   const [asked, setAsked] = useState("");
   const [helped, setHelped] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sentNote, setSentNote] = useState("");
   const [openLaw, setOpenLaw] = useState<{ id: string; quote?: string } | null>(null);
   const [finished, setFinished] = useState(false);
   const [plusOne, setPlusOne] = useState(0);
-  const [flight, setFlight] = useState<{ from: DOMRect; to: DOMRect } | null>(null);
-  const reduceMotion = useReducedMotion();
+  const { fly, envelope } = useFlyToMe();
+  // opened from わたし with a question to ask again: ask it once, on arrival
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!seed || seeded.current) return;
+    seeded.current = true;
+    void submit(seed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening, with the question it came with
+  }, [seed]);
 
   async function submit(q = text) {
     if (!q.trim() || busy) return;
@@ -76,6 +82,7 @@ export function Ask({ role }: { role: Role }) {
     setOpenGeneral(false);
     setHelped(false);
     setSent(false);
+    setSentNote("");
     setAsked(q.trim());
     try {
       const a = await call<Answer>("ask", { text: q.trim(), askerRole: role });
@@ -103,23 +110,24 @@ export function Ask({ role }: { role: Role }) {
   async function sendToBox(e: React.MouseEvent<HTMLButtonElement>) {
     const from = e.currentTarget.getBoundingClientRect(); // fly from the button that was pressed (always on screen)
     setSent(true);
+    let r: { duplicate?: boolean; merged?: boolean; askers?: number };
     try {
-      await call("sendToBox", { text: asked, askerName: getName(role), askerRole: role });
+      r = await call("sendToBox", { text: asked, askerName: getName(role), askerRole: role });
     } catch (e) {
       setSent(false);
       setErr(errorText(e, "質問箱に送れませんでした。もう一度お試しください。"));
       return;
     }
-    // only once it is really in the box: the question flies to わたし, where the answer will come back
-    const to = document.querySelector('[data-tab="me"]')?.getBoundingClientRect();
-    if (to && !reduceMotion) setFlight({ from, to });
-    else landed();
-  }
-
-  function landed() {
-    setFlight(null);
-    window.dispatchEvent(new Event(SENT_TO_BOX));
-    document.querySelector('[data-tab="me"] .tab-icon')?.animate([{ transform: "scale(1)" }, { transform: "scale(1.35)" }, { transform: "scale(1)" }], { duration: 380, easing: "ease-out" });
+    if (r.duplicate) {
+      setSentNote("この質問は、もう質問箱に入っています。親方が答えると、「わたし」に届きます。");
+      return; // nothing new went in: no envelope
+    }
+    setSentNote(
+      r.merged
+        ? `同じことを聞いた人が、ほかにもいます（あなたで${r.askers}人目）。親方が答えると、全員の「わたし」に届きます。`
+        : "親方が答えると、「わたし」に届きます。",
+    );
+    fly(from); // only once it is really in the box: it flies to わたし, where the answer will come back
   }
 
   const [openGeneral, setOpenGeneral] = useState(false);
@@ -269,29 +277,12 @@ export function Ask({ role }: { role: Role }) {
           </div>
           {sent && (
             <motion.p className="hint sent-note" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
-              親方が答えると、「わたし」に届きます。
+              {sentNote}
             </motion.p>
           )}
         </motion.div>
       )}
-      {flight && (
-        <motion.div
-          className="envelope"
-          aria-hidden
-          style={{ left: flight.from.left + flight.from.width / 2 - 16, top: flight.from.top + flight.from.height / 2 - 16 }}
-          initial={{ x: 0, y: 0, scale: 1, rotate: 0 }}
-          animate={{
-            x: [0, (flight.to.left + flight.to.width / 2 - (flight.from.left + flight.from.width / 2)) * 0.5, flight.to.left + flight.to.width / 2 - (flight.from.left + flight.from.width / 2)],
-            y: [0, -70, flight.to.top - flight.from.top - flight.from.height / 2 + 8],
-            scale: [1, 1.25, 0.45],
-            rotate: [0, -12, 10],
-          }}
-          transition={{ duration: 0.95, ease: "easeInOut", times: [0, 0.4, 1] }}
-          onAnimationComplete={landed}
-        >
-          ✉️
-        </motion.div>
-      )}
+      {envelope}
     </section>
   );
 }

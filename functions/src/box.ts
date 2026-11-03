@@ -1,7 +1,8 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { db, spaceOf, spacesOf, str } from "./common";
+import { db, displayAuthor, spaceOf, spacesOf, str, type CardDoc } from "./common";
 import { takeQuota } from "./limits";
+import { normalizeQuestion } from "./ask";
 
 export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?: { ip: string }) {
   const text = str(data.text, "質問", 500);
@@ -13,24 +14,46 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
   if (photo && (photo.length > 300_000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(photo))) throw new HttpsError("invalid-argument", "写真が大きすぎるか、形式が違います");
   // No Claude here, but every veteran's device downloads the open questions (photos included): cap the posts too.
   await takeQuota(askerId, "box", ctx?.ip);
-  const ref = await db.collection("questions").add({
-    companyId: spaceOf(data, uid), // 審査員モードなら本人にだけ見える
-    text,
-    askerId,
-    askerName,
-    askerRole,
-    // A veteran's own question goes to the other veterans, not to themselves.
-    excludeVeteranId: askerRole === "veteran" ? askerId : null,
-    photoUrl: null,
-    photo: photo || null,
-    hasPhoto: !!photo, // so the list can say so without reading the photo
-    status: "open",
-    goodBy: [],
-    answeredCardId: null,
-    createdAt: Timestamp.now(),
-    answeredAt: null,
+  const companyId = spaceOf(data, uid); // 審査員モードなら本人にだけ見える
+  // The same words (spaces and a closing ？ aside) still open in the box: one question, asked by several people.
+  // Photo questions are never merged: the photo is the question.
+  const textKey = photo ? null : normalizeQuestion(text);
+  return db.runTransaction(async (tx) => {
+    if (textKey) {
+      const same = await tx.get(
+        db.collection("questions").where("companyId", "==", companyId).where("status", "==", "open").where("textKey", "==", textKey).limit(1),
+      );
+      const q = same.docs[0];
+      if (q) {
+        if (q.get("askerId") === askerId || ((q.get("alsoAskerIds") as string[] | undefined) ?? []).includes(askerId)) {
+          return { questionId: q.id, duplicate: true as const }; // already in the box from this device
+        }
+        tx.update(q.ref, { alsoAskerIds: FieldValue.arrayUnion(askerId) });
+        return { questionId: q.id, merged: true as const, askers: 2 + ((q.get("alsoAskerIds") as string[] | undefined) ?? []).length };
+      }
+    }
+    const ref = db.collection("questions").doc();
+    tx.set(ref, {
+      companyId,
+      textKey,
+      alsoAskerIds: [], // others who sent the same question (they hear the answer too)
+      text,
+      askerId,
+      askerName,
+      askerRole,
+      // A veteran's own question goes to the other veterans, not to themselves.
+      excludeVeteranId: askerRole === "veteran" ? askerId : null,
+      photoUrl: null,
+      photo: photo || null,
+      hasPhoto: !!photo, // so the list can say so without reading the photo
+      status: "open",
+      goodBy: [],
+      answeredCardId: null,
+      createdAt: Timestamp.now(),
+      answeredAt: null,
+    });
+    return { questionId: ref.id };
   });
-  return { questionId: ref.id };
 }
 
 export async function markGoodQuestion(data: Record<string, unknown>, uid: string) {
@@ -56,7 +79,7 @@ export async function openQuestions(data: Record<string, unknown>, uid: string) 
     .collection("questions")
     .where("companyId", "in", spacesOf(data, uid))
     .where("status", "==", "open")
-    .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "createdAt", "hasPhoto")
+    .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "alsoAskerIds", "createdAt", "hasPhoto")
     .get();
   const list = snap.docs
     .filter((d) => d.get("excludeVeteranId") !== uid)
@@ -70,6 +93,7 @@ export async function openQuestions(data: Record<string, unknown>, uid: string) 
       askerRole: d.get("askerRole") as string,
       hasPhoto: d.get("hasPhoto") !== false, // questions from before the flag: offer to look
       good: ((d.get("goodBy") as string[] | undefined) ?? []).includes(uid),
+      askers: 1 + ((d.get("alsoAskerIds") as string[] | undefined) ?? []).length,
       createdAt: ms(d.get("createdAt")),
     })),
   };
@@ -84,10 +108,20 @@ export async function questionPhoto(data: Record<string, unknown>, uid: string) 
 
 /** The questions this device asked, and the card that answered each. */
 export async function myQuestions(data: Record<string, unknown>, uid: string) {
-  const snap = await db.collection("questions").where("companyId", "in", spacesOf(data, uid)).where("askerId", "==", uid).get();
+  const spaces = spacesOf(data, uid);
+  const [mine, joined] = await Promise.all([
+    db.collection("questions").where("companyId", "in", spaces).where("askerId", "==", uid).get(),
+    // one field only (no composite index): the space is checked below
+    db.collection("questions").where("alsoAskerIds", "array-contains", uid).get(),
+  ]);
+  const docs = [...mine.docs, ...joined.docs.filter((d) => spaces.includes(d.get("companyId")))];
+  const snap = { docs };
   const cardIds = [...new Set(snap.docs.map((d) => d.get("answeredCardId") as string | null).filter((x): x is string => !!x))];
   const cards = cardIds.length ? await db.getAll(...cardIds.map((id) => db.collection("cards").doc(id))) : [];
-  const title = new Map(cards.map((c) => [c.id, c.exists && c.get("status") === "published" ? (c.get("title") as string) : "（いまは非公開のカード）"]));
+  const shown = (c: (typeof cards)[number]) => c.exists && c.get("status") === "published";
+  const title = new Map(cards.map((c) => [c.id, shown(c) ? (c.get("title") as string) : "（いまは非公開のカード）"]));
+  // who answered, as the card shows it (a hidden name stays hidden)
+  const author = new Map(cards.map((c) => [c.id, shown(c) ? displayAuthor(c.data() as CardDoc) : null]));
   return {
     questions: snap.docs
       .map((d) => ({
@@ -95,7 +129,12 @@ export async function myQuestions(data: Record<string, unknown>, uid: string) {
         text: d.get("text") as string,
         status: d.get("status") as "open" | "answered",
         answeredCardTitle: d.get("answeredCardId") ? (title.get(d.get("answeredCardId")) ?? null) : null,
+        answeredBy: d.get("answeredCardId") ? (author.get(d.get("answeredCardId")) ?? null) : null,
+        hasPhoto: !!d.get("hasPhoto"),
+        good: ((d.get("goodBy") as string[] | undefined) ?? []).length, // veterans who said いい質問
+        askers: 1 + ((d.get("alsoAskerIds") as string[] | undefined) ?? []).length,
         createdAt: ms(d.get("createdAt")),
+        answeredAt: ms(d.get("answeredAt")),
       }))
       .sort((a, b) => b.createdAt - a.createdAt),
   };

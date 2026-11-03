@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getRole, getTheme, getTrial, setRole as saveRole, setTheme as saveTheme, setTrial, type Role } from "./local";
-import { Ask, SENT_TO_BOX } from "./screens/Ask";
+import { Ask } from "./screens/Ask";
+import { SENT_TO_BOX } from "./FlyToMe";
 import { Talk, type Topic } from "./screens/Talk";
 import { Box } from "./screens/Box";
 import { MyCards } from "./screens/MyCards";
@@ -32,6 +33,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(role === "veteran" ? "talk" : "ask");
   // a question sent to the 質問箱 lands on わたし (where the answer will come back): a dot until it is opened
   const [meDot, setMeDot] = useState(false);
+  // わたし →「答えを聞く」: the question is asked again on 聞く (now the veteran's card is there to answer it)
+  const [askSeed, setAskSeed] = useState<{ text: string; n: number } | null>(null);
   useEffect(() => {
     const on = () => setMeDot(true);
     window.addEventListener(SENT_TO_BOX, on);
@@ -98,7 +101,7 @@ export default function App() {
       )}
 
       <main>
-        {tab === "ask" && (role === "veteran" ? <VeteranAsk role={role} /> : <Ask role={role} />)}
+        {tab === "ask" && (role === "veteran" ? <VeteranAsk role={role} /> : <Ask key={askSeed?.n ?? 0} role={role} seed={askSeed?.text} />)}
         {tab === "browse" && <Browse />}
         {tab === "calc" && <Calc key={calcStart ? JSON.stringify(calcStart) : "list"} start={calcStart} />}
         {tab === "photo" && (
@@ -109,7 +112,14 @@ export default function App() {
             }}
           />
         )}
-        {tab === "me" && <Me />}
+        {tab === "me" && (
+          <Me
+            onAskAgain={(text) => {
+              setAskSeed({ text, n: Date.now() });
+              setTab("ask");
+            }}
+          />
+        )}
         {/* kept mounted while other tabs are open, so a half-told story is not lost */}
         {role === "veteran" && (
           <div hidden={tab !== "talk"}>
@@ -130,6 +140,7 @@ export default function App() {
             onClick={() => {
               if (t.id === "calc") setCalcStart(null);
               if (t.id === "me") setMeDot(false);
+              setAskSeed(null); // a tab press opens 聞く empty, not with the last question
               setTab(t.id); // 話す keeps what was being told; 「続けて話す」 starts a new one
             }}
           >

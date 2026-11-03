@@ -11,7 +11,29 @@ interface Q {
   askerRole: string;
   hasPhoto: boolean;
   good: boolean;
+  askers: number; // people who sent this same question
   createdAt: number;
+}
+
+/** A few stars spring out of the button when a veteran says いい質問 (the asker sees it on わたし). */
+function StarBurst() {
+  return (
+    <span className="star-burst" aria-hidden>
+      {[0, 1, 2, 3, 4, 5].map((i) => {
+        const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+        return (
+          <motion.span
+            key={i}
+            initial={{ x: 0, y: 0, opacity: 1, scale: 0.6 }}
+            animate={{ x: Math.cos(a) * 46, y: Math.sin(a) * 30, opacity: 0, scale: 1.1 }}
+            transition={{ duration: 0.7, ease: "easeOut" }}
+          >
+            ⭐
+          </motion.span>
+        );
+      })}
+    </span>
+  );
 }
 
 // When this device last looked at the box, so questions that came in since then are marked 新着.
@@ -115,14 +137,17 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
             ))}
           <p className="qtext">{q.text}</p>
           <p className="src-meta">
-            {q.askerName}さん{q.askerRole === "veteran" ? "（ベテラン）" : ""}・{fmtDate(q.createdAt)}
+            {q.askerName}さん{q.askerRole === "veteran" ? "（ベテラン）" : ""}
+            {q.askers > 1 ? `ほか${q.askers - 1}人` : ""}・{fmtDate(q.createdAt)}
           </p>
+          {q.askers > 1 && <span className="same-chip">👥 同じ質問：{q.askers}人</span>}
           <div className="row">
             <button className="primary" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName })}>
               🎤 話して答える
             </button>
-            <button className={`secondary ${q.good ? "done" : ""}`} disabled={q.good} onClick={() => good(q)}>
+            <button className={`secondary good-btn ${q.good ? "done" : ""}`} disabled={q.good} onClick={() => good(q)}>
               {q.good ? "⭐ いい質問！" : "⭐ いい質問"}
+              {q.good && <StarBurst key={q.id} />}
             </button>
           </div>
         </motion.div>
