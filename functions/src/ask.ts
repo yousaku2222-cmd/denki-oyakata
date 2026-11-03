@@ -8,9 +8,9 @@ import { searchCards } from "./search";
 import { Law, getLawById, quoteIsInOriginal, searchLaws } from "./laws";
 import { COMPANY, CardDoc, Sentence, db, displayAuthor, safetyNote, str } from "./common";
 
-type Card = CardDoc & { id: string };
+export type Card = CardDoc & { id: string };
 
-async function publishedCards(): Promise<Card[]> {
+export async function publishedCards(): Promise<Card[]> {
   const snap = await db.collection("cards").where("companyId", "==", COMPANY).where("status", "==", "published").get();
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as CardDoc) }));
 }

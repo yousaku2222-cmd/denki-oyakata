@@ -7,6 +7,7 @@ import { MyCards } from "./screens/MyCards";
 import { Me } from "./screens/Me";
 import { Browse } from "./screens/Browse";
 import { Calc } from "./screens/Calc";
+import { Photo, type CalcStart } from "./screens/Photo";
 
 type Tab = "ask" | "browse" | "calc" | "photo" | "me" | "talk" | "box" | "mycards";
 
@@ -32,6 +33,7 @@ export default function App() {
   const [topic, setTopic] = useState<Topic | null>(null);
   const [talkKey, setTalkKey] = useState(0);
   const [theme, setThemeState] = useState(getTheme());
+  const [calcStart, setCalcStart] = useState<CalcStart | null>(null);
 
   useEffect(() => {
     if (theme) document.documentElement.dataset.theme = theme;
@@ -74,8 +76,15 @@ export default function App() {
       <main>
         {tab === "ask" && (role === "veteran" ? <VeteranAsk role={role} /> : <Ask role={role} />)}
         {tab === "browse" && <Browse />}
-        {tab === "calc" && <Calc />}
-        {tab === "photo" && <Soon icon="📷" title="撮って調べる" text="部材の写真から名前と使い方を調べます。準備中です。" />}
+        {tab === "calc" && <Calc key={calcStart ? JSON.stringify(calcStart) : "list"} start={calcStart} />}
+        {tab === "photo" && (
+          <Photo
+            onCalc={(s) => {
+              setCalcStart(s);
+              setTab("calc");
+            }}
+          />
+        )}
         {tab === "me" && <Me />}
         {tab === "talk" && <Talk key={talkKey} topic={topic} onDone={() => startTalk(null)} />}
         {tab === "box" && <Box onAnswer={startTalk} />}
@@ -88,7 +97,11 @@ export default function App() {
           <button
             key={t.id}
             className={tab === t.id ? "on" : ""}
-            onClick={() => (t.id === "talk" && tab !== "talk" ? startTalk(null) : setTab(t.id))}
+            onClick={() => {
+              if (t.id === "calc") setCalcStart(null);
+              if (t.id === "talk" && tab !== "talk") startTalk(null);
+              else setTab(t.id);
+            }}
           >
             <span className="tab-icon">{t.icon}</span>
             <span className="tab-label">{t.label}</span>
@@ -116,15 +129,6 @@ function VeteranAsk({ role }: { role: Role }) {
   );
 }
 
-function Soon({ icon, title, text }: { icon: string; title: string; text: string }) {
-  return (
-    <section className="screen center">
-      <div className="big-emoji">{icon}</div>
-      <h1 className="screen-title">{title}</h1>
-      <p className="hint">{text}</p>
-    </section>
-  );
-}
 
 function Entry({ onChoose }: { onChoose: (r: Role) => void }) {
   return (

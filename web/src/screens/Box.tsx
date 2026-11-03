@@ -11,6 +11,7 @@ interface Q {
   askerRole: string;
   excludeVeteranId: string | null;
   goodBy: string[];
+  photo?: string | null;
   createdAt: { toMillis(): number } | null;
 }
 
@@ -44,6 +45,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
         const good = q.goodBy?.includes(me);
         return (
           <div key={q.id} className="qcard">
+            {q.photo && <img className="photo-preview" src={q.photo} alt="若手が撮った写真" />}
             <p className="qtext">{q.text}</p>
             <p className="src-meta">
               {q.askerName || "若手"}さん{q.askerRole === "veteran" ? "（ベテラン）" : ""}・{fmtDate(q.createdAt?.toMillis())}

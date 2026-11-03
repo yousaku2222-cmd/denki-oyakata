@@ -24,16 +24,21 @@ interface CalcDef {
 }
 
 /** The 計算 tab: pick one, fill the form, the server computes. */
-export function Calc() {
+export function Calc({ start }: { start?: { name: string; params: Record<string, string | number | boolean> } | null }) {
   const [defs, setDefs] = useState<CalcDef[] | null>(null);
   const [cur, setCur] = useState<CalcDef | null>(null);
   useEffect(() => {
     call<{ calcs: CalcDef[] }>("listCalcs", {})
-      .then((r) => setDefs(r.calcs))
+      .then((r) => {
+        setDefs(r.calcs);
+        // opened from 撮る with what was read from the photo
+        const d = start && r.calcs.find((c) => c.name === start.name);
+        if (d) setCur(d);
+      })
       .catch(() => setDefs([]));
   }, []);
 
-  if (cur) return <CalcForm def={cur} onBack={() => setCur(null)} />;
+  if (cur) return <CalcForm def={cur} preset={start?.name === cur.name ? start.params : undefined} onBack={() => setCur(null)} />;
   return (
     <section className="screen">
       <h1 className="screen-title">計算・判定</h1>
@@ -60,9 +65,14 @@ function slotOf(f: Field) {
 }
 const isCount = (f: Field) => f.type === "number" && (f.unit === "本" || f.unit === "条");
 
-function CalcForm({ def, onBack }: { def: CalcDef; onBack: () => void }) {
+function CalcForm({ def, onBack, preset }: { def: CalcDef; onBack: () => void; preset?: Record<string, string | number | boolean> }) {
   const [values, setValues] = useState<Record<string, string | boolean>>(() =>
-    Object.fromEntries(def.fields.map((f) => [f.key, f.default === undefined ? "" : typeof f.default === "boolean" ? f.default : String(f.default)])),
+    Object.fromEntries(
+      def.fields.map((f) => {
+        const v = preset?.[f.key] ?? f.default;
+        return [f.key, v === undefined ? "" : typeof v === "boolean" ? v : String(v)];
+      }),
+    ),
   );
   const [result, setResult] = useState<CalcOutput | null>(null);
   const [err, setErr] = useState("");

@@ -7,6 +7,9 @@ export async function sendToBox(data: Record<string, unknown>, uid: string) {
   const askerId = uid;
   const askerName = str(data.askerName, "askerName", 30, false) || "若手";
   const askerRole = data.askerRole === "veteran" ? "veteran" : "young";
+  // a small JPEG from ⑤撮る ("これ何ですか？"); kept in the question itself, so no storage bucket is needed
+  const photo = typeof data.photo === "string" ? data.photo : "";
+  if (photo && (photo.length > 300_000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(photo))) throw new HttpsError("invalid-argument", "写真が大きすぎるか、形式が違います");
   const ref = await db.collection("questions").add({
     companyId: COMPANY,
     text,
@@ -16,6 +19,7 @@ export async function sendToBox(data: Record<string, unknown>, uid: string) {
     // A veteran's own question goes to the other veterans, not to themselves.
     excludeVeteranId: askerRole === "veteran" ? askerId : null,
     photoUrl: null,
+    photo: photo || null,
     status: "open",
     goodBy: [],
     answeredCardId: null,

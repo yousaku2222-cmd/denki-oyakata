@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
 import { COMPANY, db, myId } from "../firebase";
-import { getName, setName } from "../local";
+import { getName, getParts, setName } from "../local";
 import { fmtDate } from "../components";
 
 interface Q {
@@ -16,6 +16,7 @@ export function Me() {
   const [items, setItems] = useState<Q[] | null>(null);
   const [titles, setTitles] = useState<Record<string, string>>({});
   const [name, setNameState] = useState(getName("young"));
+  const [parts] = useState(getParts);
 
   useEffect(
     () =>
@@ -76,6 +77,21 @@ export function Me() {
           )}
         </div>
       ))}
+      <h2 className="sub-title">📷 わたしの部材帳</h2>
+      {parts.length === 0 && <p className="empty">「撮る」で調べた部材が、ここにたまります。</p>}
+      <div className="parts-book">
+        {parts.map((p) => (
+          <div key={p.name} className="part-item">
+            {p.thumb ? <img src={p.thumb} alt="" /> : <span className="part-noimg">📦</span>}
+            <div>
+              <strong>{p.name}</strong>
+              <p className="src-meta">
+                {p.use}・{fmtDate(p.at)}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

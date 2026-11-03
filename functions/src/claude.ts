@@ -45,7 +45,7 @@ export async function pickTools(opts: {
 export async function jsonCall<T>(opts: {
   model: string;
   system: string;
-  user: string;
+  user: string | Anthropic.ContentBlockParam[]; // blocks for images
   schema: Record<string, unknown>;
   maxTokens?: number;
   effort?: "low" | "medium" | "high";

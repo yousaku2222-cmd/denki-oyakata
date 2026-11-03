@@ -59,7 +59,7 @@ export function reductionFactor(n: number): number {
   return 0.34;
 }
 
-type WireType = "IV" | "CV1" | "CV3" | "CVT";
+export type WireType = "IV" | "CV1" | "CV3" | "CVT";
 const TYPES: Record<WireType, { label: string; sizes: string[] }> = {
   IV: { label: "IV（600Vビニル絶縁電線）", sizes: ["1.6", "2.0", "2.6", ...SIZES] },
   CV1: { label: "CV 単心", sizes: SIZES },
@@ -160,7 +160,7 @@ const parallelNote = "並列にする電線は、同じ種類・同じ太さ・�
 const label = (t: WireType, s: string, n: number) => `${wireName(t, s)}${n > 1 ? ` ×${n}並列` : ""}`;
 
 /** The thinnest size of this type that carries the current (and keeps the drop within the limit, if given). */
-function thinnest(t: WireType, n: number, c: Conditions, current: number, drop?: { k: number; L: number; V: number; limit: number }) {
+export function thinnest(t: WireType, n: number, c: Conditions, current: number, drop?: { k: number; L: number; V: number; limit: number }) {
   for (const s of TYPES[t].sizes) {
     let a: number;
     try {
