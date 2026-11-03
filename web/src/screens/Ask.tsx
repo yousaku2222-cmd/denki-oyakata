@@ -7,25 +7,23 @@ import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
 import { CalcCard, type CalcOutput } from "../CalcCard";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
-const STAGGER = 0.15;
-const SENTENCE = { hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" as const } } };
+// The list starts moving when it scrolls into view (a calculation card above can push it below the fold).
+const STAGGER = 0.25;
+const SENTENCE = { hidden: { opacity: 0, y: 18 }, shown: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" as const } } };
+const STAMP = {
+  hidden: { opacity: 0, scale: 1.9, rotate: -16 },
+  shown: { opacity: 1, scale: 1, rotate: -4, transition: { delay: 0.4, type: "spring" as const, stiffness: 520, damping: 18 } },
+};
+const RING = {
+  hidden: { opacity: 0, scale: 1 },
+  shown: { opacity: [0, 0.55, 0], scale: [1, 1, 1.7], transition: { delay: 0.52, duration: 0.6, times: [0, 0.05, 1] } },
+};
 
-function Stamp({ delay }: { delay: number }) {
+function Stamp() {
   return (
-    <motion.span
-      className="stamp"
-      initial={{ opacity: 0, scale: 1.9, rotate: -16 }}
-      animate={{ opacity: 1, scale: 1, rotate: -4 }}
-      transition={{ delay, type: "spring", stiffness: 520, damping: 18 }}
-    >
+    <motion.span className="stamp" variants={STAMP}>
       ✔ 引用は原文と一致
-      <motion.span
-        className="stamp-ring"
-        aria-hidden
-        initial={{ opacity: 0, scale: 1 }}
-        animate={{ opacity: [0, 0.55, 0], scale: [1, 1, 1.7] }}
-        transition={{ delay: delay + 0.12, duration: 0.6, times: [0, 0.05, 1] }}
-      />
+      <motion.span className="stamp-ring" aria-hidden variants={RING} />
     </motion.span>
   );
 }
@@ -118,7 +116,7 @@ export function Ask({ role }: { role: Role }) {
           {answer.mode === "dummy" && <p className="hint">※ 試験用のダミー応答です（AIの接続前）</p>}
           {answer.calcs?.map((c, i) => <CalcCard key={i} c={c} />)}
 
-          <motion.div key={answer.answerId} className="sentences" initial="hidden" animate="shown" variants={{ shown: { transition: { staggerChildren: STAGGER } } }}>
+          <motion.div key={answer.answerId} className="sentences" initial="hidden" whileInView="shown" viewport={{ once: true }} variants={{ shown: { transition: { staggerChildren: STAGGER } } }}>
           {answer.sentences.map((s, i) => {
             const c = s.source === "wisdom" ? cardOf(s.cardId) : undefined;
             const law = s.source === "law" ? answer.laws.find((l) => l.id === s.lawId) : undefined;
@@ -129,7 +127,7 @@ export function Ask({ role }: { role: Role }) {
                     {SOURCE_LABEL[s.source].icon} {SOURCE_LABEL[s.source].label}
                   </span>
                   {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
-                  {s.verified && <Stamp delay={i * STAGGER + 0.3} />}
+                  {s.verified && <Stamp />}
                 </div>
                 <p>{s.text}</p>
                 {c && (
