@@ -71,6 +71,12 @@ const box = await call("openQuestions", {}, vet);
 check("question box lists without photos or device ids", Array.isArray(box.questions) && !JSON.stringify(box).includes("askerId") && !JSON.stringify(box).includes("data:image"));
 const a2 = await call("ask", { text: "新しい現場の朝礼は何時からですか？", askerRole: "young" }, young);
 check("same question now answered from the new card", a2.grounded && a2.cards.some((c) => c.id === d2.cardId && c.author === "社内のベテラン" && c.triggerAskerName === "テスト若手"));
+// Saved answers: the same question again does not call Claude (with an API key only).
+if (a2.mode === "claude") {
+  const a3 = await call("ask", { text: "新しい現場の朝礼は何時からですか", askerRole: "young" }, young);
+  check("same question served from the saved answer", a3.cached === true && a3.answerId !== a2.answerId && a3.cards.some((c) => c.id === d2.cardId));
+}
+
 
 // 5. Veteran's own view.
 await call("markGoodQuestion", { questionId }, vet);
@@ -125,6 +131,23 @@ for (let i = 0; i < 21; i++) {
   try { await call("sendToBox", { text: `テスト${i}` }, spammer); accepted++; } catch { break; }
 }
 check("question box: 20 posts a day per device", accepted === 20, `accepted=${accepted}`);
+
+// 9. 審査員モード: a judge goes round the loop, and nobody else sees it.
+const judge = await signUp(), other = await signUp();
+const jq = await call("sendToBox", { text: "審査員の試しの質問です", askerName: "審査員", askerRole: "young", trial: true }, judge);
+check("judge's question is only in their own box", (await call("openQuestions", { trial: true }, judge)).questions.some((q) => q.id === jq.questionId) && !(await call("openQuestions", {}, other)).questions.some((q) => q.id === jq.questionId));
+const jt = [{ role: "veteran", text: "（テスト用）脚立は開き止めを必ず掛けてから乗る。" }];
+const jd = await call("draftCard", { transcript: jt, authorName: "審査員", trial: true }, judge);
+await call("publishCard", { cardId: jd.cardId, authorName: "審査員", showAuthorName: true, edits: { ...jd.draft, tags: ["脚立", "開き止め"] }, trial: true }, judge);
+check("judge sees their trial card", (await call("myCards", { trial: true }, judge)).cards.some((c) => c.id === jd.cardId));
+const ja = await call("ask", { text: "脚立の開き止めは？", askerRole: "young", trial: true }, judge);
+const oa = await call("ask", { text: "脚立の開き止めは？", askerRole: "young" }, other);
+check("judge's answer uses their trial card, others' does not", ja.cards.some((c) => c.id === jd.cardId) && !oa.cards.some((c) => c.id === jd.cardId));
+// answering a shared question from trial mode leaves it open for everyone else
+const sq = await call("sendToBox", { text: "共有の質問箱の質問です", askerName: "若手", askerRole: "young" }, other);
+const jd2 = await call("draftCard", { transcript: jt, authorName: "審査員", triggerQuestionId: sq.questionId, trial: true }, judge);
+await call("publishCard", { cardId: jd2.cardId, authorName: "審査員", showAuthorName: true, edits: { ...jd2.draft, tags: ["脚立"] }, trial: true }, judge);
+check("trial card does not close a shared question", (await call("myQuestions", {}, other)).questions.find((q) => q.id === sq.questionId)?.status === "open");
 
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);

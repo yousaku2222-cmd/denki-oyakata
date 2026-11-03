@@ -42,3 +42,7 @@ export function addPart(p: PartEntry) {
   const list = [p, ...getParts().filter((x) => x.name !== p.name)].slice(0, 60);
   set("oyakata.parts", JSON.stringify(list));
 }
+
+// 「審査員の方はこちら」: what this device publishes or sends is seen only by itself (see spaceOf in functions).
+export const getTrial = () => get("oyakata.trial") === "1";
+export const setTrial = (on: boolean) => set("oyakata.trial", on ? "1" : null);

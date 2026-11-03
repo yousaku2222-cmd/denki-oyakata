@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { HttpsError } from "firebase-functions/v2/https";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER } from "./models";
-import { displayAuthor, safetyNote, str } from "./common";
+import { displayAuthor, safetyNote, spacesOf, str } from "./common";
 import { publishedCards } from "./ask";
 import { LAWS, getLawById, lawLabel } from "./laws";
 import { CONDUITS } from "./calc/conduitData";
@@ -148,7 +148,7 @@ function calcLink(spec: Judged["spec"]) {
   return null;
 }
 
-export async function identifyPart(data: Record<string, unknown>, _uid: string) {
+export async function identifyPart(data: Record<string, unknown>, uid: string) {
   const image = typeof data.image === "string" ? data.image.replace(/^data:image\/\w+;base64,/, "") : "";
   const name = image ? "" : str(data.name, "部材の名前", 60);
   // check (and shrink) the photo before any Claude call
@@ -156,7 +156,7 @@ export async function identifyPart(data: Record<string, unknown>, _uid: string) 
   if (image && !photo && (image.length > MAX_IMAGE || !/^[A-Za-z0-9+/]+={0,2}$/.test(image))) throw new HttpsError("invalid-argument", "写真が大きすぎるか、形式が違います");
 
   // Claude picks the related cards and rules from these lists; the ids are checked against the data afterwards.
-  const all = await publishedCards();
+  const all = await publishedCards(spacesOf(data, uid));
   // The list goes into every photo request: keep it bounded however many cards there are (most helpful first).
   const listed = [...all]
     .sort((a, b) => b.helpedCount - a.helpedCount || (b.publishedAt?.toMillis() ?? 0) - (a.publishedAt?.toMillis() ?? 0))

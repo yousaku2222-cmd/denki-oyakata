@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getClient, jsonCall, pickTools } from "./claude";
@@ -6,12 +7,13 @@ import { CalcInputError } from "./calc/types";
 import { MODEL_ANSWER, MODEL_ROUTER } from "./models";
 import { scoreCard, searchCards } from "./search";
 import { Law, getLawById, numbersMissing, quoteIsInOriginal, searchLaws } from "./laws";
-import { COMPANY, CardDoc, Sentence, db, displayAuthor, safetyNote, str } from "./common";
+import { COMPANY, CardDoc, Sentence, db, displayAuthor, safetyNote, spaceOf, spacesOf, str } from "./common";
 
 export type Card = CardDoc & { id: string };
 
-export async function publishedCards(): Promise<Card[]> {
-  const snap = await db.collection("cards").where("companyId", "==", COMPANY).where("status", "==", "published").get();
+/** The shared cards, plus the caller's own trial cards when they came in as a judge (see spaceOf). */
+export async function publishedCards(spaces = [COMPANY]): Promise<Card[]> {
+  const snap = await db.collection("cards").where("companyId", "in", spaces).where("status", "==", "published").get();
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as CardDoc) }));
 }
 
@@ -106,11 +108,73 @@ export function enforceSources(
     });
 }
 
-export async function ask(data: Record<string, unknown>, uid: string) {
+/** The same question with the same cards gets the same answer, so it is saved and served without calling Claude. */
+export function normalizeQuestion(text: string): string {
+  return text.normalize("NFKC").replace(/\s+/g, "").replace(/[?？。.!！]+$/, "");
+}
+export function cacheKey(text: string, cards: Card[]): { id: string; ver: string } {
+  // Any change to the cards (a new one, one made private, an edit) or a new deploy (law data) gives a new version.
+  const ver = createHash("sha256")
+    .update(process.env.K_REVISION ?? "local")
+    .update(cards.map((c) => `${c.id}:${c.updatedAt?.toMillis?.() ?? 0}`).sort().join(","))
+    .digest("hex")
+    .slice(0, 16);
+  return { id: createHash("sha256").update(normalizeQuestion(text)).digest("hex").slice(0, 32), ver };
+}
+
+type Composed = Awaited<ReturnType<typeof compose>>;
+
+/** ctx.charge() counts one Claude-backed answer against the daily caps; a saved answer costs nothing. */
+export async function ask(data: Record<string, unknown>, uid: string, ctx?: { charge?: () => Promise<void> }) {
   const text = str(data.text, "質問", 500);
   const askerId = uid;
   const askerRole = data.askerRole === "veteran" ? "veteran" : "young";
-  const cards = await publishedCards();
+  const cards = await publishedCards(spacesOf(data, uid));
+
+  // Saved answers only for the shared cards (a judge's own trial card changes the answer for them alone).
+  const cacheable = getClient() !== null && cards.every((c) => c.companyId === COMPANY);
+  const key = cacheKey(text, cards);
+  const cacheRef = db.collection("askCache").doc(key.id);
+  let out: Composed | null = null;
+  let cached = false;
+  if (cacheable) {
+    const hit = await cacheRef.get();
+    if (hit.exists && hit.get("ver") === key.ver) {
+      out = hit.get("result") as Composed;
+      cached = true;
+    }
+  }
+  if (!out) {
+    await ctx?.charge?.();
+    out = await compose(text, cards);
+    // (through JSON: Firestore rejects the undefined fields an answer can have)
+    if (cacheable) await cacheRef.set({ ver: key.ver, result: JSON.parse(JSON.stringify(out)), createdAt: Timestamp.now() });
+  }
+
+  const ref = await db.collection("answers").add({
+    companyId: spaceOf(data, uid),
+    question: text,
+    interpretedAs: out.interpretedAs,
+    sentences: out.sentences,
+    grounded: out.grounded,
+    usedCardIds: out.usedCardIds,
+    usedLawIds: out.usedLawIds,
+    helped: false,
+    askerId,
+    askerRole,
+    mode: out.mode,
+    models: out.models,
+    cached,
+    createdAt: Timestamp.now(),
+  });
+  await Promise.all(out.usedCardIds.map((id) => db.collection("cards").doc(id).update({ viewCount: FieldValue.increment(1) })));
+  await db.collection("users").doc(askerId).set({ askedCount: FieldValue.increment(1) }, { merge: true });
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { usedCardIds, usedLawIds, models, ...shown } = out;
+  return { answerId: ref.id, cached, ...shown };
+}
+
+async function compose(text: string, cards: Card[]) {
 
   let interpretedAs = text;
   let sentences: Sentence[];
@@ -234,27 +298,11 @@ export async function ask(data: Record<string, unknown>, uid: string) {
   const usedCardIds = [...new Set(sentences.flatMap((s) => (s.source === "wisdom" && s.cardId ? [s.cardId] : [])))];
   const usedLawIds = [...new Set(sentences.flatMap((s) => (s.source === "law" && s.lawId ? [s.lawId] : [])))];
   const grounded = usedCardIds.length > 0 || usedLawIds.length > 0 || calcs.length > 0;
-  const ref = await db.collection("answers").add({
-    companyId: COMPANY,
-    question: text,
-    interpretedAs,
-    sentences,
-    grounded,
-    usedCardIds,
-    usedLawIds,
-    helped: false,
-    askerId,
-    askerRole,
-    mode,
-    models,
-    createdAt: Timestamp.now(),
-  });
-  await Promise.all(usedCardIds.map((id) => db.collection("cards").doc(id).update({ viewCount: FieldValue.increment(1) })));
-  await db.collection("users").doc(askerId).set({ askedCount: FieldValue.increment(1) }, { merge: true });
-
   const byId = new Map(hits.map((c) => [c.id, c]));
   return {
-    answerId: ref.id,
+    usedCardIds,
+    usedLawIds,
+    models,
     interpretedAs,
     sentences,
     grounded,

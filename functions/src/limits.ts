@@ -14,9 +14,11 @@ export const BOX_PER_USER_PER_DAY = 20;
 export const BOX_ALL_USERS_PER_DAY = 300;
 export const PUBLISH_PER_USER_PER_DAY = 10;
 export const PUBLISH_ALL_USERS_PER_DAY = 100;
+export const PHOTOS_PER_DAY = 150; // a photo also counts as two answers (index.ts); this caps photos on their own
 
 export const CAPS = {
-  claude: { prefix: "", user: PER_USER_PER_DAY, ip: PER_IP_PER_DAY, all: ALL_USERS_PER_DAY, userMsg: `今日はこの端末で ${PER_USER_PER_DAY} 回まで使えます。また明日お試しください。`, allMsg: "今日の利用回数の上限に達しました。また明日お試しください。" },
+  claude: { prefix: "", user: PER_USER_PER_DAY, ip: PER_IP_PER_DAY, all: ALL_USERS_PER_DAY, userMsg: `今日はこの端末で ${PER_USER_PER_DAY} 回まで使えます。また明日お試しください。例題の質問はいつでも試せます。`, allMsg: "今日の利用回数の上限に達しました。また明日お試しください。例題の質問はいつでも試せます。" },
+  photo: { prefix: "photo_", user: 20, ip: 60, all: PHOTOS_PER_DAY, userMsg: "写真で調べられるのは、この端末から1日20回までです。", allMsg: "今日の写真の判定は上限に達しました。また明日お試しください。" },
   box: { prefix: "box_", user: BOX_PER_USER_PER_DAY, ip: BOX_PER_USER_PER_DAY * 3, all: BOX_ALL_USERS_PER_DAY, userMsg: `質問箱に送れるのは、この端末から1日 ${BOX_PER_USER_PER_DAY} 件までです。`, allMsg: "今日は質問箱がいっぱいです。また明日お試しください。" },
   publish: { prefix: "pub_", user: PUBLISH_PER_USER_PER_DAY, ip: PUBLISH_PER_USER_PER_DAY * 3, all: PUBLISH_ALL_USERS_PER_DAY, userMsg: `新しく公開できるカードは、この端末から1日 ${PUBLISH_PER_USER_PER_DAY} 枚までです。`, allMsg: "今日はこれ以上カードを公開できません。また明日お試しください。" },
   transferMake: { prefix: "trm_", user: 5, ip: 20, all: 2000, userMsg: "引き継ぎコードを出せるのは、1日5回までです。", allMsg: "今日は引き継ぎが混み合っています。また明日お試しください。" },
@@ -46,6 +48,16 @@ export function ipGroup(ip: string): string {
   const t = a.includes("::") ? (tail ? tail.split(":") : []) : [];
   const full = [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t];
   return `${full.slice(0, 4).map((g) => parseInt(g || "0", 16).toString(16)).join(":")}::/64`;
+}
+
+/**
+ * Google's front end appends the address it saw to X-Forwarded-For (the front is whatever the client sent), and may
+ * append its own proxy after it: the last entry outside Google's proxy ranges is the client. Checked in production:
+ * a PC and a phone on mobile data counted as two addresses.
+ */
+export function callerIp(xff: string | string[] | undefined, socketIp?: string): string {
+  const list = (Array.isArray(xff) ? xff.join(",") : xff ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return list.filter((ip) => !/^35[.]191[.]|^130[.]211[.][0-3][.]/.test(ip)).at(-1) ?? socketIp ?? "";
 }
 
 /** The address is stored only as a short salted hash. */

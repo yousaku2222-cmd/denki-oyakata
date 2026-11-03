@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { COMPANY, call, db } from "../firebase";
+import { call, db, spaces } from "../firebase";
 import { CATEGORY_LABEL, LOCATION_LABEL, authorOf, fmtDate, type Card } from "../components";
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
 
@@ -57,7 +57,7 @@ function CardList() {
   useEffect(
     () =>
       onSnapshot(
-        query(collection(db, "cards"), where("companyId", "==", COMPANY), where("status", "==", "published")),
+        query(collection(db, "cards"), where("companyId", "in", spaces()), where("status", "==", "published")),
         (snap) =>
           setCards(
             snap.docs

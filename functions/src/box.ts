@@ -1,6 +1,6 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { COMPANY, db, str } from "./common";
+import { db, spaceOf, spacesOf, str } from "./common";
 import { takeQuota } from "./limits";
 
 export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?: { ip: string }) {
@@ -14,7 +14,7 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
   // No Claude here, but every veteran's device downloads the open questions (photos included): cap the posts too.
   await takeQuota(askerId, "box", ctx?.ip);
   const ref = await db.collection("questions").add({
-    companyId: COMPANY,
+    companyId: spaceOf(data, uid), // 審査員モードなら本人にだけ見える
     text,
     askerId,
     askerName,
@@ -50,11 +50,11 @@ const BOX_LIST = 50;
 const ms = (t: Timestamp | null | undefined) => t?.toMillis() ?? 0;
 
 /** Open questions for a veteran (newest first, without photos; not the veteran's own). */
-export async function openQuestions(_data: Record<string, unknown>, uid: string) {
+export async function openQuestions(data: Record<string, unknown>, uid: string) {
   // only the small fields: the photos (up to 300KB each) stay in Firestore until one is opened
   const snap = await db
     .collection("questions")
-    .where("companyId", "==", COMPANY)
+    .where("companyId", "in", spacesOf(data, uid))
     .where("status", "==", "open")
     .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "createdAt", "hasPhoto")
     .get();
@@ -76,15 +76,15 @@ export async function openQuestions(_data: Record<string, unknown>, uid: string)
 }
 
 /** The photo of one question, when the veteran opens it. */
-export async function questionPhoto(data: Record<string, unknown>) {
+export async function questionPhoto(data: Record<string, unknown>, uid: string) {
   const q = await db.collection("questions").doc(str(data.questionId, "質問の番号", 64)).get();
-  if (!q.exists || q.get("companyId") !== COMPANY) throw new HttpsError("not-found", "質問が見つかりません。");
+  if (!q.exists || !spacesOf(data, uid).includes(q.get("companyId") as string)) throw new HttpsError("not-found", "質問が見つかりません。");
   return { photo: (q.get("photo") as string | null) || null };
 }
 
 /** The questions this device asked, and the card that answered each. */
-export async function myQuestions(_data: Record<string, unknown>, uid: string) {
-  const snap = await db.collection("questions").where("companyId", "==", COMPANY).where("askerId", "==", uid).get();
+export async function myQuestions(data: Record<string, unknown>, uid: string) {
+  const snap = await db.collection("questions").where("companyId", "in", spacesOf(data, uid)).where("askerId", "==", uid).get();
   const cardIds = [...new Set(snap.docs.map((d) => d.get("answeredCardId") as string | null).filter((x): x is string => !!x))];
   const cards = cardIds.length ? await db.getAll(...cardIds.map((id) => db.collection("cards").doc(id))) : [];
   const title = new Map(cards.map((c) => [c.id, c.exists && c.get("status") === "published" ? (c.get("title") as string) : "（いまは非公開のカード）"]));

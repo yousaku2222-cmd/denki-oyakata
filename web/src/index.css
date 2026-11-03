@@ -989,3 +989,18 @@ input[inputmode="decimal"] {
   text-align: center;
   user-select: all;
 }
+
+.trial-note {
+  margin: 0;
+  padding: 6px 16px;
+  font-size: 13px;
+  background: var(--general-bg);
+  color: var(--text);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.trial-note .link {
+  flex: none;
+}

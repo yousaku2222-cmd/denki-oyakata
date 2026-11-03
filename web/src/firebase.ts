@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { connectAuthEmulator, getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
+import { getTrial } from "./local";
 
 // Real values come from web/.env.local once the Firebase project exists.
 // Without them the app talks to the local emulators (project "demo-denki-oyakata").
@@ -48,8 +49,11 @@ export function errorText(e: unknown, fallback: string): string {
 
 export async function call<T>(name: string, data: unknown): Promise<T> {
   const fn = httpsCallable(functions, name);
-  const res = await fn(data);
+  const res = await fn(getTrial() ? { ...(data as object), trial: true } : data);
   return res.data as T;
 }
 
 export const COMPANY = "demo";
+
+/** The spaces this device reads: the shared one, plus its own trial space when it came in as a judge. */
+export const spaces = () => (getTrial() && myId() ? [COMPANY, "trial_" + myId()] : [COMPANY]);
