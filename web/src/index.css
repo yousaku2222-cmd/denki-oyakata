@@ -353,7 +353,8 @@ input[type="text"] {
   font-size: 0.8rem;
   font-weight: 700;
 }
-.src-law .src-tag {
+.src-law .src-tag,
+.src-group.src-law .src-tag {
   color: var(--law);
 }
 .src-wisdom .src-tag {
@@ -370,6 +371,41 @@ input[type="text"] {
 .sentences {
   display: grid;
   gap: 10px;
+}
+/* one block per source: the colour bar says where every sentence in it comes from */
+.src-group {
+  display: grid;
+  gap: 8px;
+  border-left: 6px solid;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.src-row p {
+  margin: 0;
+}
+.src-row + .src-row {
+  border-top: 1px dashed color-mix(in srgb, currentColor 18%, transparent);
+  padding-top: 8px;
+}
+.cite-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 4px;
+}
+.cite-chip {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--law);
+  background: var(--surface);
+  border: 1px solid var(--law);
+  border-radius: 999px;
+  padding: 2px 10px;
+  min-height: 32px;
+}
+.src-head .link {
+  font-size: 0.85rem;
 }
 .src-head {
   display: flex;

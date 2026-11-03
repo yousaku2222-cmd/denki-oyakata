@@ -3,13 +3,18 @@ import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { getName, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
-import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
+import { LawSheet, type LawRef } from "../LawSheet";
 import { CalcCard, type CalcOutput } from "../CalcCard";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
 // The list starts moving when it scrolls into view (a calculation card above can push it below the fold).
 const STAGGER = 0.25;
 const SENTENCE = { hidden: { opacity: 0, y: 18 }, shown: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" as const } } };
+const GROUP = {
+  hidden: { opacity: 0, y: 18 },
+  shown: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" as const, staggerChildren: STAGGER, delayChildren: 0.15 } },
+};
+const SOURCES = ["law", "wisdom", "general"] as const;
 const STAMP = {
   hidden: { opacity: 0, scale: 1.9, rotate: -16 },
   shown: { opacity: 1, scale: 1, rotate: -4, transition: { delay: 0.4, type: "spring" as const, stiffness: 520, damping: 18 } },
@@ -57,6 +62,7 @@ export function Ask({ role }: { role: Role }) {
     setBusy(true);
     setErr("");
     setAnswer(null);
+    setOpenGeneral(false);
     setHelped(false);
     setSent(false);
     try {
@@ -85,6 +91,7 @@ export function Ask({ role }: { role: Role }) {
     });
   }
 
+  const [openGeneral, setOpenGeneral] = useState(false);
   const cardOf = (id?: string) => answer?.cards.find((c) => c.id === id);
 
   return (
@@ -114,39 +121,56 @@ export function Ask({ role }: { role: Role }) {
             こう受け取りました：<strong>{answer.interpretedAs}</strong>
           </p>
           {answer.mode === "dummy" && <p className="hint">※ 試験用のダミー応答です（AIの接続前）</p>}
-          {answer.calcs?.map((c, i) => <CalcCard key={i} c={c} />)}
+          {answer.calcs?.map((c, i) => <CalcCard key={i} c={c} compact />)}
 
           <motion.div key={answer.answerId} className="sentences" initial="hidden" whileInView="shown" viewport={{ once: true }} variants={{ shown: { transition: { staggerChildren: STAGGER } } }}>
-          {answer.sentences.map((s, i) => {
-            const c = s.source === "wisdom" ? cardOf(s.cardId) : undefined;
-            const law = s.source === "law" ? answer.laws.find((l) => l.id === s.lawId) : undefined;
-            return (
-              <motion.div key={i} className={`sentence src-${s.source}`} variants={SENTENCE}>
-                <div className="src-head">
-                  <span className="src-tag">
-                    {SOURCE_LABEL[s.source].icon} {SOURCE_LABEL[s.source].label}
-                  </span>
-                  {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
-                  {s.verified && <Stamp />}
-                </div>
-                <p>{s.text}</p>
-                {c && (
-                  <p className="src-meta">
-                    {c.author}の話{c.publishedAt ? `・${fmtDate(c.publishedAt)}` : ""}
-                    {c.triggerAskerName ? `（きっかけ: ${c.triggerAskerName}さんの質問）` : ""}
-                  </p>
-                )}
-                {law && (
-                  <button className="law-cite" onClick={() => setOpenLaw({ id: law.id, quote: s.quote })}>
-                    <q>{s.quote}</q>
-                    <span className="src-meta">
-                      {lawTitle(law)}・{law.edition} ›
+            {SOURCES.map((src) => {
+              const rows = answer.sentences.filter((s) => s.source === src);
+              if (!rows.length) return null;
+              // general knowledge waits behind a tap when there is a checked source to read first
+              const folded = src === "general" && answer.sentences.some((s) => s.source !== "general") && !openGeneral;
+              return (
+                <motion.div key={src} className={`src-group src-${src}`} variants={GROUP}>
+                  <div className="src-head">
+                    <span className="src-tag">
+                      {SOURCE_LABEL[src].icon} {SOURCE_LABEL[src].label} {rows.length}件
                     </span>
-                  </button>
-                )}
-              </motion.div>
-            );
-          })}
+                    {folded && (
+                      <button className="link" onClick={() => setOpenGeneral(true)}>
+                        ▶ 開く
+                      </button>
+                    )}
+                  </div>
+                  {!folded &&
+                    rows.map((s, i) => {
+                      const c = s.source === "wisdom" ? cardOf(s.cardId) : undefined;
+                      const law = s.source === "law" ? answer.laws.find((l) => l.id === s.lawId) : undefined;
+                      // say whose story it is once per run of sentences from the same card
+                      const newCard = c && rows[i - 1]?.cardId !== s.cardId;
+                      return (
+                        <motion.div key={i} className="src-row" variants={SENTENCE} initial={src === "general" ? "hidden" : undefined} animate={src === "general" ? "shown" : undefined}>
+                          <p>{s.text}</p>
+                          {newCard && (
+                            <p className="src-meta">
+                              {c.author}の話{c.publishedAt ? `・${fmtDate(c.publishedAt)}` : ""}
+                              {c.triggerAskerName ? `（きっかけ: ${c.triggerAskerName}さんの質問）` : ""}
+                            </p>
+                          )}
+                          {law && (
+                            <div className="cite-line">
+                              <button className="cite-chip" onClick={() => setOpenLaw({ id: law.id, quote: s.quote })} title={s.quote}>
+                                📜 {law.short} {law.article} ›
+                              </button>
+                              {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
+                              {s.verified && <Stamp />}
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                </motion.div>
+              );
+            })}
           </motion.div>
 
           {answer.safetyNote && <Notice>⚠️ {answer.safetyNote}</Notice>}

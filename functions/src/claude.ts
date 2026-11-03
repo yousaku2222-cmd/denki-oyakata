@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { defineSecret } from "firebase-functions/params";
+import { recordUsage } from "./usage";
 
 export const anthropicKey = defineSecret("ANTHROPIC_API_KEY");
 
@@ -36,6 +37,7 @@ export async function pickTools(opts: {
     tools: opts.tools,
     tool_choice: { type: "auto" },
   });
+  await recordUsage(opts.model, res.usage);
   return res.content
     .flatMap((b) => (b.type === "tool_use" ? [{ name: b.name, input: (b.input ?? {}) as Record<string, unknown> }] : []))
     .slice(0, opts.maxCalls ?? 2);
@@ -60,6 +62,7 @@ export async function jsonCall<T>(opts: {
     messages: [{ role: "user", content: opts.user }],
     output_config: { format: { type: "json_schema", schema: opts.schema }, ...(opts.effort ? { effort: opts.effort } : {}) },
   });
+  await recordUsage(opts.model, res.usage);
   if (res.stop_reason === "refusal") throw new Error("refused");
   if (res.stop_reason === "max_tokens") throw new Error(`${opts.model} hit max_tokens (${JSON.stringify(res.usage)})`);
   const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");

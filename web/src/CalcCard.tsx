@@ -14,10 +14,14 @@ export interface CalcOutput {
     | { kind: "rack"; width: number; tiers: { cables: { label: string; x: number; d: number; hv: boolean }[]; barrierAt?: number }[] };
 }
 
-/** Result of a calculation done by code: verdict, the working, the basis (checked quotes), and a figure. */
-export function CalcCard({ c }: { c: CalcOutput }) {
+/**
+ * Result of a calculation done by code: verdict, the working, the basis (checked quotes), and a figure.
+ * compact (inside an answer) shows the verdict and keeps the rest behind a tap, so the answer stays short.
+ */
+export function CalcCard({ c, compact = false }: { c: CalcOutput; compact?: boolean }) {
   const [open, setOpen] = useState<{ id: string; quote: string } | null>(null);
   const tone = c.ok === null ? "info" : c.ok ? "pass" : "fail";
+  const detail = <CalcDetail c={c} onCite={setOpen} foldSteps={!compact} />;
   return (
     <div className={`calc-card ${tone}`}>
       <span className="src-tag">🧮 計算・判定（プログラムで計算）</span>
@@ -27,18 +31,41 @@ export function CalcCard({ c }: { c: CalcOutput }) {
         {c.ok === false && "❌ "}
         {c.verdict}
       </p>
+      {compact ? (
+        <details>
+          <summary>計算の過程と根拠</summary>
+          {detail}
+        </details>
+      ) : (
+        detail
+      )}
+      {open && <LawSheet id={open.id} highlight={open.quote} onClose={() => setOpen(null)} />}
+    </div>
+  );
+}
+
+function CalcDetail({ c, onCite, foldSteps }: { c: CalcOutput; onCite: (o: { id: string; quote: string }) => void; foldSteps: boolean }) {
+  const steps = (
+    <ol className="calc-steps">
+      {c.steps.map((s, i) => (
+        <li key={i}>{s}</li>
+      ))}
+    </ol>
+  );
+  return (
+    <>
       {c.figure?.kind === "fill" && <FillFigure f={c.figure} />}
       {c.figure?.kind === "rack" && <RackFigure f={c.figure} />}
-      <details>
-        <summary>計算の過程</summary>
-        <ol className="calc-steps">
-          {c.steps.map((s, i) => (
-            <li key={i}>{s}</li>
-          ))}
-        </ol>
-      </details>
+      {foldSteps ? (
+        <details>
+          <summary>計算の過程</summary>
+          {steps}
+        </details>
+      ) : (
+        steps
+      )}
       {c.basisShown.map((b, i) => (
-        <button key={i} className="law-cite" onClick={() => setOpen({ id: b.lawId, quote: b.quote })}>
+        <button key={i} className="law-cite" onClick={() => onCite({ id: b.lawId, quote: b.quote })}>
           <span className="src-tag law">⚖️ 根拠</span>
           <q>{b.quote}</q>
           <span className="src-meta">
@@ -52,8 +79,7 @@ export function CalcCard({ c }: { c: CalcOutput }) {
           ※ {n}
         </p>
       ))}
-      {open && <LawSheet id={open.id} highlight={open.quote} onClose={() => setOpen(null)} />}
-    </div>
+    </>
   );
 }
 
