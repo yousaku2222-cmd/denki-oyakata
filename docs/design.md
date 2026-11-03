@@ -36,6 +36,8 @@
 | photo | string\|null | 段階4: 写真ごと質問（1024px 程度の JPEG の data URL、30万字まで。photoUrl は未使用） |
 | hasPhoto | boolean | 写真があるか（一覧は写真を読まずにこれで示す。この項目が無い古い質問は「写真あり」として扱い、開いて確かめる） |
 | status | 'open'\|'answered' | |
+| textKey | string\|null | 同じ質問をまとめるための文（空白・全角半角・文末の「？」「。」をそろえたもの）。写真付きは null |
+| alsoAskerIds | string[] | 同じ質問を後から送った人の端末ID（写真付きの質問はまとめないので空）。答えると、この人たちの「わたし」にも届く |
 | goodBy | string[] | 「いい質問」を押したベテラン |
 | answeredCardId | string\|null | 答えになったカード |
 | createdAt / answeredAt | Timestamp | |
@@ -51,6 +53,8 @@
 | askerId / askerRole | string | |
 | mode | 'claude'\|'dummy' | |
 | models | {router?, calc?, answer?} | 使ったモデル（calc は計算を選ぶ時） |
+| cached | boolean | 保存した答え（askCache）を返したか |
+| companyId | string | `demo` か、審査員モードの `trial_<uid>` |
 | createdAt | Timestamp | |
 
 `Sentence = { text, source: 'law'|'wisdom'|'general', cardId?, lawId?, quote?, verified?: boolean }`
@@ -64,8 +68,12 @@
 ### users（端末ごと。ログインなし）
 `{ askedCount, answeredFromMyQuestions }`（いまは数だけ。displayName・roleHistory は将来の「若手→ベテランへの移行」「成長の記録」の土台として予定）
 
-### usage（回数制限の数。サーバーだけ）
-`{日付}_{種類}{uid}`・`{日付}_{種類}ip_{回線のハッシュ}`・`{日付}_{種類}all_{0〜9}`（全体の数は10か所に分けて数える）。種類は AI（なし）／質問箱 `box_`／公開 `pub_`／引き継ぎコードを出す `trm_`／入れる `tr_`。断った呼び出しは足した数を戻すので、1台が全体の数に足せるのは自分の上限の分まで。
+### usage（回数制限の数と、料金の記録。サーバーだけ）
+- 回数制限: `{日付}_{種類}{uid}`・`{日付}_{種類}ip_{回線のハッシュ}`・`{日付}_{種類}all_{0〜9}`（全体の数は10か所に分けて数える）。種類は AI（なし）／保存した答え `c_`（1台200回）／写真 `photo_`／質問箱 `box_`／公開 `pub_`／引き継ぎコードを出す `trm_`／入れる `tr_`。断った呼び出しは足した数を戻すので、1台が全体の数に足せるのは自分の上限の分まで。
+- 料金の記録: `{日付}`（例 `2026-11-04`、日本時間）に `{ usd, calls, models.<モデル名>.{calls, input, output, usd} }`。Claude を呼ぶたびに `functions/src/usage.ts` が足す（料金は公表単価からの目安）。書き込みに失敗しても答えは止めない。
+
+### askCache（保存した答え。サーバーだけ）
+`{ ver, result, createdAt }` — 文書IDは質問の文（`normalizeQuestion`）のハッシュ。ver はデプロイ（K_REVISION）と使える共有カードの id・更新日時から作るので、カードの追加・非公開・直し、新しいデプロイで古い答えは使われなくなる。人ごとの情報は入れない。
 
 ### transfers（引き継ぎコード。サーバーだけ）
 `{ uid, createdAt, expiresAt }` — 24時間・1回だけ。新しいコードを出すと、その端末の前のコードは消える。使うと、古い端末IDのカード・質問・答えの記録が新しい端末IDに移る。
@@ -92,7 +100,8 @@ Opus が条文ごとに要約・キーワード・場面を付ける（ナレッ
 | makeTransferCode / useTransferCode | 締め | 端末の引き継ぎ |
 
 回数制限（締め）: 端末ごと・回線ごと・全体の1日上限を Functions で数える（`functions/src/limits.ts`）。先に数を足してから読み、上限を超えていれば断る（トランザクションを使わないので、同時に呼ばれてもロック待ちで失敗しない。上限を超えて通ることはない）。写真は1回で2回分＋写真だけの上限。
-保存した答え（`askCache`）: 同じ質問（空白・句読点・全角半角をそろえたもの）は、カードの一覧とデプロイが同じ間、保存した答えを返して回数に数えない。審査員の試用カードがある時は保存しない。
+保存した答え（`askCache`）: 同じ質問（空白・全角半角・文末の「？」「。」をそろえたもの。文の途中の「、」はそのまま）は、カードの一覧とデプロイが同じ間、保存した答えを返して AI の回数に数えない（別に、保存した答えだけの上限 1台1日200回）。保存した答えでは、カードの参照数と質問した数を増やさない。審査員の試用カードがある時は保存しない。
+同じ質問のまとめ: `sendToBox` は、まだ答えのない同じ質問（textKey が同じ）があれば新しく作らず、`alsoAskerIds` に足す（同じ端末がもう一度送った時は何もしない）。トランザクションの中で companyId・status・textKey の等号3つで探す。写真付きはまとめない。まとまった人の `myQuestions` には、自分が送った文と答えのカードの題名だけを返し、ほかの人の端末IDや名前は返さない。
 審査員モード: 入口の「審査員の方はこちら」から入ると、カード・質問を `companyId = trial_<uid>` に置き、その端末にだけ見せる（`spaceOf` / `spacesOf`）。試用のカードで共有の質問を答えても、共有の質問は閉じない。
 
 ## 3. 画面

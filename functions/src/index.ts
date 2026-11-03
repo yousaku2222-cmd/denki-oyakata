@@ -17,12 +17,13 @@ setGlobalOptions({ region: "asia-northeast1", maxInstances: 5 });
 export interface Ctx {
   ip: string; // the caller's network address, for the per-address daily caps
   charge: () => Promise<void>; // counts one Claude-backed answer (for functions that count themselves: ask)
+  chargeCached: () => Promise<void>; // counts one saved answer, against its own looser cap
 }
 type Handler = (data: Record<string, unknown>, uid: string, ctx: Ctx) => Promise<unknown>;
 
 
 // How a function is counted: "claude" before it runs, "photo" as two answers plus the photo cap,
-// "self" when the function calls ctx.charge() itself (ask: a saved answer costs nothing).
+// "self" when the function calls ctx.charge() itself (ask: a saved answer counts only against the looser "cached" cap).
 type Quota = false | "claude" | "photo" | "self";
 
 // Every call needs a signed-in user (anonymous sign-in, invisible to the user).
@@ -37,7 +38,10 @@ function callable(fn: Handler, quota: Quota = false) {
       const charge = async () => {
         if (getClient()) await takeQuota(uid, "claude", ip);
       };
-      const ctx: Ctx = { ip, charge };
+      const chargeCached = async () => {
+        if (getClient()) await takeQuota(uid, "cached", ip);
+      };
+      const ctx: Ctx = { ip, charge, chargeCached };
       if (quota === "photo" && getClient()) {
         await takeQuota(uid, "photo", ip);
         await charge();

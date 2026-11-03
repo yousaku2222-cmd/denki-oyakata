@@ -30,7 +30,7 @@ const ROUTER_SYSTEM = `電気工事の現場の若手からの質問を受け取
 
 const ANSWER_SYSTEM = `あなたは電気工事会社の「でんきの親方」アプリで、若手の質問に答えます。
 答えは一文ずつ、出どころ(source)を付けて返します。
-- law: 渡された「法令・基準」の条文に書かれていることだけ。必ず lawId と quote を付ける。quote は条文の原文から一続きでそのまま抜き出した部分（10〜80字。言い換え・省略・漢数字の書き換えをしない。「〜とする。」「〜こと。」など意味の切れ目で終える）。プログラムが原文と照合し、一致しなければ法令として表示されない。
+- law: 渡された「法令・基準」の条文に書かれていることだけ。必ず lawId と quote を付ける。quote は条文の原文から一続きでそのまま抜き出した部分（12〜80字。言い換え・省略・漢数字の書き換えをしない。「〜とする。」「〜こと。」など意味の切れ目で終える）。プログラムが原文と照合し、一致しなければ法令として表示されない。
 - wisdom: 渡された「社内の知恵カード」に書かれている内容だけ。必ず cardId を付ける。カードに無いことを wisdom にしない。
 - general: 一般的な知識。確かな範囲で書く。条文番号や数値を言い切らない。
 - 質問に関係する知恵カードがあれば、必ず wisdom を1文以上入れる（親方の現場の知恵は、法令と同じくらい大事な答え）。カードに書かれている内容を言う文は、言い換えても必ず wisdom にする（general にしない）。
@@ -131,8 +131,11 @@ export function cacheKey(text: string, cards: Card[]): { id: string; ver: string
 
 type Composed = Awaited<ReturnType<typeof compose>>;
 
-/** ctx.charge() counts one Claude-backed answer against the daily caps; a saved answer costs nothing. */
-export async function ask(data: Record<string, unknown>, uid: string, ctx?: { charge?: () => Promise<void> }) {
+/**
+ * ctx.charge() counts one Claude-backed answer against the daily caps. A saved answer counts only against the
+ * looser cached cap, and adds nothing to the cards' view counts or the asker's count.
+ */
+export async function ask(data: Record<string, unknown>, uid: string, ctx?: { charge?: () => Promise<void>; chargeCached?: () => Promise<void> }) {
   const text = str(data.text, "質問", 500);
   const askerId = uid;
   const askerRole = data.askerRole === "veteran" ? "veteran" : "young";
@@ -147,6 +150,7 @@ export async function ask(data: Record<string, unknown>, uid: string, ctx?: { ch
   if (cacheable) {
     const hit = await cacheRef.get();
     if (hit.exists && hit.get("ver") === key.ver) {
+      await ctx?.chargeCached?.();
       out = hit.get("result") as Composed;
       cached = true;
     }
@@ -174,8 +178,10 @@ export async function ask(data: Record<string, unknown>, uid: string, ctx?: { ch
     cached,
     createdAt: Timestamp.now(),
   });
-  await Promise.all(out.usedCardIds.map((id) => db.collection("cards").doc(id).update({ viewCount: FieldValue.increment(1) })));
-  await db.collection("users").doc(askerId).set({ askedCount: FieldValue.increment(1) }, { merge: true });
+  if (!cached) {
+    await Promise.all(out.usedCardIds.map((id) => db.collection("cards").doc(id).update({ viewCount: FieldValue.increment(1) })));
+    await db.collection("users").doc(askerId).set({ askedCount: FieldValue.increment(1) }, { merge: true });
+  }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { usedCardIds, usedLawIds, models, ...shown } = out;
   return { answerId: ref.id, cached, ...shown };

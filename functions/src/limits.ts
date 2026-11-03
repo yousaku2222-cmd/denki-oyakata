@@ -18,6 +18,8 @@ export const PHOTOS_PER_DAY = 150; // a photo also counts as two answers (index.
 
 export const CAPS = {
   claude: { prefix: "", user: PER_USER_PER_DAY, ip: PER_IP_PER_DAY, all: ALL_USERS_PER_DAY, userMsg: `今日はこの端末で ${PER_USER_PER_DAY} 回まで使えます。また明日お試しください。例題の質問はいつでも試せます。`, allMsg: "今日の利用回数の上限に達しました。また明日お試しください。例題の質問はいつでも試せます。" },
+  // A saved answer calls no Claude but still writes the answer record: a loose cap of its own.
+  cached: { prefix: "c_", user: 200, ip: 600, all: 20000, userMsg: "今日はこの端末からの質問が多すぎます。また明日お試しください。", allMsg: "今日の利用回数の上限に達しました。また明日お試しください。" },
   photo: { prefix: "photo_", user: 20, ip: 60, all: PHOTOS_PER_DAY, userMsg: "写真で調べられるのは、この端末から1日20回までです。", allMsg: "今日の写真の判定は上限に達しました。また明日お試しください。" },
   box: { prefix: "box_", user: BOX_PER_USER_PER_DAY, ip: BOX_PER_USER_PER_DAY * 3, all: BOX_ALL_USERS_PER_DAY, userMsg: `質問箱に送れるのは、この端末から1日 ${BOX_PER_USER_PER_DAY} 件までです。`, allMsg: "今日は質問箱がいっぱいです。また明日お試しください。" },
   publish: { prefix: "pub_", user: PUBLISH_PER_USER_PER_DAY, ip: PUBLISH_PER_USER_PER_DAY * 3, all: PUBLISH_ALL_USERS_PER_DAY, userMsg: `新しく公開できるカードは、この端末から1日 ${PUBLISH_PER_USER_PER_DAY} 枚までです。`, allMsg: "今日はこれ以上カードを公開できません。また明日お試しください。" },

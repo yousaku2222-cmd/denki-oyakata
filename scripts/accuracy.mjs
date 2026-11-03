@@ -33,8 +33,40 @@ async function askApp(text) {
   if (r.error) throw new Error(`ask: ${JSON.stringify(r.error)}`);
   return r.result;
 }
-/** The app's answer as the young worker sees it: each sentence with its source. */
+/**
+ * The app's answer as plain sentences, for the grader: no source labels (⚖️・🧰・「引用は原文と一致」), which would
+ * tell the grader which answer is the app's and nudge it. A law sentence keeps the article it cites, the way a
+ * plain answer names one.
+ */
 function appText(a) {
+  const law = new Map(a.laws.map((l) => [l.id, l]));
+  const lines = a.sentences.map((s) => {
+    const l = s.source === "law" ? law.get(s.lawId) : undefined;
+    return l ? `${s.text}（${l.lawName} ${l.article}）` : s.text;
+  });
+  for (const c of a.calcs ?? []) lines.push(`${c.title}: ${c.verdict}`);
+  if (a.safetyNote) lines.push(a.safetyNote);
+  return lines.join("\n");
+}
+/** The plain answer without markdown marks, which would also tell the two apart. */
+const unmark = (md) =>
+  md
+    .replace(/^#+\s*/gm, "")
+    .replace(/\*\*|__|`/g, "")
+    .replace(/^\s*[-*]\s+/gm, "・")
+    .replace(/^\s*\|?\s*:?-{3,}.*$/gm, "")
+    .replace(/\|/g, " ");
+/** The articles a plain answer names (the law's name or usual short name, and the article), among the 52. */
+function citedIn(text) {
+  const t = text.replace(/\s/g, "");
+  const names = (l) => [l.lawName, l.short, l.id.startsWith("kaishaku-") ? "解釈" : "", l.id.startsWith("shiyo-") ? "標準仕様書" : ""].filter(Boolean);
+  return lawList
+    .filter((l) => new RegExp(`${l.article.replace(/\./g, "[.．]")}(?![0-9の.．])`).test(t) && names(l).some((n) => t.includes(n)))
+    .map((l) => l.id);
+}
+
+/** The app's answer as the young worker sees it, for the report: each sentence with its source. */
+function appView(a) {
   const card = new Map(a.cards.map((c) => [c.id, c]));
   const law = new Map(a.laws.map((l) => [l.id, l]));
   const lines = a.sentences.map((s) => {
@@ -53,8 +85,11 @@ function appText(a) {
 // --- B: the same model on its own ---
 const PLAIN_SYSTEM = "電気工事の若手（資格なし〜第二種電気工事士）からの質問に、日本語で答えてください。根拠になる法令・基準があれば、法令名と条番号も示してください。";
 async function askPlain(text) {
-  const res = await claude.messages.create({ model: MODEL_ANSWER, max_tokens: 3000, system: PLAIN_SYSTEM, messages: [{ role: "user", content: text }] });
-  return res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+  // max_tokens also covers thinking: at 3000 the thinking alone used it up and 4 of the 20 answers came back empty
+  const res = await claude.messages.create({ model: MODEL_ANSWER, max_tokens: 16000, system: PLAIN_SYSTEM, messages: [{ role: "user", content: text }] });
+  const out = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+  if (res.stop_reason === "max_tokens" || !out.trim()) throw new Error(`plain answer cut off (${res.stop_reason}, ${res.usage.output_tokens} tokens)`);
+  return out;
 }
 
 // --- grading: blind, both answers in one request so the same yardstick is used ---
@@ -82,8 +117,8 @@ const GRADE_SCHEMA = {
 };
 async function grade(q, app, plain, citedLawIds = []) {
   const appFirst = q.id % 2 === 1; // which answer is X alternates by question
-  const [x, y] = appFirst ? [app, plain] : [plain, app];
-  // the articles the question is about, plus every article the app's answer cited (so its quotes can be checked)
+  const [x, y] = appFirst ? [app, unmark(plain)] : [unmark(plain), app];
+  // the articles the question is about, plus every article either answer cited (both are checked against the text)
   const lawText = [...new Set([...q.lawIds, ...citedLawIds])].map((id) => lawById.get(id)).filter(Boolean).map((l) => `【${l.short ?? l.lawName} ${l.article}】\n${l.text}`).join("\n\n") || "（この質問に法令の根拠は要らない想定）";
   const res = await claude.messages.create({
     model: MODEL_HEAVY,
@@ -103,8 +138,8 @@ for (let i = 0; i < questions.length; i += 4) {
     ...(await Promise.all(
       questions.slice(i, i + 4).map(async (q) => {
         const [a, plain] = await Promise.all([askApp(q.q), askPlain(q.q)]);
-        const app = appText(a);
-        const g = await grade(q, app, plain, a.laws.map((l) => l.id));
+        const g = await grade(q, appText(a), plain, [...a.laws.map((l) => l.id), ...citedIn(plain)]);
+        const app = appView(a);
         console.log(`#${q.id} app ${g.app.correct}/${g.app.basis}  plain ${g.plain.correct}/${g.plain.basis}`);
         return { ...q, app, plain, cached: a.cached, grade: g };
       }),

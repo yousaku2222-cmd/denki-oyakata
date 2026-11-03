@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { defineSecret } from "firebase-functions/params";
+import { logger } from "firebase-functions";
 import { recordUsage } from "./usage";
 
 export const anthropicKey = defineSecret("ANTHROPIC_API_KEY");
@@ -31,13 +32,15 @@ export async function pickTools(opts: {
   if (!c) throw new Error("no api key");
   const res = await c.messages.create({
     model: opts.model,
-    max_tokens: 4000,
+    max_tokens: 8000, // also covers thinking
     system: opts.system,
     messages: [{ role: "user", content: opts.user }],
     tools: opts.tools,
     tool_choice: { type: "auto" },
   });
   await recordUsage(opts.model, res.usage);
+  // cut off before choosing: the answer goes on without a calculation, but leave a trace
+  if (res.stop_reason === "max_tokens") logger.warn(`${opts.model} hit max_tokens choosing tools`, res.usage);
   return res.content
     .flatMap((b) => (b.type === "tool_use" ? [{ name: b.name, input: (b.input ?? {}) as Record<string, unknown> }] : []))
     .slice(0, opts.maxCalls ?? 2);

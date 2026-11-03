@@ -54,24 +54,31 @@ const TICK_MS = 450; // every step shows ✓ for this long before the list folds
 const EXAMPLES = ["資格が無くても出来る作業はありますか？", "PF管って何回まで曲げていい？", "VE管とPF管のサドルの違いは？"];
 const GENERAL_PREVIEW = 2; // general sentences shown before 「もっと見る」 when a checked source comes first
 
-// the last answer stays while other tabs are open (this screen unmounts), until the app is reloaded
-let last: { asked: string; answer: Answer } | null = null;
+// the last answer stays while other tabs are open (this screen unmounts), until the app is reloaded;
+// one per role (切替 shows the other role its own), with whether 助かった / 親方にも聞く was already pressed
+type Last = { asked: string; answer: Answer; helped?: boolean; sent?: boolean; sentNote?: string };
+const lastOf: Partial<Record<Role, Last>> = {};
 
 export function Ask({ role, seed }: { role: Role; seed?: string }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [answer, setAnswerState] = useState<Answer | null>(seed ? null : (last?.answer ?? null));
-  const [asked, setAsked] = useState(seed ? "" : (last?.asked ?? ""));
+  const last = seed ? undefined : lastOf[role];
+  const [answer, setAnswerState] = useState<Answer | null>(last?.answer ?? null);
+  const [asked, setAsked] = useState(last?.asked ?? "");
   const setAnswer = (a: Answer | null, q = asked) => {
     setAnswerState(a);
-    last = a ? { asked: q, answer: a } : last;
+    if (a) lastOf[role] = { asked: q, answer: a };
+  };
+  const remember = (more: Partial<Last>) => {
+    const l = lastOf[role];
+    if (l) Object.assign(l, more);
   };
   // asked again from わたし: the veteran already answered it, so no 「親方にも聞く」
   const fromMe = !!seed;
-  const [helped, setHelped] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [sentNote, setSentNote] = useState("");
+  const [helped, setHelped] = useState(!!last?.helped);
+  const [sent, setSent] = useState(!!last?.sent);
+  const [sentNote, setSentNote] = useState(last?.sentNote ?? "");
   const [openLaw, setOpenLaw] = useState<{ id: string; quote?: string } | null>(null);
   const [finished, setFinished] = useState(false);
   const [plusOne, setPlusOne] = useState(0);
@@ -114,8 +121,12 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
   async function helpedClick() {
     if (!answer) return;
     setHelped(true);
+    remember({ helped: true });
     setPlusOne((n) => n + 1);
-    await call("markHelped", { answerId: answer.answerId }).catch(() => setHelped(false));
+    await call("markHelped", { answerId: answer.answerId }).catch(() => {
+      setHelped(false);
+      remember({ helped: false });
+    });
   }
 
   async function sendToBox(e: React.MouseEvent<HTMLButtonElement>) {
@@ -130,14 +141,16 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
       return;
     }
     if (r.duplicate) {
-      setSentNote("この質問は、もう質問箱に入っています。親方が答えると、「わたし」に届きます。");
+      const note = "この質問は、もう質問箱に入っています。親方が答えると、「わたし」に届きます。";
+      setSentNote(note);
+      remember({ sent: true, sentNote: note });
       return; // nothing new went in: no envelope
     }
-    setSentNote(
-      r.merged
-        ? `同じことを聞いた人が、ほかにもいます（あなたで${r.askers}人目）。親方が答えると、全員の「わたし」に届きます。`
-        : "親方が答えると、「わたし」に届きます。",
-    );
+    const note = r.merged
+      ? `同じことを聞いた人が、ほかにもいます（あなたで${r.askers}人目）。親方が答えると、全員の「わたし」に届きます。`
+      : "親方が答えると、「わたし」に届きます。";
+    setSentNote(note);
+    remember({ sent: true, sentNote: note });
     fly(from); // only once it is really in the box: it flies to わたし, where the answer will come back
   }
 
@@ -161,7 +174,7 @@ export function Ask({ role, seed }: { role: Role; seed?: string }) {
             onClick={() => {
               setText(asked); // to fix the words and ask again
               setAnswerState(null);
-              last = null;
+              delete lastOf[role];
             }}
           >
             聞き直す
