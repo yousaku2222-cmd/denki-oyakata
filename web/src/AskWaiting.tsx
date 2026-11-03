@@ -11,17 +11,25 @@ const STEPS: { icon: string; text: string; at: number }[] = [
   { icon: "✔", text: "引用を条文の原文と照らしています", at: 8000 },
 ];
 
-export function AskWaiting({ question }: { question: string }) {
-  const [step, setStep] = useState(0);
+/** finished: the answer is in, so every step shows as done for a moment before the list folds away. */
+export function AskWaiting({ question, finished = false }: { question: string; finished?: boolean }) {
+  const [timed, setTimed] = useState(0);
+  const step = finished ? STEPS.length : timed;
   useEffect(() => {
-    const timers = STEPS.slice(1).map((s, i) => setTimeout(() => setStep(i + 1), s.at));
+    const timers = STEPS.slice(1).map((s, i) => setTimeout(() => setTimed(i + 1), s.at));
     return () => timers.forEach(clearTimeout);
   }, []);
   return (
-    <div className="ask-waiting" role="status" aria-live="polite">
+    <motion.div
+      className="ask-waiting"
+      role="status"
+      aria-live="polite"
+      exit={{ opacity: 0, height: 0, scaleY: 0.4, transition: { duration: 0.35, ease: "easeIn" } }}
+      style={{ transformOrigin: "50% 0%", overflow: "hidden" }}
+    >
       <ol>
         <AnimatePresence initial={false}>
-          {STEPS.slice(0, step + 1).map((s, i) => (
+          {STEPS.slice(0, Math.min(step + 1, STEPS.length)).map((s, i) => (
             <motion.li
               key={s.text}
               className={i < step ? "done" : "now"}
@@ -45,7 +53,27 @@ export function AskWaiting({ question }: { question: string }) {
           ))}
         </AnimatePresence>
       </ol>
-    </div>
+    </motion.div>
+  );
+}
+
+/** What the answer was checked against, in one line that stays above it. Counts come from the answer itself. */
+export function CheckedLine({ laws, cards, calcs, cached }: { laws: number; cards: number; calcs: number; cached: boolean }) {
+  const found = [laws && `法令・基準 ${laws}件`, cards && `親方の知恵 ${cards}件`, calcs && `計算 ${calcs}件`].filter(Boolean);
+  const text = cached
+    ? "前に確かめた答えです"
+    : found.length
+      ? `${found.join("と")}を確かめました`
+      : "法令・基準と親方の知恵からは見つかりませんでした";
+  return (
+    <motion.p
+      className={`checked-line ${found.length || cached ? "ok" : "none"}`}
+      initial={{ opacity: 0, y: -8, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+    >
+      <span aria-hidden>{found.length || cached ? "✓" : "—"}</span> {text}
+    </motion.p>
   );
 }
 

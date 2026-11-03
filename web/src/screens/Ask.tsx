@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { getName, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
 import { LawSheet, type LawRef } from "../LawSheet";
 import { CalcCard, type CalcOutput } from "../CalcCard";
-import { AskWaiting } from "../AskWaiting";
+import { AskWaiting, CheckedLine } from "../AskWaiting";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
 // The list starts moving when it scrolls into view (a calculation card above can push it below the fold).
@@ -44,7 +44,10 @@ interface Answer {
   cards: { id: string; title: string; author: string; publishedAt: number | null; triggerAskerName: string | null }[];
   laws: LawRef[];
   calcs?: CalcOutput[];
+  cached?: boolean;
 }
+
+const TICK_MS = 450; // every step shows ✓ for this long before the list folds into one line
 
 const EXAMPLES = ["資格が無くても出来る作業はありますか？", "PF管って何回まで曲げていい？", "圧着端子の2とか3.5って何の数字？"];
 
@@ -57,6 +60,7 @@ export function Ask({ role }: { role: Role }) {
   const [helped, setHelped] = useState(false);
   const [sent, setSent] = useState(false);
   const [openLaw, setOpenLaw] = useState<{ id: string; quote?: string } | null>(null);
+  const [finished, setFinished] = useState(false);
 
   async function submit(q = text) {
     if (!q.trim() || busy) return;
@@ -69,12 +73,17 @@ export function Ask({ role }: { role: Role }) {
     setAsked(q.trim());
     try {
       const a = await call<Answer>("ask", { text: q.trim(), askerRole: role });
+      if (!a.cached) {
+        setFinished(true);
+        await new Promise((r) => setTimeout(r, TICK_MS));
+      }
       setAnswer(a);
       setText("");
     } catch (e) {
       setErr(errorText(e, "答えを取得できませんでした。電波の良い所で、もう一度お試しください。"));
     } finally {
       setBusy(false);
+      setFinished(false);
     }
   }
 
@@ -120,7 +129,19 @@ export function Ask({ role }: { role: Role }) {
         </>
       )}
 
-      {busy && <AskWaiting question={asked} />}
+      <AnimatePresence mode="wait">
+        {busy && !answer ? (
+          <AskWaiting key="waiting" question={asked} finished={finished} />
+        ) : answer ? (
+          <CheckedLine
+            key={`checked-${answer.answerId}`}
+            laws={new Set(answer.sentences.flatMap((s) => (s.source === "law" && s.lawId ? [s.lawId] : []))).size}
+            cards={new Set(answer.sentences.flatMap((s) => (s.source === "wisdom" && s.cardId ? [s.cardId] : []))).size}
+            calcs={answer.calcs?.length ?? 0}
+            cached={!!answer.cached}
+          />
+        ) : null}
+      </AnimatePresence>
 
       {!folded && (
         <div className="examples">
@@ -136,14 +157,14 @@ export function Ask({ role }: { role: Role }) {
       {err && <p className="hint error">{err}</p>}
 
       {answer && (
-        <div className="answer">
+        <motion.div className="answer" key={answer.answerId} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: answer.cached ? 0 : 0.35, duration: 0.25 }}>
           <p className="interpreted">
             こう受け取りました：<strong>{answer.interpretedAs}</strong>
           </p>
           {answer.mode === "dummy" && <p className="hint">※ 試験用のダミー応答です（AIの接続前）</p>}
           {answer.calcs?.map((c, i) => <CalcCard key={i} c={c} compact />)}
 
-          <motion.div key={answer.answerId} className="sentences" initial="hidden" whileInView="shown" viewport={{ once: true }} variants={{ shown: { transition: { staggerChildren: STAGGER } } }}>
+          <motion.div key={answer.answerId} className="sentences" initial="hidden" whileInView="shown" viewport={{ once: true }} variants={{ shown: { transition: { staggerChildren: STAGGER, delayChildren: 0.35 } } }}>
             {SOURCES.map((src) => {
               const rows = answer.sentences.filter((s) => s.source === src);
               if (!rows.length) return null;
@@ -216,7 +237,7 @@ export function Ask({ role }: { role: Role }) {
               {sent ? "📮 質問箱に入れました" : answer.grounded ? "📮 親方にも聞く" : "📮 親方に聞いてみる"}
             </button>
           </div>
-        </div>
+        </motion.div>
       )}
     </section>
   );
