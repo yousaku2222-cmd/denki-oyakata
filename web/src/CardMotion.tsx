@@ -11,7 +11,6 @@ interface DraftLike {
   caution: string;
 }
 
-const BIRTH_MS = 4300; // long enough to read the filled card before the draft opens
 
 /** Pieces of what the veteran said, to be drawn into the card (the longest phrases read best). */
 function phrases(said: string[]): string[] {
@@ -39,15 +38,12 @@ const CARD_Y = 236;
 
 /**
  * The moment a card is born: the veteran's words light up, are drawn into one card,
- * and its fields fill in one by one. Then the editable draft takes over. Tap to skip.
+ * and its fields fill in one by one. It then rests on the filled card (the veteran reads it
+ * at their own pace) until they tap to check the draft. A tap at any time goes straight there.
  */
 export function CardBirth({ said, draft, onDone }: { said: string[]; draft: DraftLike; onDone: () => void }) {
   const reduce = useReducedMotion();
-  const bits = useMemo(() => phrases(said), [said]);
-  useEffect(() => {
-    const t = setTimeout(onDone, reduce ? 0 : BIRTH_MS);
-    return () => clearTimeout(t);
-  }, [onDone, reduce]);
+  const bits = useMemo(() => (reduce ? [] : phrases(said)), [said, reduce]);
   const rows: [string, string][] = [
     ["場面", draft.scene],
     ["やり方", draft.body],
@@ -104,7 +100,14 @@ export function CardBirth({ said, draft, onDone }: { said: string[]; draft: Draf
           ))}
         </motion.div>
       </div>
-      <p className="hint">押すと、すぐに中身を確かめられます</p>
+      <motion.button
+        className="primary birth-next"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: cardAt + 0.3 + rows.length * 0.22 + 0.3 }}
+      >
+        中身を確かめる →
+      </motion.button>
     </section>
   );
 }

@@ -1171,3 +1171,66 @@ input[inputmode="decimal"] {
 .bag-num span {
   grid-area: 1 / 1;
 }
+
+/* ---- 聞く: the question folds into one line, the steps run while waiting (AskWaiting.tsx) ---- */
+.screen {
+  scroll-margin-top: 64px; /* below the sticky header when scrolled to */
+}
+.ask-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line, #d6dbe6);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+.ask-bar-q {
+  flex: 1;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.ask-bar .secondary {
+  flex: none;
+  min-height: 40px;
+  padding: 0 12px;
+}
+.ask-waiting ol {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.ask-waiting li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+.ask-waiting li.done {
+  color: var(--muted);
+  font-weight: 500;
+}
+.wait-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--law);
+  flex: none;
+}
+.ask-waiting li.done .wait-icon {
+  border-color: var(--wisdom);
+  color: var(--wisdom);
+}
+.birth-next {
+  margin-top: 16px;
+  width: 100%;
+}

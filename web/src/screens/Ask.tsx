@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { getName, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
 import { LawSheet, type LawRef } from "../LawSheet";
 import { CalcCard, type CalcOutput } from "../CalcCard";
+import { AskWaiting } from "../AskWaiting";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
 // The list starts moving when it scrolls into view (a calculation card above can push it below the fold).
@@ -65,10 +66,10 @@ export function Ask({ role }: { role: Role }) {
     setOpenGeneral(false);
     setHelped(false);
     setSent(false);
+    setAsked(q.trim());
     try {
       const a = await call<Answer>("ask", { text: q.trim(), askerRole: role });
       setAnswer(a);
-      setAsked(q.trim());
       setText("");
     } catch (e) {
       setErr(errorText(e, "答えを取得できませんでした。電波の良い所で、もう一度お試しください。"));
@@ -92,17 +93,36 @@ export function Ask({ role }: { role: Role }) {
   }
 
   const [openGeneral, setOpenGeneral] = useState(false);
+  // once asked, the input folds into one line and the answer takes the screen
+  const folded = busy || !!answer;
+  const top = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (folded) top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [folded]);
   const cardOf = (id?: string) => answer?.cards.find((c) => c.id === id);
 
   return (
-    <section className="screen">
-      <h1 className="screen-title">現場の疑問を、聞いてみよう</h1>
-      <MicInput value={text} onChange={setText} maxLength={500} micLabel="話して聞く" placeholder="例: VE管とPF管の支持の違いは？（話し言葉・方言のままでOK）" />
-      <button className="primary" disabled={!text.trim() || busy} onClick={() => submit()}>
-        {busy ? "調べています…" : "聞く"}
-      </button>
+    <section className="screen" ref={top}>
+      {folded ? (
+        <div className="ask-bar">
+          <span className="ask-bar-q">🎤 {asked}</span>
+          <button className="secondary" disabled={busy} onClick={() => setAnswer(null)}>
+            聞き直す
+          </button>
+        </div>
+      ) : (
+        <>
+          <h1 className="screen-title">現場の疑問を、聞いてみよう</h1>
+          <MicInput value={text} onChange={setText} maxLength={500} micLabel="話して聞く" placeholder="例: VE管とPF管の支持の違いは？（話し言葉・方言のままでOK）" />
+          <button className="primary" disabled={!text.trim()} onClick={() => submit()}>
+            聞く
+          </button>
+        </>
+      )}
 
-      {!answer && !busy && (
+      {busy && <AskWaiting question={asked} />}
+
+      {!folded && (
         <div className="examples">
           <p className="hint">よく聞かれる質問</p>
           {EXAMPLES.map((q) => (
