@@ -1230,6 +1230,32 @@ input[inputmode="decimal"] {
   border: 2px solid var(--law);
   flex: none;
 }
+.wait-icon {
+  position: relative;
+}
+.wait-icon > span {
+  display: inline-block;
+}
+.wait-icon.spin::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--bag-tie);
+  border-right-color: var(--bag-tie);
+  animation: wait-spin 0.9s linear infinite;
+}
+@keyframes wait-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wait-icon.spin::after {
+    animation: none;
+  }
+}
 .ask-waiting li.done .wait-icon {
   border-color: var(--wisdom);
   color: var(--wisdom);

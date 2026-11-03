@@ -37,13 +37,15 @@ export function AskWaiting({ question, finished = false }: { question: string; f
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, ease: "easeOut" }}
             >
-              <motion.span
-                className="wait-icon"
-                animate={i === step ? { rotateY: [0, 180, 360], scale: [1, 1.15, 1] } : { rotateY: 0, scale: 1 }}
-                transition={i === step ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 }}
-              >
-                {i < step ? "✓" : s.icon}
-              </motion.span>
+              {/* the circle stays still; only the icon turns, and a ring spins round the current step */}
+              <span className={`wait-icon ${i === step ? "spin" : ""}`}>
+                <motion.span
+                  animate={i === step ? { rotateY: [0, 180, 360] } : { rotateY: 0 }}
+                  transition={i === step ? { duration: 1.4, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 }}
+                >
+                  {i < step ? "✓" : s.icon}
+                </motion.span>
+              </span>
               <span>
                 {s.text}
                 {i === 0 && question ? `：「${question.length > 24 ? question.slice(0, 23) + "…" : question}」` : ""}
