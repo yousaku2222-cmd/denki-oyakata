@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { addPart, getName } from "../local";
 import { LawSheet } from "../LawSheet";
@@ -115,7 +116,21 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
       </button>
       <p className="hint">印字や型番が写るように撮ると、読み取って確かめます。写真の一覧からも選べます。</p>
 
-      {preview && <img className="photo-preview" src={preview} alt="撮った写真" />}
+      {preview && (
+        <div className="photo-frame">
+          <img className="photo-preview" src={preview} alt="撮った写真" />
+          {/* while it is being read: a scan line runs over the photo (only while identifying, not while sending) */}
+          {busy && !res && (
+            <>
+              <motion.div className="scan-line" aria-hidden initial={{ top: "0%" }} animate={{ top: ["0%", "100%", "0%"] }} transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }} />
+              <span className="scan-corner tl" aria-hidden />
+              <span className="scan-corner tr" aria-hidden />
+              <span className="scan-corner bl" aria-hidden />
+              <span className="scan-corner br" aria-hidden />
+            </>
+          )}
+        </div>
+      )}
       {busy && <p className="hint">調べています…（小さい印字は拡大して読み直します）</p>}
       {err && <p className="hint error">{err}</p>}
 

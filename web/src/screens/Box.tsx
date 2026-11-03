@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { fmtDate } from "../components";
 import type { Topic } from "./Talk";
@@ -13,12 +14,30 @@ interface Q {
   createdAt: number;
 }
 
+// When this device last looked at the box, so questions that came in since then are marked 新着.
+const SEEN_KEY = "oyakata.boxSeen";
+function lastSeen(): number {
+  try {
+    return Number(localStorage.getItem(SEEN_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+function markSeen(at: number) {
+  try {
+    localStorage.setItem(SEEN_KEY, String(at));
+  } catch {
+    // private window: nothing is marked new next time, which is fine
+  }
+}
+
 // Read through Functions: a question carries its asker's device id and a photo (opened only when wanted).
 export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
   const [items, setItems] = useState<Q[] | null>(null);
   const [more, setMore] = useState(0);
   const [err, setErr] = useState("");
   const [photos, setPhotos] = useState<Record<string, string | null>>({});
+  const [seenBefore, setSeenBefore] = useState(lastSeen);
 
   const load = useCallback(() => {
     setErr("");
@@ -26,6 +45,9 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
       .then((r) => {
         setItems(r.questions);
         setMore(r.more);
+        // the marks stay for this visit; next time only newer questions are 新着
+        const newest = Math.max(0, ...r.questions.map((q) => q.createdAt));
+        if (newest > lastSeen()) markSeen(newest);
       })
       .catch((e) => setErr(errorText(e, "質問を読み込めませんでした。電波の良い所で、もう一度お試しください。")));
   }, []);
@@ -50,14 +72,33 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
     <section className="screen">
       <h1 className="screen-title">答えてほしい質問</h1>
       <p className="hint">若手が答えを見つけられなかった質問です。押すと、そのまま話して答えられます。</p>
-      <button className="link" onClick={load}>
+      {!!items?.length && (
+        <p className="box-count">
+          📮 {items.length}件の質問が届いています
+          {items.some((q) => q.createdAt > seenBefore) && <span className="new-chip">新着 {items.filter((q) => q.createdAt > seenBefore).length}件</span>}
+        </p>
+      )}
+      <button
+        className="link"
+        onClick={() => {
+          setSeenBefore(lastSeen());
+          load();
+        }}
+      >
         ↻ 新しい質問を見る
       </button>
       {err && <p className="hint error">{err}</p>}
       {items === null && !err && <p className="hint">読み込み中…</p>}
       {items?.length === 0 && <p className="empty">いまは質問がありません。</p>}
-      {items?.map((q) => (
-        <div key={q.id} className="qcard">
+      {items?.map((q, i) => (
+        <motion.div
+          key={q.id}
+          className={`qcard ${q.createdAt > seenBefore ? "is-new" : ""}`}
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: Math.min(i, 6) * 0.12, duration: 0.4, ease: "easeOut" }}
+        >
+          {q.createdAt > seenBefore && <span className="new-chip">新着</span>}
           {q.hasPhoto &&
             (q.id in photos ? (
               photos[q.id] === null ? (
@@ -84,7 +125,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
               {q.good ? "⭐ いい質問！" : "⭐ いい質問"}
             </button>
           </div>
-        </div>
+        </motion.div>
       ))}
       {more > 0 && <p className="hint">ほかに古い質問が {more} 件あります（新しい順に50件まで表示）。</p>}
     </section>

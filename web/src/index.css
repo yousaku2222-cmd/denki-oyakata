@@ -1323,3 +1323,56 @@ input[inputmode="decimal"] {
 .sent-note {
   margin: 0;
 }
+
+/* ---- 撮る: a scan line over the photo while it is being read ---- */
+.photo-frame {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.photo-frame .photo-preview {
+  display: block;
+}
+.scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--bag-tie);
+  box-shadow: 0 0 12px 4px rgba(245, 196, 0, 0.7), 0 -24px 32px rgba(245, 196, 0, 0.18);
+  pointer-events: none;
+}
+.scan-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--bag-tie);
+  pointer-events: none;
+}
+.scan-corner.tl { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+.scan-corner.tr { top: 8px; right: 8px; border-left: none; border-bottom: none; }
+.scan-corner.bl { bottom: 8px; left: 8px; border-right: none; border-top: none; }
+.scan-corner.br { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+
+/* ---- 質問箱: count and 新着 ---- */
+.box-count {
+  margin: 0;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.new-chip {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #4a3b00;
+  background: var(--bag-tie);
+  border-radius: 999px;
+  padding: 1px 8px;
+  width: fit-content;
+}
+.qcard.is-new {
+  box-shadow: 0 0 0 2px var(--bag-tie);
+}
