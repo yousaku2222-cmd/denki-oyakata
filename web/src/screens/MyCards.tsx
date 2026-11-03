@@ -19,6 +19,7 @@ export function MyCards({ onEdit }: { onEdit: (cardId: string) => void }) {
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const load = useCallback(() => {
+    setErr("");
     call<{ cards: Mine[] }>("myCards", {})
       .then((r) => setCards(r.cards))
       .catch((e) => setErr(errorText(e, "カードを読み込めませんでした。電波の良い所で、ページを開き直してください。")));
@@ -44,7 +45,7 @@ export function MyCards({ onEdit }: { onEdit: (cardId: string) => void }) {
     <section className="screen">
       <h1 className="screen-title">わたしのカード</h1>
       <div className="stat">
-        <span className="stat-num">{total}</span>
+        <span className="stat-num">{cards === null ? "—" : total}</span>
         <span>回、あなたの知恵が若手を助けました</span>
       </div>
       {cards === null && !err && <p className="hint">読み込み中…</p>}

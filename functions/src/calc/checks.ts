@@ -1,4 +1,4 @@
-import { Calc, CalcInputError, CalcResult, Field, flag, fmt, fmtVs, num, pick } from "./types";
+import { Calc, CalcInputError, CalcResult, Field, flag, fmt, fmtVs, num, pick, tidy } from "./types";
 
 // ---------- 絶縁抵抗（電技省令 第58条） ----------
 const ins = {
@@ -30,7 +30,7 @@ export const insulation: Calc = {
       title: "絶縁抵抗の合否",
       ok,
       verdict: `${ok ? "合格" : "不合格"}（測定 ${ms}MΩ ${ok ? "≧" : "＜"} 基準 ${ls}MΩ）`,
-      steps: [`区分: ${ins.voltage.options!.find((o) => o.value === v)!.label}`, `基準値: ${lim.mohm}MΩ以上`, `測定値: ${fmt(m, 3)}MΩ`],
+      steps: [`区分: ${ins.voltage.options!.find((o) => o.value === v)!.label}`, `基準値: ${lim.mohm}MΩ以上`, `測定値: ${ms}MΩ`],
       basis: [
         { lawId: "409M50000400052-58", quote: "開閉器又は過電流遮断器で区切ることのできる電路ごとに" },
         { lawId: "409M50000400052-58", quote: lim.quote },
@@ -85,7 +85,7 @@ export const grounding: Calc = {
       title: `${t}種接地工事の接地抵抗`,
       ok,
       verdict: `${ok ? "合格" : "不合格"}（測定 ${fmtVs(m, lim)[0]}Ω ${ok ? "≦" : "＞"} 基準 ${fmtVs(m, lim)[1]}Ω）`,
-      steps: [`${t}種接地工事`, t === "A" ? "基準値: 10Ω以下" : `0.5秒以内の自動遮断装置: ${fast ? "あり → 500Ω以下" : `なし → ${lim}Ω以下`}`, `測定値: ${fmt(m)}Ω`],
+      steps: [`${t}種接地工事`, t === "A" ? "基準値: 10Ω以下" : `0.5秒以内の自動遮断装置: ${fast ? "あり → 500Ω以下" : `なし → ${lim}Ω以下`}`, `測定値: ${fmtVs(m, lim)[0]}Ω`],
       basis,
       notes: [],
     };
@@ -120,15 +120,17 @@ function groundingB(p: Record<string, unknown>): CalcResult {
     );
   }
   const lim = numer / ig;
-  steps.push(`基準値 = ${numer} ÷ ${fmt(ig)} = ${fmt(lim, 1)}Ω`);
+  // shown cut down to 2 decimals (the safe side: a reading at the shown value always passes)
+  const limShown = (Math.floor(tidy(lim) * 100) / 100).toLocaleString("ja-JP", { maximumFractionDigits: 2 });
+  steps.push(`基準値 = ${numer} ÷ ${fmt(ig)} = ${limShown}Ω${tidy(lim * 100) % 1 ? "（小数第3位以下は切り捨て）" : ""}`);
   const hasM = has(p, "measured");
   const m = hasM ? num(p, gnd.measured) : null;
   const ok = m === null ? null : m <= lim;
-  if (m !== null) steps.push(`測定値: ${fmt(m)}Ω`);
+  if (m !== null) steps.push(`測定値: ${fmtVs(m, lim, 1)[0]}Ω`);
   return {
     title: "B種接地工事の接地抵抗",
     ok,
-    verdict: m === null ? `基準値 ${fmt(lim, 1)}Ω以下（${numer}／Ig、Ig = ${fmt(ig)}A）` : `${ok ? "合格" : "不合格"}（測定 ${fmtVs(m!, lim, 1)[0]}Ω ${ok ? "≦" : "＞"} 基準 ${fmtVs(m!, lim, 1)[1]}Ω）`,
+    verdict: m === null ? `基準値 ${limShown}Ω以下（${numer}／Ig、Ig = ${fmt(ig)}A）` : `${ok ? "合格" : "不合格"}（測定 ${fmtVs(m!, lim, 1)[0]}Ω ${ok ? "≦" : "＞"} 基準 ${fmtVs(m!, lim, 1)[1]}Ω）`,
     steps,
     basis: [
       { lawId: "kaishaku-17", quote: "2 B種接地工事は、次の各号によること。" },
@@ -172,7 +174,7 @@ export const support: Calc = {
       title: `${s.label}の支持間隔`,
       ok,
       verdict: x === null ? `${s.limit}m以下` : `${ok ? "OK" : "NG"}（予定 ${fmtVs(x, s.limit)[0]}m ${ok ? "≦" : "＞"} 上限 ${fmtVs(x, s.limit)[1]}m）`,
-      steps: [`種類: ${s.label}`, `上限: ${s.limit}m以下`, ...(x === null ? [] : [`予定: ${fmt(x)}m`])],
+      steps: [`種類: ${s.label}`, `上限: ${s.limit}m以下`, ...(x === null ? [] : [`予定: ${fmtVs(x, s.limit)[0]}m`])],
       basis: [...s.basis],
       notes: [
         "ボックスとの接続点・管端・管相互の接続点の近くでも支持・固定します。",

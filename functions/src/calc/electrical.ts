@@ -1,4 +1,4 @@
-import { Basis, Calc, CalcInputError, Field, flag, fmt, fmtVs, num, pick } from "./types";
+import { Basis, Calc, CalcInputError, Field, flag, fmt, fmtVs, num, pick, tidy } from "./types";
 
 // ---------- 電線の種類と太さ ----------
 // IV は電技解釈 第146条の表で計算し、CV・CVT はメーカー公表の許容電流（JCS 0168-2 による）を使う。
@@ -94,7 +94,7 @@ export function ampsOf(t: WireType, s: string, c: Conditions): { amps: number; s
     if (!row) throw new CalcInputError("この太さは表の範囲外です");
     const k = Math.sqrt((IV_T - theta) / 30);
     const r = c.inConduit > 0 ? reductionFactor(c.inConduit) : 1;
-    const amps = row[2] * k * r;
+    const amps = tidy(row[2] * k * r); // 48 × 1 × 0.7 must be 33.6, not 33.599999…
     return {
       amps,
       source: `電技解釈 第146条${c.inConduit > 0 ? `・同一管内${c.inConduit}本` : "・管に入れない"}・周囲${theta}℃`,
@@ -118,7 +118,7 @@ export function ampsOf(t: WireType, s: string, c: Conditions): { amps: number; s
   const temps = c.install === "air" ? TEMP_AIR : TEMP_GROUND;
   const row = theta <= temps[0][0] ? temps[0] : temps.find(([deg]) => deg >= theta);
   if (!row) throw new CalcInputError("周囲温度が表の範囲（50℃まで）を超えています");
-  const amps = base * row[1];
+  const amps = tidy(base * row[1]);
   const how = tb[c.install];
   const place = INSTALL[c.install].label.replace(/（.*）/, "");
   return {
@@ -173,7 +173,7 @@ export function thinnest(t: WireType, n: number, c: Conditions, current: number,
   for (const s of TYPES[t].sizes) {
     let a: number;
     try {
-      a = ampsOf(t, s, c).amps * n;
+      a = tidy(ampsOf(t, s, c).amps * n);
     } catch {
       continue;
     }
@@ -220,7 +220,7 @@ export const voltageDrop: Calc = {
     const pct = (e / V) * 100;
     const limit = dropLimit(L);
     const amp = ampsOf(t, s, c);
-    const allowed = amp.amps * n;
+    const allowed = tidy(amp.amps * n);
     const ampOk = I <= allowed;
     const dropOk = pct <= limit;
     const ok = ampOk && dropOk;
@@ -272,7 +272,7 @@ export const ampacity: Calc = {
   run(p) {
     const { t, s, n, c } = readWire(p);
     const a = ampsOf(t, s, c);
-    const allowed = a.amps * n;
+    const allowed = tidy(a.amps * n);
     const load = given(p, "load") ? num(p, amp.load) : null;
     const ok = load === null ? null : load <= allowed;
     return {

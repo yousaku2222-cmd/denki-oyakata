@@ -45,8 +45,12 @@ export function Talk({
   const [name, setNameState] = useState(getName("veteran"));
   const [published, setPublished] = useState(false);
   const [status, setStatus] = useState<"draft" | "published" | "private">("draft");
+  const [savedStatus, setSavedStatus] = useState<"published" | "private">("published");
+  // the card as last saved on the server (a new draft is saved when made): only changes since then would be lost
+  const [saved, setSaved] = useState("");
+  const snapshot = JSON.stringify([draft, tagsText, showName, name]);
 
-  const dirty = !published && (turns.length > 0 || !!text.trim() || !!draft);
+  const dirty = !published && (draft ? snapshot !== saved : turns.length > 0 || !!text.trim());
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
 
   // opened from わたしのカード: go on with a draft (or fix a published card)
@@ -60,6 +64,7 @@ export function Talk({
         setTagsText(r.draft.tags.join("、"));
         setShowName(r.showAuthorName);
         if (r.authorName) setNameState(r.authorName);
+        setSaved(JSON.stringify([r.draft, r.draft.tags.join("、"), r.showAuthorName, r.authorName || name]));
         if (r.topic) setTopic({ questionId: "", ...r.topic });
       })
       .catch((e) => setErr(errorText(e, "カードを開けませんでした。もう一度お試しください。")))
@@ -96,6 +101,7 @@ export function Talk({
         setCardId(d.cardId);
         setDraft(d.draft);
         setTagsText(d.draft.tags.join("、"));
+        setSaved(JSON.stringify([d.draft, d.draft.tags.join("、"), showName, name]));
       }
     } catch (e) {
       setErr(errorText(e, "うまく送れませんでした。もう一度お試しください。"));
@@ -110,12 +116,14 @@ export function Talk({
     setErr("");
     try {
       setName("veteran", name);
-      await call("publishCard", {
+      const r = await call<{ status?: "published" | "private" }>("publishCard", {
         cardId,
         authorName: name,
         showAuthorName: showName,
         edits: { ...draft, tags: tagsText.split(/[、,\s]+/).filter(Boolean) },
       });
+      // what the card is now (it may have been made public or hidden from わたしのカード meanwhile)
+      setSavedStatus(r.status ?? "published");
       setPublished(true);
     } catch (e) {
       setErr(errorText(e, "保存できませんでした。題名とやり方が入っているか、長すぎないか確かめてください。"));
@@ -128,8 +136,8 @@ export function Talk({
     return (
       <section className="screen center">
         <div className="big-emoji">🗂️</div>
-        <h1 className="screen-title">{status === "private" ? "直しました（非公開のまま）" : status === "published" ? "直しました" : "知恵袋に入りました"}</h1>
-        {status !== "private" && <p>若手が聞けば、あなたの話が答えに出てきます。{status === "draft" && topic && `${topic.askerName}さんにも届きます。`}</p>}
+        <h1 className="screen-title">{savedStatus === "private" ? "直しました（非公開のまま）" : status === "draft" ? "知恵袋に入りました" : "直しました"}</h1>
+        {savedStatus !== "private" && <p>若手が聞けば、あなたの話が答えに出てきます。{status === "draft" && topic && `${topic.askerName}さんにも届きます。`}</p>}
         <button className="primary" onClick={onDone}>
           続けて話す
         </button>
@@ -138,10 +146,12 @@ export function Talk({
   }
 
   if (draft) {
+    // the same limits as the server (functions/src/interview.ts CARD_LIMITS)
+    const MAX: Record<string, number> = { title: 60, scene: 500, body: 1500, reason: 1000, caution: 1000 };
     const field = (key: keyof Draft, label: string, rows = 2) => (
       <label className="field">
         <span>{label}</span>
-        <textarea rows={rows} value={draft[key] as string} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
+        <textarea rows={rows} maxLength={MAX[key]} value={draft[key] as string} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
       </label>
     );
     return (
@@ -151,7 +161,7 @@ export function Talk({
           {status === "draft"
             ? "中身を確かめてください。直してから公開できます。公開するまで、誰にも見えません。"
             : status === "private"
-              ? "非公開のカードです。直しても非公開のままです（公開は「わたしのカード」から）。"
+              ? "非公開のカードです。直しても非公開のままです（保存してから「わたしのカード」で公開できます）。"
               : "公開中のカードです。直すと、すぐに答えにも反映されます。"}
         </p>
         {field("title", "一言でいうと", 1)}
@@ -168,7 +178,7 @@ export function Talk({
           <label className="radio">
             <input type="radio" checked={showName} onChange={() => setShowName(true)} /> 名前を出す
           </label>
-          {showName && <input placeholder="例: 山田（親方）" value={name} onChange={(e) => setNameState(e.target.value)} />}
+          {showName && <input placeholder="例: 山田（親方）" maxLength={30} value={name} onChange={(e) => setNameState(e.target.value)} />}
           <label className="radio">
             <input type="radio" checked={!showName} onChange={() => setShowName(false)} /> 出さない（「社内のベテラン」と表示）
           </label>

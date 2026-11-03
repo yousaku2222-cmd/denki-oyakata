@@ -20,6 +20,7 @@ export function Me() {
 
   // read through Functions (questions are not readable from the screen: they carry device ids and photos)
   const load = useCallback(() => {
+    setErr("");
     call<{ questions: Q[] }>("myQuestions", {})
       .then((r) => setItems(r.questions))
       .catch((e) => setErr(errorText(e, "質問を読み込めませんでした。電波の良い所で、ページを開き直してください。")));
@@ -43,7 +44,7 @@ export function Me() {
         />
       </label>
       <div className="stat">
-        <span className="stat-num">{born}</span>
+        <span className="stat-num">{items === null ? "—" : born}</span>
         <span>枚の知恵カードが、あなたの質問から生まれました</span>
       </div>
       <h2 className="sub">親方に聞いた質問</h2>

@@ -120,7 +120,7 @@ test("cable rack: width search, one row per tier", () => {
 test("grounding B: 150/Ig, Ig by formula 17-2", () => {
   // 6.6kV, overhead 0, cable 10km: V'=6, (6/3×10 −1)/2 = 9.5 → 1+9.5 = 10.5 → 11A → 150/11 = 13.6Ω
   const r = grounding.run({ type: "B", cutoff: "none", kv: 6.6, overhead: 0, cableLen: 10 });
-  assert.match(r.verdict, /^基準値 13\.6Ω以下/);
+  assert.match(r.verdict, /^基準値 13\.63Ω以下/); // 150/11 = 13.636… shown cut down
   assert.equal(grounding.run({ type: "B", cutoff: "le1", ig: 10, measured: 50 }).ok, true); // 600/10 = 60Ω
   assert.equal(grounding.run({ type: "B", cutoff: "none", ig: 10, measured: 16 }).ok, false); // 15Ω
   basisOk(r);
@@ -183,4 +183,19 @@ test("the figures in a verdict never contradict it", () => {
   assert.match(insulation.run({ voltage: "le150", measured: 0.0999 }).verdict, /0\.0999MΩ ＜ 基準 0\.1MΩ/);
   assert.match(grounding.run({ type: "C", measured: 10.004 }).verdict, /10\.004Ω ＞ 基準 10Ω/);
   assert.match(engineer.run({ prime: true, subTotal: 4999.99, contract: 1 }).steps[0], /4,999\.99万円/);
+});
+
+test("exact limits pass: no floating-point noise in a verdict", () => {
+  // IV 2.6mm in a conduit: 48 × 1 × 0.7 = 33.6A exactly
+  assert.equal(ampacity.run({ wireType: "IV", size: "2.6", inConduit: 3, load: 33.6 }).ok, true);
+  assert.match(voltageDrop.run({ system: "single2", length: 10, current: 33.6, wireType: "IV", size: "2.6", inConduit: 3 }).steps.join("\n"), /33\.6A ≧ 負荷 33\.6A … ○/);
+  // VE16 (18mm) with 8 × IV 2.0 (3.6mm) is exactly 32%
+  const r = conduitFill.run({ conduitType: "VE", conduitSize: "16", wire1: "IV-2.0", count1: 8 });
+  assert.equal(r.ok, true, r.verdict);
+  assert.match(conduitFill.run({ conduitType: "VE", conduitSize: "16", wire1: "IV-2.0", maxCount: true }).verdict, /^8本まで/);
+  // B種: the limit is shown cut down, and the shown figures agree with the verdict
+  assert.match(grounding.run({ type: "B", cutoff: "none", ig: 7 }).verdict, /^基準値 21\.42Ω以下/);
+  assert.match(grounding.run({ type: "B", cutoff: "none", ig: 7, measured: 21.42 }).verdict, /^合格（測定 21\.42Ω ≦/);
+  assert.match(grounding.run({ type: "C", measured: 10.0000001 }).verdict, /10\.0000001Ω ＞ 基準 10Ω/);
+  assert.ok(insulation.run({ voltage: "le150", measured: 0.0999 }).steps.includes("測定値: 0.0999MΩ"));
 });

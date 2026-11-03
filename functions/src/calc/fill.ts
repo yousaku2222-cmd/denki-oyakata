@@ -1,5 +1,5 @@
 import { CONDUITS, WIRES } from "./conduitData";
-import { Calc, CalcInputError, Field, fmt, num, pick } from "./types";
+import { Calc, CalcInputError, Field, fmt, fmtVs, num, pick, tidy } from "./types";
 
 // 占有率 = 電線の断面積の合計 ÷ 管の内断面積。平形（VVF）は長径×短径の長方形で数える。
 // 基準（内線規程の考え方。本文は載せない）: 管の曲がりが少なく短い、電線を楽に引き入れ・引き替えできる配管は48%以下、
@@ -60,7 +60,7 @@ export const conduitFill: Calc = {
     const mixed = new Set(wires.map((w) => w.key)).size > 1;
     const limit = route.limit;
 
-    const rows = Object.entries(conduit.sizes).map(([size, inner]) => ({ size: Number(size), inner, pct: (total / conduitArea(inner)) * 100 }));
+    const rows = Object.entries(conduit.sizes).map(([size, inner]) => ({ size: Number(size), inner, pct: tidy((total / conduitArea(inner)) * 100) })); // exactly 32% must pass, not 32.0000001%
     const wanted = p.conduitSize === undefined || p.conduitSize === null || p.conduitSize === "" ? null : num(p, f.conduitSize);
     const target = wanted === null ? rows.find((r) => r.pct <= limit) : rows.find((r) => r.size === wanted);
     if (wanted !== null && !target) throw new CalcInputError(`${conduit.label}に呼び${wanted}はありません（${rows.map((r) => r.size).join("・")}）`);
@@ -70,7 +70,7 @@ export const conduitFill: Calc = {
       ...list.map((w) => `${w.label}: ${w.long ? `${w.long}×${w.short}mm（平形）` : `外径${w.d}mm`} → ${fmt(wireArea(w), 1)}mm² × ${w.count}本`),
       `電線の断面積の合計: ${fmt(total, 1)}mm²`,
       `基準: ${route.label} → ${limit}%以下`,
-      ...rows.map((r) => `${conduit.short}${r.size}（内径${r.inner}mm）: ${fmt(r.pct, 1)}%${r.pct <= limit ? " ○" : " ×"}`),
+      ...rows.map((r) => `${conduit.short}${r.size}（内径${r.inner}mm）: ${fmtVs(r.pct, limit, 1)[0]}%${r.pct <= limit ? " ○" : " ×"}`),
     ];
     const figureWires = list.map((w) => ({ label: w.label, diameter: w.long && w.short ? Math.sqrt((4 * w.long * w.short) / Math.PI) : w.d!, count: w.count }));
 
@@ -89,7 +89,7 @@ export const conduitFill: Calc = {
     if (wanted !== null && !mixed) {
       // how many of this one wire fit in the chosen conduit
       const one = wireArea(list[0]);
-      const max = Math.floor(((limit / 100) * conduitArea(target.inner)) / one);
+      const max = Math.floor(tidy(((limit / 100) * conduitArea(target.inner)) / one));
       extra.push(`${conduit.short}${target.size}に ${list[0].label} は ${max}本まで（${limit}%）`);
     }
     return {
@@ -97,8 +97,8 @@ export const conduitFill: Calc = {
       ok,
       verdict:
         wanted === null
-          ? `${conduit.short}${target.size} 以上（占有率 ${fmt(target.pct, 1)}% ≦ ${limit}%）`
-          : `${ok ? "入ります" : "入りません"}（${conduit.short}${target.size}: ${fmt(target.pct, 1)}% ${ok ? "≦" : "＞"} ${limit}%）`,
+          ? `${conduit.short}${target.size} 以上（占有率 ${fmtVs(target.pct, limit, 1)[0]}% ≦ ${limit}%）`
+          : `${ok ? "入ります" : "入りません"}（${conduit.short}${target.size}: ${fmtVs(target.pct, limit, 1)[0]}% ${ok ? "≦" : "＞"} ${limit}%）`,
       steps: [...steps, ...extra],
       basis: [],
       notes: notes(),
@@ -123,9 +123,9 @@ function maxCount(p: Record<string, unknown>, conduit: (typeof CONDUITS)[string]
   const w = WIRES[pick<string>(p, f.wire1)];
   const one = wireArea(w);
   const LIMIT = route.limit;
-  const max = Math.floor(((LIMIT / 100) * conduitArea(inner)) / one);
+  const max = Math.floor(tidy(((LIMIT / 100) * conduitArea(inner)) / one));
   const other = route === ROUTES.long ? ROUTES.easy : ROUTES.long;
-  const maxOther = Math.floor(((other.limit / 100) * conduitArea(inner)) / one);
+  const maxOther = Math.floor(tidy(((other.limit / 100) * conduitArea(inner)) / one));
   return {
     title: `${conduit.short}${size}に入る${w.label}の本数（${route.label}）`,
     ok: null,

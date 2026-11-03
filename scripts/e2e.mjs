@@ -106,6 +106,18 @@ catch (e) { check("transfer code works once", /NOT_FOUND|not-found/.test(String(
 try { await call("setCardStatus", { cardId: d.cardId, status: "private" }, vet); check("old phone no longer owns the cards", false); }
 catch (e) { check("old phone no longer owns the cards", /permission-denied|PERMISSION_DENIED/.test(String(e))); }
 
+// 7b. A refused edit (too long) does not use up the day's publications.
+const longVet = await signUp();
+const ld = await call("draftCard", { transcript: [{ role: "veteran", text: "（テスト）" + "長い話。".repeat(450) }] }, longVet);
+check("drafts are cut to what can be published", ld.draft.body.length <= 1500, `body=${ld.draft.body.length}`);
+let refused = 0;
+for (let i = 0; i < 12; i++) {
+  try { await call("publishCard", { cardId: ld.cardId, edits: { ...ld.draft, body: "長".repeat(1501) } }, longVet); }
+  catch (e) { if (/INVALID_ARGUMENT/.test(String(e))) refused++; }
+}
+await call("publishCard", { cardId: ld.cardId, edits: ld.draft }, longVet);
+check("refused publishes do not use up the cap", refused === 12);
+
 // 8. The question box has its own daily cap per device (it costs no Claude call, but every veteran downloads it).
 const spammer = await signUp();
 let accepted = 0;

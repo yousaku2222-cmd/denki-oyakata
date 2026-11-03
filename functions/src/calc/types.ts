@@ -83,13 +83,16 @@ const round = (n: number, digits: number) => Number(`${Math.round(Number(`${n}e$
  * A value and the limit it was compared with, shown so the figures never contradict the verdict:
  * when rounding would make them look equal ("0.1MΩ ＜ 0.1MΩ"), more digits are shown.
  */
+/** Drops floating-point noise (35 × 0.96 = 33.599999…) before a value is compared with a limit. */
+export const tidy = (n: number) => Math.round(n * 1e9) / 1e9;
+
 export function fmtVs(x: number, limit: number, digits = 2): [string, string] {
   for (let d = digits; d <= 6; d++) {
     const a = fmt(x, d);
     const b = fmt(limit, d);
     if (a !== b || x === limit) return [a, b];
   }
-  return [fmt(x, 6), fmt(limit, 6)]; // equal to 6 digits: show them as equal (the verdict uses ≦ / ≧ then)
+  return [String(x), String(limit)]; // they differ beyond 6 digits: show every digit rather than "10 ＞ 10"
 }
 
 export const fmt = (n: number, digits = 2) => (Number.isFinite(round(n, digits)) ? round(n, digits) : Number(n.toFixed(digits))).toLocaleString("ja-JP", { maximumFractionDigits: digits });

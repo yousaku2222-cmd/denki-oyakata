@@ -64,6 +64,20 @@ const DRAFT_SYSTEM = `電気工事のベテランの話を「知恵カード」�
 - tags: 検索用。部材や工具の別名・現場の呼び名・略称（例: PF管→「PF」「合成樹脂可とう電線管」）を5〜10個
 - relatedLaws: ベテランが法令・基準に触れた場合だけ、その名前（例「電技解釈 第158条」）。推測で足さない`;
 
+// What a published card may hold (publishCard checks these; drafts are cut to fit so they can be published).
+export const CARD_LIMITS = { title: 60, scene: 500, body: 1500, reason: 1000, caution: 1000, tags: 15, tag: 30 } as const;
+function fitDraft(d: Draft): Draft {
+  return {
+    ...d,
+    title: d.title.slice(0, CARD_LIMITS.title),
+    scene: d.scene.slice(0, CARD_LIMITS.scene),
+    body: d.body.slice(0, CARD_LIMITS.body),
+    reason: d.reason.slice(0, CARD_LIMITS.reason),
+    caution: d.caution.slice(0, CARD_LIMITS.caution),
+    tags: d.tags.map((x) => x.trim().slice(0, CARD_LIMITS.tag)).filter(Boolean).slice(0, CARD_LIMITS.tags),
+  };
+}
+
 function dummyDraft(t: Turn[]): Draft {
   const v = t.filter((x) => x.role === "veteran").map((x) => x.text);
   return {
@@ -115,6 +129,8 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
     draft = dummyDraft(transcript);
   }
 
+  draft = fitDraft(draft);
+
   let triggerAskerName: string | null = null;
   let triggerQuestionText: string | null = null;
   if (triggerQuestionId) {
@@ -128,7 +144,7 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
   const card: CardDoc = {
     companyId: COMPANY,
     ...draft,
-    tags: draft.tags.slice(0, 15),
+    tags: draft.tags,
     authorName,
     showAuthorName: true,
     status: "draft",
@@ -171,29 +187,35 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
   const authorId = uid;
   const e = (data.edits ?? {}) as Record<string, unknown>;
   const { ref, card } = await ownCard(cardId, authorId);
+  // check every field first: a refused edit must not use up a publication
+  const fields = {
+    title: str(e.title, "題名", CARD_LIMITS.title),
+    scene: str(e.scene, "場面", CARD_LIMITS.scene, false),
+    body: str(e.body, "やり方・コツ", CARD_LIMITS.body),
+    reason: str(e.reason, "理由・失敗", CARD_LIMITS.reason, false),
+    caution: str(e.caution, "新人が間違えること", CARD_LIMITS.caution, false),
+    tags: strList(e.tags, "探す時の言葉", CARD_LIMITS.tags, CARD_LIMITS.tag), // a short list: long ones would match every question
+  };
+  const nameIn = str(data.authorName, "名前", 30, false);
   // Anyone can act as a veteran (no login by design), so first publications per device are capped.
   if (card.status === "draft") await takeQuota(authorId, "publish", ctx?.ip);
   const privRef = db.collection("cardPrivate").doc(cardId);
   const priv = await privRef.get();
-  const authorName = str(data.authorName, "authorName", 30, false) || (priv.get("authorName") as string | undefined) || card.authorName;
+  const authorName = nameIn || (priv.get("authorName") as string | undefined) || card.authorName;
   const showAuthorName = data.showAuthorName !== false;
   // The card itself is public: keep the name out of it unless the veteran chose to show it.
   const shownName = showAuthorName ? authorName : "";
   const now = Timestamp.now();
+  const newStatus: CardDoc["status"] = card.status === "private" ? "private" : "published";
 
   // a card from before cardPrivate: its interview moves out of the public card here
   await privRef.set({ authorId, authorName, ...(card.transcript?.length ? { transcript: card.transcript } : {}) }, { merge: true });
   await ref.update({
-    title: str(e.title, "title", 60),
-    scene: str(e.scene, "scene", 500, false),
-    body: str(e.body, "body", 1500),
-    reason: str(e.reason, "reason", 1000, false),
-    caution: str(e.caution, "caution", 1000, false),
-    tags: strList(e.tags, "tags", 15, 30), // a short list: long ones would match every question
+    ...fields,
     authorName: shownName,
     showAuthorName,
     // editing a hidden card keeps it hidden; a draft or a published card is (re)published
-    status: card.status === "private" ? "private" : "published",
+    status: newStatus,
     // only the shown name and the time: no device id on a public card (it would link hidden-name cards)
     confirmations: [{ name: shownName, at: now }],
     authorId: FieldValue.delete(), // cards from before cardPrivate carried it
@@ -211,7 +233,7 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
       await db.collection("users").doc(askerId).set({ answeredFromMyQuestions: FieldValue.increment(1) }, { merge: true });
     }
   }
-  return { ok: true };
+  return { ok: true, status: newStatus };
 }
 
 export async function setCardStatus(data: Record<string, unknown>, uid: string) {

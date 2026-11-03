@@ -44,12 +44,12 @@
 |---|---|---|
 | question / interpretedAs | string | 原文と「こう受け取りました」 |
 | sentences | Sentence[] | 一文ずつ |
-| grounded | boolean | 法令か知恵の根拠が1つ以上あるか |
+| grounded | boolean | 法令・知恵・計算（プログラム）の根拠が1つ以上あるか |
 | usedCardIds / usedLawIds | string[] | |
 | helped | boolean | 若手が「助かった」を押したか |
 | askerId / askerRole | string | |
 | mode | 'claude'\|'dummy' | |
-| models | {router?, answer?} | 使ったモデル |
+| models | {router?, calc?, answer?} | 使ったモデル（calc は計算を選ぶ時） |
 | createdAt | Timestamp | |
 
 `Sentence = { text, source: 'law'|'wisdom'|'general', cardId?, lawId?, quote?, verified?: boolean }`

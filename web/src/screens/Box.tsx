@@ -33,7 +33,10 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
 
   function good(q: Q) {
     setItems((list) => list?.map((x) => (x.id === q.id ? { ...x, good: true } : x)) ?? null);
-    call("markGoodQuestion", { questionId: q.id }).catch(() => setItems((list) => list?.map((x) => (x.id === q.id ? { ...x, good: false } : x)) ?? null));
+    call("markGoodQuestion", { questionId: q.id }).catch((e) => {
+      setItems((list) => list?.map((x) => (x.id === q.id ? { ...x, good: false } : x)) ?? null);
+      setErr(errorText(e, "「いい質問」を送れませんでした。もう一度お試しください。"));
+    });
   }
 
   function openPhoto(q: Q) {
@@ -62,7 +65,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
               ) : photos[q.id] ? (
                 <img className="photo-preview" src={photos[q.id]!} alt="若手が撮った写真" />
               ) : (
-                <p className="hint error">写真を読み込めませんでした。</p>
+                <p className="hint">写真はありません（または読み込めませんでした）。</p>
               )
             ) : (
               <button className="link" onClick={() => openPhoto(q)}>

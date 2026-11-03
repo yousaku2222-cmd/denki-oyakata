@@ -55,7 +55,17 @@ export async function useTransferCode(data: Record<string, unknown>, uid: string
   const legacy = await db.collection("cards").where("companyId", "==", COMPANY).where("authorId", "==", from).get();
   for (const d of legacy.docs) {
     const c = d.data();
-    await db.collection("cardPrivate").doc(d.id).set({ authorId: uid, authorName: c.authorName ?? "", ...(c.transcript?.length ? { transcript: c.transcript } : {}) }, { merge: true });
+    // never overwrite what cardPrivate already holds: a hidden card's public authorName is "", its real name is there
+    const privRef = db.collection("cardPrivate").doc(d.id);
+    const priv = await privRef.get();
+    await privRef.set(
+      {
+        authorId: uid,
+        ...(c.authorName && !priv.get("authorName") ? { authorName: c.authorName } : {}),
+        ...(c.transcript?.length && !(priv.get("transcript") ?? []).length ? { transcript: c.transcript } : {}),
+      },
+      { merge: true },
+    );
     await d.ref.update({ authorId: FieldValue.delete(), confirmations: ((c.confirmations ?? []) as { name: string; at: unknown }[]).map(({ name, at }) => ({ name: c.showAuthorName === false ? "" : name, at })), ...(c.showAuthorName === false ? { authorName: "" } : {}), transcript: [] });
   }
   const cards = new Set([...privSnap.docs.map((d) => d.id), ...legacy.docs.map((d) => d.id)]).size;

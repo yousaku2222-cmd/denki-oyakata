@@ -57,28 +57,28 @@ export interface CardDoc {
 // --- input checks (callable data is untrusted) ---
 export function str(v: unknown, name: string, max = 2000, required = true): string {
   if (v === undefined || v === null || v === "") {
-    if (required) throw new HttpsError("invalid-argument", `${name} is required`);
+    if (required) throw new HttpsError("invalid-argument", `${name}を入れてください`);
     return "";
   }
-  if (typeof v !== "string") throw new HttpsError("invalid-argument", `${name} must be a string`);
+  if (typeof v !== "string") throw new HttpsError("invalid-argument", `${name}の形式が違います`);
   const s = v.trim();
-  if (s.length > max) throw new HttpsError("invalid-argument", `${name} is too long`);
-  if (required && !s) throw new HttpsError("invalid-argument", `${name} is required`);
+  if (s.length > max) throw new HttpsError("invalid-argument", `${name}が長すぎます（${max}字まで）`);
+  if (required && !s) throw new HttpsError("invalid-argument", `${name}を入れてください`);
   return s;
 }
 
 export function strList(v: unknown, name: string, maxItems = 20, maxLen = 60): string[] {
   if (v === undefined || v === null) return [];
-  if (!Array.isArray(v) || v.length > maxItems) throw new HttpsError("invalid-argument", `${name} is invalid`);
+  if (!Array.isArray(v) || v.length > maxItems) throw new HttpsError("invalid-argument", `${name}は${maxItems}個までです`);
   return v.map((x) => str(x, name, maxLen)).filter(Boolean);
 }
 
 export function turns(v: unknown): Turn[] {
-  if (!Array.isArray(v) || v.length === 0 || v.length > 20) throw new HttpsError("invalid-argument", "transcript is invalid");
+  if (!Array.isArray(v) || v.length === 0 || v.length > 20) throw new HttpsError("invalid-argument", "やりとりが長すぎるか、空です");
   return v.map((t) => {
     const role = (t as Turn)?.role;
     if (role !== "veteran" && role !== "ai") throw new HttpsError("invalid-argument", "transcript role is invalid");
-    return { role, text: str((t as Turn).text, "transcript text", 3000) };
+    return { role, text: str((t as Turn).text, "話した内容", 3000) };
   });
 }
 

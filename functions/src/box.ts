@@ -23,6 +23,7 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
     excludeVeteranId: askerRole === "veteran" ? askerId : null,
     photoUrl: null,
     photo: photo || null,
+    hasPhoto: !!photo, // so the list can say so without reading the photo
     status: "open",
     goodBy: [],
     answeredCardId: null,
@@ -50,7 +51,13 @@ const ms = (t: Timestamp | null | undefined) => t?.toMillis() ?? 0;
 
 /** Open questions for a veteran (newest first, without photos; not the veteran's own). */
 export async function openQuestions(_data: Record<string, unknown>, uid: string) {
-  const snap = await db.collection("questions").where("companyId", "==", COMPANY).where("status", "==", "open").get();
+  // only the small fields: the photos (up to 300KB each) stay in Firestore until one is opened
+  const snap = await db
+    .collection("questions")
+    .where("companyId", "==", COMPANY)
+    .where("status", "==", "open")
+    .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "createdAt", "hasPhoto")
+    .get();
   const list = snap.docs
     .filter((d) => d.get("excludeVeteranId") !== uid)
     .sort((a, b) => ms(b.get("createdAt")) - ms(a.get("createdAt")));
@@ -61,7 +68,7 @@ export async function openQuestions(_data: Record<string, unknown>, uid: string)
       text: d.get("text") as string,
       askerName: (d.get("askerName") as string) || "若手",
       askerRole: d.get("askerRole") as string,
-      hasPhoto: !!d.get("photo"),
+      hasPhoto: d.get("hasPhoto") !== false, // questions from before the flag: offer to look
       good: ((d.get("goodBy") as string[] | undefined) ?? []).includes(uid),
       createdAt: ms(d.get("createdAt")),
     })),
@@ -72,7 +79,7 @@ export async function openQuestions(_data: Record<string, unknown>, uid: string)
 export async function questionPhoto(data: Record<string, unknown>) {
   const q = await db.collection("questions").doc(str(data.questionId, "questionId", 64)).get();
   if (!q.exists || q.get("companyId") !== COMPANY) throw new HttpsError("not-found", "質問が見つかりません。");
-  return { photo: (q.get("photo") as string | null) ?? null };
+  return { photo: (q.get("photo") as string | null) || null };
 }
 
 /** The questions this device asked, and the card that answered each. */

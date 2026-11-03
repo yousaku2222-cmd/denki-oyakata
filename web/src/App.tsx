@@ -74,7 +74,7 @@ export default function App() {
         <button className="icon-btn" aria-label="明るさの切り替え" onClick={toggleTheme}>
           ◐
         </button>
-        <button className="icon-btn" onClick={() => choose(null)}>
+        <button className="icon-btn" onClick={() => (!talkDirty || confirm("「話す」で話している途中の内容は消えます。切り替えますか？")) && choose(null)}>
           切替
         </button>
       </header>

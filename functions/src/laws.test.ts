@@ -64,3 +64,30 @@ test("a wisdom sentence may not carry numbers its card does not have", () => {
   );
   assert.deepEqual(out.map((s) => s.source), ["wisdom", "general"]);
 });
+
+import { numbersMissing } from "./laws";
+test("numbers are compared as values, not as look-alike words", () => {
+  const text = (id: string) => LAWS.find((l) => l.id === id)!.text;
+  const cases: [string, string, string[]][] = [
+    // article references are places, not values
+    ["電気工事士法施行令第1条第4号により、二次電圧36V以下の小型変圧器の二次側配線工事は軽微な工事です。", text("335CO0000000260-1"), []],
+    // item numbers at the start of a line (一 電圧六百ボルト…)
+    ["600V以下で使う電力量計の取付けは軽微な工事です。", text("335CO0000000260-1"), []],
+    // words that look like numbers stay words, also on the source side (十分 in 第145条 is not 10)
+    ["10cm以上離します。", text("kaishaku-145"), ["10"]],
+    ["十分に注意してください。", "注意すること", []],
+    // but inside real numbers they are numbers
+    ["コーキングは30分待ってから通線する", "コーキングは三十分待ってから通線する", []],
+    ["1時間おきに見回る", "一時間おきに見回る", []],
+    // digits with 千・百: 5千万円 = 5,000万円 = 五千万円
+    ["下請代金の合計が5千万円以上なら特定建設業の許可が要ります。", text("331CO0000000273-2"), []],
+    ["4千5百万円以上", text("331CO0000000273-27"), []],
+    ["5,000円の部材", "5千円の部材", []],
+    // counters and letters after kanji numbers
+    ["単相3線式の中性線", "単相三線式の中性線", []],
+    ["20Aのブレーカ", "二十Aのブレーカ", []],
+    // a number the article really lacks is still caught
+    ["三相200Vの電動機回路は0.2MΩ以上です。", text("409M50000400052-58"), ["200"]],
+  ];
+  for (const [t, src, missing] of cases) assert.deepEqual(numbersMissing(t, src), missing, t);
+});
