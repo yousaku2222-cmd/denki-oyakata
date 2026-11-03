@@ -33,14 +33,16 @@ export interface CardDoc {
   tags: string[];
   category: (typeof CATEGORIES)[number];
   location: (typeof LOCATIONS)[number];
-  authorId: string;
+  // who wrote it lives in cardPrivate (authorId): a public card must not link a hidden name to a named one.
+  // Cards published before that change may still carry authorId here (scripts/migrate-private.mjs moves it).
+  authorId?: string;
   authorName: string;
   showAuthorName: boolean;
   status: "draft" | "published" | "private";
   visibility: "company" | "region" | "national";
   region: string | null;
   powerCompany: string | null;
-  confirmations: { by: string; name: string; at: Timestamp }[];
+  confirmations: { name: string; at: Timestamp; by?: string }[]; // by: only on cards from before cardPrivate
   helpedCount: number;
   viewCount: number;
   triggerQuestionId: string | null;

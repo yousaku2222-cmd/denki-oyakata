@@ -178,3 +178,9 @@ test("branch circuit wire by 149-1表: 20A配線用遮断器 is 1.6mm, no condui
 test("conduit fill uses 電線1's default when the model leaves it out", () => {
   assert.match(conduitFill.run({ conduitType: "VE", conduitSize: 22 }).verdict, /^入ります/); // IV 2.0 ×3
 });
+
+test("the figures in a verdict never contradict it", () => {
+  assert.match(insulation.run({ voltage: "le150", measured: 0.0999 }).verdict, /0\.0999MΩ ＜ 基準 0\.1MΩ/);
+  assert.match(grounding.run({ type: "C", measured: 10.004 }).verdict, /10\.004Ω ＞ 基準 10Ω/);
+  assert.match(engineer.run({ prime: true, subTotal: 4999.99, contract: 1 }).steps[0], /4,999\.99万円/);
+});

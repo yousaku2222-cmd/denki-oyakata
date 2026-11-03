@@ -71,11 +71,23 @@ function kanjiBelowMan(run: string): string {
 // 万 stays a word (四千五百万 → 4500万), the way people write amounts ("4,500万円")
 const kanjiRunToNumber = (run: string) => run.split("万").map(kanjiBelowMan).join("万");
 
+// Words that only look like numbers (十分 = enough, 一般 = general …) stay words.
+const NOT_NUMBERS = /十分|一般|一部|一つ|一体|一緒|一番|一方|一定|一連|一括|一時|一旦|一応|一切|同一|統一|唯一|万一|万全|千葉|一度に|もう一度|一度も/g;
+// A kanji number counts only before a unit or counter (六百ボルト, 二箇所, 三以上), after 第 (第一種) or with a decimal part (〇・一).
+const UNIT_AFTER = /^(?:ボルト|キロボルト|メガオーム|オーム|アンペア|ミリメートル|センチメートル|メートル|キロメートル|平方|ミリ|センチ|キロワット|ワット|キロ|メガ|ヘルツ|パーセント|割|円|億|箇所|か所|カ所|ケ所|条|項|号|種|年|月|日|時間|分間|秒|倍|本|回|個|枚|台|人|度|℃|以上|以下|未満|を超え|分の)/;
+const KANJI_NUMBER = /(第)?([〇一二三四五六七八九十百千万]+)(?:・([〇一二三四五六七八九]+))?/g;
+
 /** e-Gov writes 六百ボルト and 〇・一メガオーム: turn those into 600 and 0.1 so they compare with "600V" and "0.1MΩ". */
 export function kanjiToArabic(s: string): string {
-  return s.replace(/([〇一二三四五六七八九十百千万]+)(?:・([〇一二三四五六七八九]+))?/g, (_, int: string, frac?: string) =>
-    `${kanjiRunToNumber(int)}${frac ? "." + [...frac].map((c) => KANJI_DIGITS.indexOf(c)).join("") : ""}`,
-  );
+  const kept: string[] = [];
+  const masked = s.replace(NOT_NUMBERS, (w) => `\u0000${kept.push(w) - 1}\u0000`);
+  return masked
+    .replace(KANJI_NUMBER, (all: string, dai: string | undefined, int: string, frac: string | undefined, at: number, whole: string) => {
+      // a number only after 第, with a decimal part, or before a unit or counter; otherwise a word
+      if (!dai && frac === undefined && !UNIT_AFTER.test(whole.slice(at + all.length))) return all;
+      return `${dai ?? ""}${kanjiRunToNumber(int)}${frac ? "." + [...frac].map((c) => KANJI_DIGITS.indexOf(c)).join("") : ""}`;
+    })
+    .replace(/\u0000(\d+)\u0000/g, (_, i: string) => kept[Number(i)]);
 }
 
 const plain = (s: string) => kanjiToArabic(s.normalize("NFKC")).replace(/(\d),(?=\d{3}(?!\d))/g, "$1");

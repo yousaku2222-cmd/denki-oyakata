@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { HttpsError } from "firebase-functions/v2/https";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COMPANY, db, str } from "./common";
 import { takeQuota } from "./limits";
 
@@ -14,9 +14,15 @@ const TTL_MS = 24 * 3600_000;
 export const newCode = () => Array.from({ length: CODE_LENGTH }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
 const normalizeCode = (s: string) => s.normalize("NFKC").toUpperCase().replace(/[^0-9A-Z]/g, "");
 
-export async function makeTransferCode(_data: Record<string, unknown>, uid: string) {
+export async function makeTransferCode(_data: Record<string, unknown>, uid: string, ctx?: { ip: string }) {
+  await takeQuota(uid, "transferMake", ctx?.ip);
   const code = newCode();
-  await db.collection("transfers").doc(code).set({ uid, createdAt: Timestamp.now(), expiresAt: Timestamp.fromMillis(Date.now() + TTL_MS) });
+  // one live code per device: a new code replaces the earlier ones
+  const old = await db.collection("transfers").where("uid", "==", uid).get();
+  const batch = db.batch();
+  for (const d of old.docs) batch.delete(d.ref);
+  batch.set(db.collection("transfers").doc(code), { uid, createdAt: Timestamp.now(), expiresAt: Timestamp.fromMillis(Date.now() + TTL_MS) });
+  await batch.commit();
   return { code, expiresInHours: TTL_MS / 3600_000 };
 }
 
@@ -43,11 +49,16 @@ export async function useTransferCode(data: Record<string, unknown>, uid: string
     tx.delete(ref); // one use only
     return old;
   });
-  const cards = await move("cards", "authorId", from, uid, (d) => ({
-    confirmations: ((d.confirmations ?? []) as { by: string }[]).map((c) => (c.by === from ? { ...c, by: uid } : c)),
-  }));
+  // the owner of a card is kept in cardPrivate; cards from before that kept it on the card: move those out too
   const privSnap = await db.collection("cardPrivate").where("authorId", "==", from).get();
   for (const d of privSnap.docs) await d.ref.update({ authorId: uid });
+  const legacy = await db.collection("cards").where("companyId", "==", COMPANY).where("authorId", "==", from).get();
+  for (const d of legacy.docs) {
+    const c = d.data();
+    await db.collection("cardPrivate").doc(d.id).set({ authorId: uid, authorName: c.authorName ?? "", ...(c.transcript?.length ? { transcript: c.transcript } : {}) }, { merge: true });
+    await d.ref.update({ authorId: FieldValue.delete(), confirmations: ((c.confirmations ?? []) as { name: string; at: unknown }[]).map(({ name, at }) => ({ name: c.showAuthorName === false ? "" : name, at })), ...(c.showAuthorName === false ? { authorName: "" } : {}), transcript: [] });
+  }
+  const cards = new Set([...privSnap.docs.map((d) => d.id), ...legacy.docs.map((d) => d.id)]).size;
   const questions = await move("questions", "askerId", from, uid, (d) => (d.excludeVeteranId === from ? { excludeVeteranId: uid } : {}));
   await move("answers", "askerId", from, uid);
   const user = await db.collection("users").doc(from).get();

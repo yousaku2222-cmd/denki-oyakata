@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
-import { COMPANY, db, myId } from "../firebase";
+import { useCallback, useEffect, useState } from "react";
+import { call, errorText } from "../firebase";
 import { getName, getParts, setName } from "../local";
 import { fmtDate } from "../components";
 import { Transfer } from "../Transfer";
@@ -9,42 +8,23 @@ interface Q {
   id: string;
   text: string;
   status: "open" | "answered";
-  answeredCardId: string | null;
-  createdAt: { toMillis(): number } | null;
+  answeredCardTitle: string | null;
+  createdAt: number;
 }
 
 export function Me() {
   const [items, setItems] = useState<Q[] | null>(null);
-  const [titles, setTitles] = useState<Record<string, string>>({});
+  const [err, setErr] = useState("");
   const [name, setNameState] = useState(getName("young"));
   const [parts] = useState(getParts);
 
-  useEffect(
-    () =>
-      onSnapshot(
-        query(collection(db, "questions"), where("companyId", "==", COMPANY), where("askerId", "==", myId())),
-        (snap) =>
-          setItems(
-            snap.docs
-              .map((d) => ({ id: d.id, ...(d.data() as Omit<Q, "id">) }))
-              .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)),
-          ),
-        () => setItems([]),
-      ),
-    [],
-  );
-
-  useEffect(() => {
-    for (const q of items ?? []) {
-      const id = q.answeredCardId;
-      if (id && !titles[id]) {
-        getDoc(doc(db, "cards", id))
-          .then((d) => setTitles((t) => ({ ...t, [id]: d.exists() ? (d.get("title") as string) : "（いまは非公開のカード）" })))
-          // a card the veteran has since hidden cannot be read: say so instead of "…" forever
-          .catch(() => setTitles((t) => ({ ...t, [id]: "（いまは非公開のカード）" })));
-      }
-    }
-  }, [items, titles]);
+  // read through Functions (questions are not readable from the screen: they carry device ids and photos)
+  const load = useCallback(() => {
+    call<{ questions: Q[] }>("myQuestions", {})
+      .then((r) => setItems(r.questions))
+      .catch((e) => setErr(errorText(e, "質問を読み込めませんでした。電波の良い所で、ページを開き直してください。")));
+  }, []);
+  useEffect(load, [load]);
 
   const born = items?.filter((q) => q.status === "answered").length ?? 0;
 
@@ -67,19 +47,20 @@ export function Me() {
         <span>枚の知恵カードが、あなたの質問から生まれました</span>
       </div>
       <h2 className="sub">親方に聞いた質問</h2>
-      {items === null && <p className="hint">読み込み中…</p>}
+      {err && <p className="hint error">{err}</p>}
+      {items === null && !err && <p className="hint">読み込み中…</p>}
       {items?.length === 0 && <p className="empty">まだありません。答えが見つからない時は「親方に聞いてみる」を押しましょう。</p>}
       {items?.map((q) => (
         <div key={q.id} className={`qcard ${q.status}`}>
           <p className="qtext">{q.text}</p>
           {q.status === "answered" ? (
-            <p className="born">🎉 親方が答えてくれました：「{titles[q.answeredCardId ?? ""] ?? "…"}」</p>
+            <p className="born">🎉 親方が答えてくれました：「{q.answeredCardTitle ?? "…"}」</p>
           ) : (
-            <p className="src-meta">親方の答え待ち・{fmtDate(q.createdAt?.toMillis())}</p>
+            <p className="src-meta">親方の答え待ち・{fmtDate(q.createdAt)}</p>
           )}
         </div>
       ))}
-      <Transfer what="あなたの質問" />
+      <Transfer what="あなたの質問" onMoved={load} />
       <h2 className="sub-title">📷 わたしの部材帳</h2>
       {parts.length === 0 && <p className="empty">「撮る」で調べた部材が、ここにたまります。</p>}
       <div className="parts-book">

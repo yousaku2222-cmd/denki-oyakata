@@ -18,7 +18,19 @@ export interface Topic {
   askerName: string;
 }
 
-export function Talk({ topic: topicIn, resumeCardId, onDone }: { topic: Topic | null; resumeCardId?: string | null; onDone: () => void }) {
+export function Talk({
+  topic: topicIn,
+  resumeCardId,
+  active = true,
+  onDone,
+  onDirty,
+}: {
+  topic: Topic | null;
+  resumeCardId?: string | null;
+  active?: boolean; // false while another tab is shown (this screen stays mounted)
+  onDone: () => void;
+  onDirty?: (dirty: boolean) => void; // something told or edited that is not published yet
+}) {
   const [topic, setTopic] = useState(topicIn);
   const [listenerMode, setListenerMode] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -32,13 +44,18 @@ export function Talk({ topic: topicIn, resumeCardId, onDone }: { topic: Topic | 
   const [showName, setShowName] = useState(true);
   const [name, setNameState] = useState(getName("veteran"));
   const [published, setPublished] = useState(false);
+  const [status, setStatus] = useState<"draft" | "published" | "private">("draft");
+
+  const dirty = !published && (turns.length > 0 || !!text.trim() || !!draft);
+  useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
 
   // opened from わたしのカード: go on with a draft (or fix a published card)
   useEffect(() => {
     if (!resumeCardId) return;
-    call<{ cardId: string; draft: Draft; authorName: string; showAuthorName: boolean; topic: { text: string; askerName: string } | null }>("myCard", { cardId: resumeCardId })
+    call<{ cardId: string; status: "draft" | "published" | "private"; draft: Draft; authorName: string; showAuthorName: boolean; topic: { text: string; askerName: string } | null }>("myCard", { cardId: resumeCardId })
       .then((r) => {
         setCardId(r.cardId);
+        setStatus(r.status);
         setDraft(r.draft);
         setTagsText(r.draft.tags.join("、"));
         setShowName(r.showAuthorName);
@@ -101,7 +118,7 @@ export function Talk({ topic: topicIn, resumeCardId, onDone }: { topic: Topic | 
       });
       setPublished(true);
     } catch (e) {
-      setErr(errorText(e, "公開できませんでした。題名とやり方が入っているか、長すぎないか確かめてください。"));
+      setErr(errorText(e, "保存できませんでした。題名とやり方が入っているか、長すぎないか確かめてください。"));
     } finally {
       setBusy(false);
     }
@@ -111,8 +128,8 @@ export function Talk({ topic: topicIn, resumeCardId, onDone }: { topic: Topic | 
     return (
       <section className="screen center">
         <div className="big-emoji">🗂️</div>
-        <h1 className="screen-title">知恵袋に入りました</h1>
-        <p>若手が聞けば、あなたの話が答えに出てきます。{topic && `${topic.askerName}さんにも届きます。`}</p>
+        <h1 className="screen-title">{status === "private" ? "直しました（非公開のまま）" : status === "published" ? "直しました" : "知恵袋に入りました"}</h1>
+        {status !== "private" && <p>若手が聞けば、あなたの話が答えに出てきます。{status === "draft" && topic && `${topic.askerName}さんにも届きます。`}</p>}
         <button className="primary" onClick={onDone}>
           続けて話す
         </button>
@@ -129,8 +146,14 @@ export function Talk({ topic: topicIn, resumeCardId, onDone }: { topic: Topic | 
     );
     return (
       <section className="screen">
-        <h1 className="screen-title">知恵カードの下書き</h1>
-        <p className="hint">中身を確かめてください。直してから公開できます。公開するまで、誰にも見えません。</p>
+        <h1 className="screen-title">{status === "draft" ? "知恵カードの下書き" : "知恵カードを直す"}</h1>
+        <p className="hint">
+          {status === "draft"
+            ? "中身を確かめてください。直してから公開できます。公開するまで、誰にも見えません。"
+            : status === "private"
+              ? "非公開のカードです。直しても非公開のままです（公開は「わたしのカード」から）。"
+              : "公開中のカードです。直すと、すぐに答えにも反映されます。"}
+        </p>
         {field("title", "一言でいうと", 1)}
         {field("scene", "どんな現場・場面で")}
         {field("body", "やり方・コツ", 3)}
@@ -152,7 +175,14 @@ export function Talk({ topic: topicIn, resumeCardId, onDone }: { topic: Topic | 
         </fieldset>
         {err && <p className="hint error">{err}</p>}
         <button className="primary" disabled={busy || !draft.title.trim() || !draft.body.trim()} onClick={publish}>
-          {busy ? "公開しています…" : "確かめたので公開する"}
+          {busy ? "保存しています…" : status === "draft" ? "確かめたので公開する" : "直して保存する"}
+        </button>
+        <button
+          className="link"
+          disabled={busy}
+          onClick={() => confirm(status === "draft" ? "この下書きは「わたしのカード」に残ります。新しく話しますか？" : "直した所は保存されません。新しく話しますか？") && onDone()}
+        >
+          {status === "draft" ? "下書きのまま置いて、新しく話す" : "保存しないで、新しく話す"}
         </button>
       </section>
     );
@@ -190,6 +220,7 @@ export function Talk({ topic: topicIn, resumeCardId, onDone }: { topic: Topic | 
       )}
 
       <MicInput
+        paused={!active}
         value={text}
         onChange={setText}
         micLabel={turns.length ? "答える" : "話す"}

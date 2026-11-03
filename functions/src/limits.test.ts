@@ -1,10 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CAPS, PER_USER_PER_DAY, QuotaKind, takeQuota, today } from "./limits";
+import { CAPS, PER_USER_PER_DAY, QuotaKind, SHARDS, ipGroup, takeQuota, today } from "./limits";
+import { db } from "./common";
 
 test("the day changes at midnight Japan time", () => {
   assert.equal(today(Date.parse("2026-11-03T14:59:59Z")), "2026-11-03"); // 23:59:59 JST
   assert.equal(today(Date.parse("2026-11-03T15:00:00Z")), "2026-11-04"); // 00:00 JST
+});
+
+test("addresses are counted per subscriber: IPv4 as is, IPv6 by /64", () => {
+  assert.equal(ipGroup("203.0.113.7"), "203.0.113.7");
+  assert.equal(ipGroup("::ffff:203.0.113.7"), "203.0.113.7");
+  assert.equal(ipGroup("2001:db8:1:2:aaaa::1"), ipGroup("2001:0db8:0001:0002:ffff:1:2:3"));
+  assert.notEqual(ipGroup("2001:db8:1:2::1"), ipGroup("2001:db8:1:3::1"));
+  assert.equal(ipGroup("2001:db8::1"), "2001:db8:0:0::/64");
 });
 
 // The rest needs the Firestore emulator: FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm test
@@ -59,4 +68,16 @@ test("the overall cap holds across many devices and addresses, with no lock-time
   }
   // never over; near the end, racing calls may both be refused
   assert.ok(ok <= all && ok >= all - 25, `ok=${ok}`);
+});
+
+test("a burst from one account cannot use up everyone's day", emu, async () => {
+  const now = day();
+  const r = await attempt(300, () => takeQuota("attacker", "box", "192.0.2.1", now));
+  assert.ok(r.ok <= CAPS.box.user, `ok=${r.ok}`);
+  assert.deepEqual(r.other, []);
+  const d = today(now);
+  const shards = await db.getAll(...Array.from({ length: SHARDS }, (_, i) => db.collection("usage").doc(`${d}_box_all_${i}`)));
+  const total = shards.reduce((t, s) => t + ((s.get("count") as number | undefined) ?? 0), 0);
+  assert.ok(total <= CAPS.box.user, `overall count after the burst: ${total}`);
+  await takeQuota("innocent", "box", "198.51.100.1", now); // still served
 });

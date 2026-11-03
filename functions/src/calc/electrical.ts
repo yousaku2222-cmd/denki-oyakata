@@ -1,4 +1,4 @@
-import { Basis, Calc, CalcInputError, Field, flag, fmt, num, pick } from "./types";
+import { Basis, Calc, CalcInputError, Field, flag, fmt, fmtVs, num, pick } from "./types";
 
 // ---------- 電線の種類と太さ ----------
 // IV は電技解釈 第146条の表で計算し、CV・CVT はメーカー公表の許容電流（JCS 0168-2 による）を使う。
@@ -229,10 +229,10 @@ export const voltageDrop: Calc = {
       `式: e = ${sys.k} × L × I ÷ (1000 × A)`,
       `電線 ${label(t, s, n)} → 断面積 A = ${fmt(area(t, s))}${n > 1 ? ` × ${n}` : ""} = ${fmt(A)}mm²`,
       `e = ${sys.k} × ${fmt(L)} × ${fmt(I)} ÷ (1000 × ${fmt(A)}) = ${fmt(e)}V`,
-      `${V}V に対して ${fmt(pct, 1)}%（${sys.note}）`,
+      `${V}V に対して ${fmtVs(pct, limit, 1)[0]}%（${sys.note}）`,
       `電圧降下の目安: こう長 ${fmt(L)}m → ${limit}%以内 … ${dropOk ? "○" : "×"}`,
       ...amp.steps,
-      `許容電流 ${fmt(allowed, 1)}A${n > 1 ? `（${fmt(amp.amps, 1)}A × ${n}並列）` : ""} ${ampOk ? "≧" : "＜"} 負荷 ${fmt(I, 1)}A … ${ampOk ? "○" : "×"}`,
+      `許容電流 ${fmtVs(allowed, I, 1)[0]}A${n > 1 ? `（${fmt(amp.amps, 1)}A × ${n}並列）` : ""} ${ampOk ? "≧" : "＜"} 負荷 ${fmtVs(allowed, I, 1)[1]}A … ${ampOk ? "○" : "×"}`,
     ];
     if (!ok)
       steps.push(
@@ -244,7 +244,7 @@ export const voltageDrop: Calc = {
     return {
       title: `電圧降下と太さの判定（${sys.label}・${label(t, s, n)}）`,
       ok,
-      verdict: `${fmt(e)}V（${fmt(pct, 1)}%）／${ok ? "この太さで適正" : `${why}${better ? ` → ${label(t, better.s, n)} 以上` : ""}`}`,
+      verdict: `${fmt(e)}V（${fmtVs(pct, limit, 1)[0]}%）／${ok ? "この太さで適正" : `${why}${better ? ` → ${label(t, better.s, n)} 以上` : ""}`}`,
       steps,
       basis: amp.basis,
       notes: [
@@ -281,7 +281,7 @@ export const ampacity: Calc = {
       verdict:
         load === null
           ? `${label(t, s, n)}：許容電流 ${fmt(allowed, 1)}A`
-          : `${ok ? "OK" : "NG"}（流す ${fmt(load, 1)}A ${ok ? "≦" : "＞"} ${label(t, s, n)} の許容 ${fmt(allowed, 1)}A）`,
+          : `${ok ? "OK" : "NG"}（流す ${fmtVs(load, allowed, 1)[0]}A ${ok ? "≦" : "＞"} ${label(t, s, n)} の許容 ${fmtVs(load, allowed, 1)[1]}A）`,
       steps: [...a.steps, ...(n > 1 ? [`${n}並列: ${fmt(a.amps, 1)} × ${n} = ${fmt(allowed, 1)}A`] : [])],
       basis: a.basis,
       notes: [`条件: ${a.source}`, "許容電流は小数点以下を切り捨てて使うのが一般的です。", ...(n > 1 ? [parallelNote] : [])],
@@ -328,7 +328,7 @@ export const loadToWire: Calc = {
     const L = given(p, "length") ? num(p, lw.length) : null;
     const drop = L === null ? undefined : { k: ph.k, L, V: ph === PHASES.single3 ? 100 : V, limit: dropLimit(L) };
     const steps = [`${ph.formula} = ${fmt(P)} ÷ (${ph.root3 ? "√3 × " : ""}${V} × ${pf}) = ${fmt(I0, 1)}A`];
-    if (motor) steps.push(`電動機の幹線: ${fmt(I0, 1)}A ${I0 <= 50 ? "≦" : "＞"} 50A → × ${factor} = ${fmt(I, 1)}A 以上の許容電流が要る`);
+    if (motor) steps.push(`電動機の幹線: ${fmtVs(I0, 50, 1)[0]}A ${I0 <= 50 ? "≦" : "＞"} 50A → × ${factor} = ${fmt(I, 1)}A 以上の許容電流が要る`);
     if (drop) steps.push(`電圧降下の目安: こう長 ${fmt(L!)}m → ${drop.limit}%以内も満たす太さを探す（電流 ${fmt(I0, 1)}A で計算）`);
     const results = (Object.keys(TYPES) as WireType[]).map((tt) => {
       const cc: Conditions = { ...c, install: tt === "IV" ? "air" : c.install, inConduit: tt === "IV" ? (t === "IV" ? c.inConduit : 3) : 0 };

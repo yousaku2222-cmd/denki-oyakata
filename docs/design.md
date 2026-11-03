@@ -16,18 +16,18 @@
 | tags | string[] | 検索用の言い換え・現場の呼び名 |
 | category | 'piping'\|'wiring'\|'grounding'\|'license'\|'calc'\|'safety'\|'other' | 種類 |
 | location | 'ceiling'\|'floor'\|'outdoor'\|'panel'\|'other' | 場所 |
-| authorId / authorName | string | 書いた人（端末ID）と表示名 |
+| authorName | string | 表示名（名前を出すと選んだ時だけ。出さない時は空。書いた人の端末ID・本名は cardPrivate） |
 | showAuthorName | boolean | 名前を出すか（公開時に本人が選ぶ） |
 | status | 'draft'\|'published'\|'private' | 本人確認までは draft |
 | visibility | 'company'\|'region'\|'national' | 公開範囲（初期値 company。今回は company のみ使う） |
 | region / powerCompany | string\|null | どの地域・電力会社の現場で通じる知恵か |
-| confirmations | {by, name, at}[] | 確かめたベテラン（全国公開は複数人を条件にする想定） |
+| confirmations | {name, at}[] | 確かめたベテラン（表示名と日時だけ。全国公開は複数人を条件にする想定） |
 | helpedCount / viewCount | number | 「助かった」数・参照数 |
-| triggerQuestionId / triggerAskerName / triggerQuestionText | string|null | きっかけの質問（本文は検索にも使う） |
-| transcript | {role:'veteran'\|'ai', text}[] | 聞き取りのやりとり（文字だけ。声は残さない） |
+| triggerQuestionId / triggerAskerName / triggerQuestionText | string\|null | きっかけの質問（本文は検索にも使う） |
+| transcript | [] | 常に空（聞き取りのやりとりの原文は cardPrivate に置く。文字だけで、声は残さない） |
 | createdAt / updatedAt / publishedAt | Timestamp | |
 
-### questions（質問箱）
+### questions（質問箱。画面からは直接読めない。openQuestions・questionPhoto・myQuestions で読む）
 | 項目 | 型 | 説明 |
 |---|---|---|
 | text | string | 質問の原文 |
@@ -58,19 +58,19 @@
 - general: AI の一般知識。「要確認」を付けて表示
 
 ### cardPrivate（サーバーだけが読む。firestore.rules で画面からは読めない）
-`{ authorId, authorName, transcript, createdAt }` — 本名と聞き取りのやりとりの原文。公開カード（cards）には、名前を出すと選んだ時だけ authorName を入れ、transcript は空にする。
+`{ authorId, authorName, transcript, createdAt }` — 書いた人の端末ID・本名・聞き取りのやりとりの原文。公開カード（cards）には端末IDを置かず（名前を伏せたカードと名前を出したカードを結び付けられないように）、名前を出すと選んだ時だけ authorName を入れ、transcript は空にする。この形の前に公開したカードは `scripts/migrate-private.mjs` で移す。
 
 ### users（端末ごと。ログインなし）
 `{ askedCount, answeredFromMyQuestions }`（いまは数だけ。displayName・roleHistory は将来の「若手→ベテランへの移行」「成長の記録」の土台として予定）
 
 ### usage（回数制限の数。サーバーだけ）
-`{日付}_{種類}{uid}`・`{日付}_{種類}ip_{回線のハッシュ}`・`{日付}_{種類}all_{0〜9}`（全体の数は10か所に分けて数える）。種類は AI（なし）／質問箱 `box_`／公開 `pub_`／引き継ぎ `tr_`。
+`{日付}_{種類}{uid}`・`{日付}_{種類}ip_{回線のハッシュ}`・`{日付}_{種類}all_{0〜9}`（全体の数は10か所に分けて数える）。種類は AI（なし）／質問箱 `box_`／公開 `pub_`／引き継ぎコードを出す `trm_`／入れる `tr_`。断った呼び出しは足した数を戻すので、1台が全体の数に足せるのは自分の上限の分まで。
 
 ### transfers（引き継ぎコード。サーバーだけ）
-`{ uid, createdAt, expiresAt }` — 24時間・1回だけ。使うと、古い端末IDのカード・質問・答えの記録が新しい端末IDに移る。
+`{ uid, createdAt, expiresAt }` — 24時間・1回だけ。新しいコードを出すと、その端末の前のコードは消える。使うと、古い端末IDのカード・質問・答えの記録が新しい端末IDに移る。
 
-### laws（段階2: 法令カード）
-`{ lawName, edition, article, heading, text(原文), summary, keywords[], scenes[], sourceUrl }`
+### 法令カード（段階2。Firestore ではなく `functions/data/laws.json` を Functions と一緒に配る）
+`{ id, lawName, short, edition, article, heading, text(原文), summary, keywords[], scenes[], sourceUrl }`
 Opus が条文ごとに要約・キーワード・場面を付ける（ナレッジウィキ方式）。原文はそのまま持ち、照合に使う。
 
 ## 2. Functions（呼び出し口。すべて callable、書き込みは admin SDK）
@@ -83,7 +83,8 @@ Opus が条文ごとに要約・キーワード・場面を付ける（ナレッ
 | ask | 1 | 振り分け → 知恵カード検索 → 3色の答え。根拠なしなら grounded=false |
 | sendToBox | 1 | 質問を質問箱へ |
 | markHelped / markGoodQuestion | 1 | 貢献の見える化 |
-| myCard / deleteDraft | 1 | 自分のカード（下書き）を開いて直す／下書きを消す |
+| myCards / myCard / deleteDraft | 1 | 自分のカードの一覧／開いて直す（非公開のカードは非公開のまま）／下書きを消す |
+| openQuestions / questionPhoto / myQuestions | 1 | 質問箱の一覧（新しい順に50件、写真なし）／1件の写真／自分が聞いた質問 |
 | listCalcs / calc | 3 | 計算・判定（プログラム）。calc は name で計算を選ぶ |
 | listLaws / getLaw | 2 | 法令カードの一覧・全文 |
 | identifyPart | 4 | 写真の判定 |

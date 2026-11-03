@@ -21,7 +21,7 @@ export function MyCards({ onEdit }: { onEdit: (cardId: string) => void }) {
   const load = useCallback(() => {
     call<{ cards: Mine[] }>("myCards", {})
       .then((r) => setCards(r.cards))
-      .catch(() => setCards([]));
+      .catch((e) => setErr(errorText(e, "カードを読み込めませんでした。電波の良い所で、ページを開き直してください。")));
   }, []);
   useEffect(load, [load]);
 
@@ -47,7 +47,7 @@ export function MyCards({ onEdit }: { onEdit: (cardId: string) => void }) {
         <span className="stat-num">{total}</span>
         <span>回、あなたの知恵が若手を助けました</span>
       </div>
-      {cards === null && <p className="hint">読み込み中…</p>}
+      {cards === null && !err && <p className="hint">読み込み中…</p>}
       {err && <p className="hint error">{err}</p>}
       {cards?.length === 0 && <p className="empty">まだカードがありません。「話す」から始めましょう。</p>}
       {cards?.map((c) => (

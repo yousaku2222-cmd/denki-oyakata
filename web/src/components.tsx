@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useSpeech } from "./speech";
 
 export type Source = "law" | "wisdom" | "general";
@@ -66,8 +66,9 @@ export function MicInput(props: {
   placeholder: string;
   micLabel: string;
   rows?: number;
+  paused?: boolean; // the screen is hidden: stop listening, so words said elsewhere do not land here
 }) {
-  const { value, onChange } = props;
+  const { value, onChange, paused } = props;
   // several final results can arrive before the next render: append to the latest text, not to this render's copy
   const latest = useRef(value);
   latest.current = value;
@@ -75,6 +76,9 @@ export function MicInput(props: {
     latest.current = (latest.current ? latest.current + " " : "") + t;
     onChange(latest.current);
   });
+  useEffect(() => {
+    if (paused) stop();
+  }, [paused, stop]);
   return (
     <div className="mic-input">
       <button type="button" className={`mic ${listening ? "on" : ""}`} onClick={listening ? stop : start}>

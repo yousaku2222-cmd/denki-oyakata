@@ -42,3 +42,54 @@ export async function markGoodQuestion(data: Record<string, unknown>, uid: strin
   await ref.update({ goodBy: FieldValue.arrayUnion(veteranId) });
   return { ok: true };
 }
+
+// The question box is read through these calls, not straight from Firestore: a question carries its asker's
+// device id and a photo, and every veteran's phone would otherwise download all of them.
+const BOX_LIST = 50;
+const ms = (t: Timestamp | null | undefined) => t?.toMillis() ?? 0;
+
+/** Open questions for a veteran (newest first, without photos; not the veteran's own). */
+export async function openQuestions(_data: Record<string, unknown>, uid: string) {
+  const snap = await db.collection("questions").where("companyId", "==", COMPANY).where("status", "==", "open").get();
+  const list = snap.docs
+    .filter((d) => d.get("excludeVeteranId") !== uid)
+    .sort((a, b) => ms(b.get("createdAt")) - ms(a.get("createdAt")));
+  return {
+    more: Math.max(0, list.length - BOX_LIST),
+    questions: list.slice(0, BOX_LIST).map((d) => ({
+      id: d.id,
+      text: d.get("text") as string,
+      askerName: (d.get("askerName") as string) || "若手",
+      askerRole: d.get("askerRole") as string,
+      hasPhoto: !!d.get("photo"),
+      good: ((d.get("goodBy") as string[] | undefined) ?? []).includes(uid),
+      createdAt: ms(d.get("createdAt")),
+    })),
+  };
+}
+
+/** The photo of one question, when the veteran opens it. */
+export async function questionPhoto(data: Record<string, unknown>) {
+  const q = await db.collection("questions").doc(str(data.questionId, "questionId", 64)).get();
+  if (!q.exists || q.get("companyId") !== COMPANY) throw new HttpsError("not-found", "質問が見つかりません。");
+  return { photo: (q.get("photo") as string | null) ?? null };
+}
+
+/** The questions this device asked, and the card that answered each. */
+export async function myQuestions(_data: Record<string, unknown>, uid: string) {
+  const snap = await db.collection("questions").where("companyId", "==", COMPANY).where("askerId", "==", uid).get();
+  const cardIds = [...new Set(snap.docs.map((d) => d.get("answeredCardId") as string | null).filter((x): x is string => !!x))];
+  const cards = cardIds.length ? await db.getAll(...cardIds.map((id) => db.collection("cards").doc(id))) : [];
+  const title = new Map(cards.map((c) => [c.id, c.exists && c.get("status") === "published" ? (c.get("title") as string) : "（いまは非公開のカード）"]));
+  return {
+    questions: snap.docs
+      .map((d) => ({
+        id: d.id,
+        text: d.get("text") as string,
+        status: d.get("status") as "open" | "answered",
+        answeredCardTitle: d.get("answeredCardId") ? (title.get(d.get("answeredCardId")) ?? null) : null,
+        createdAt: ms(d.get("createdAt")),
+      }))
+      .sort((a, b) => b.createdAt - a.createdAt),
+  };
+}

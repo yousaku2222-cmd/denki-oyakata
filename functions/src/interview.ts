@@ -129,7 +129,6 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
     companyId: COMPANY,
     ...draft,
     tags: draft.tags.slice(0, 15),
-    authorId,
     authorName,
     showAuthorName: true,
     status: "draft",
@@ -157,11 +156,13 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
   return { cardId: ref.id, draft, mode };
 }
 
+/** The card, if this device wrote it. The owner is kept in cardPrivate (older cards: on the card itself). */
 async function ownCard(cardId: string, authorId: string) {
   const ref = db.collection("cards").doc(cardId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError("not-found", "card not found");
-  if (snap.get("authorId") !== authorId) throw new HttpsError("permission-denied", "not your card");
+  const [snap, priv] = await Promise.all([ref.get(), db.collection("cardPrivate").doc(cardId).get()]);
+  if (!snap.exists) throw new HttpsError("not-found", "このカードは見つかりません（消されたか、別の端末へ移りました）。");
+  const owner = (priv.get("authorId") as string | undefined) ?? (snap.get("authorId") as string | undefined);
+  if (owner !== authorId) throw new HttpsError("permission-denied", "この端末のカードではありません（別の端末へ移った場合は、その端末で操作してください）。");
   return { ref, card: snap.data() as CardDoc };
 }
 
@@ -180,7 +181,8 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
   const shownName = showAuthorName ? authorName : "";
   const now = Timestamp.now();
 
-  await privRef.set({ authorId, authorName }, { merge: true });
+  // a card from before cardPrivate: its interview moves out of the public card here
+  await privRef.set({ authorId, authorName, ...(card.transcript?.length ? { transcript: card.transcript } : {}) }, { merge: true });
   await ref.update({
     title: str(e.title, "title", 60),
     scene: str(e.scene, "scene", 500, false),
@@ -190,9 +192,12 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
     tags: strList(e.tags, "tags", 15, 30), // a short list: long ones would match every question
     authorName: shownName,
     showAuthorName,
-    status: "published",
-    // replace (not append) this veteran's entry, so a name shown on an earlier publish does not stay behind
-    confirmations: [...(card.confirmations ?? []).filter((c) => c.by !== authorId), { by: authorId, name: shownName, at: now }],
+    // editing a hidden card keeps it hidden; a draft or a published card is (re)published
+    status: card.status === "private" ? "private" : "published",
+    // only the shown name and the time: no device id on a public card (it would link hidden-name cards)
+    confirmations: [{ name: shownName, at: now }],
+    authorId: FieldValue.delete(), // cards from before cardPrivate carried it
+    transcript: [],
     updatedAt: now,
     publishedAt: card.publishedAt ?? now,
   });
@@ -220,11 +225,15 @@ export async function setCardStatus(data: Record<string, unknown>, uid: string) 
   return { ok: true };
 }
 
-export async function myCards(data: Record<string, unknown>, uid: string) {
-  const authorId = uid;
-  const snap = await db.collection("cards").where("companyId", "==", COMPANY).where("authorId", "==", authorId).get();
+export async function myCards(_data: Record<string, unknown>, uid: string) {
+  const [priv, legacy] = await Promise.all([
+    db.collection("cardPrivate").where("authorId", "==", uid).get(),
+    db.collection("cards").where("companyId", "==", COMPANY).where("authorId", "==", uid).get(),
+  ]);
+  const ids = [...new Set([...priv.docs.map((d) => d.id), ...legacy.docs.map((d) => d.id)])];
+  const docs = ids.length ? (await db.getAll(...ids.map((id) => db.collection("cards").doc(id)))).filter((d) => d.exists) : [];
   return {
-    cards: snap.docs
+    cards: docs
       .map((d) => {
         const c = d.data() as CardDoc;
         return {

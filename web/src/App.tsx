@@ -33,6 +33,7 @@ export default function App() {
   const [topic, setTopic] = useState<Topic | null>(null);
   const [talkKey, setTalkKey] = useState(0);
   const [resumeId, setResumeId] = useState<string | null>(null);
+  const [talkDirty, setTalkDirty] = useState(false);
   const [theme, setThemeState] = useState(getTheme());
   const [calcStart, setCalcStart] = useState<CalcStart | null>(null);
 
@@ -55,7 +56,10 @@ export default function App() {
 
   if (!role) return <Entry onChoose={choose} />;
 
-  const startTalk = (t: Topic | null, resume: string | null = null) => {
+  const startTalk = (t: Topic | null, resume: string | null = null, force = false) => {
+    // starting another story replaces the one on 話す: do not drop what was told without asking
+    if (!force && talkDirty && !confirm("「話す」で話している途中の内容は消えます。よろしいですか？")) return;
+    setTalkDirty(false);
     setTopic(t);
     setResumeId(resume);
     setTalkKey((k) => k + 1);
@@ -91,7 +95,7 @@ export default function App() {
         {/* kept mounted while other tabs are open, so a half-told story is not lost */}
         {role === "veteran" && (
           <div hidden={tab !== "talk"}>
-            <Talk key={talkKey} topic={topic} resumeCardId={resumeId} onDone={() => startTalk(null)} />
+            <Talk key={talkKey} topic={topic} resumeCardId={resumeId} active={tab === "talk"} onDirty={setTalkDirty} onDone={() => startTalk(null, null, true)} />
           </div>
         )}
         {tab === "box" && <Box onAnswer={startTalk} />}

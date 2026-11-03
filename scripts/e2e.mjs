@@ -59,13 +59,16 @@ const t2 = [{ role: "veteran", text: "（テスト用の文）新しい現場の
 const d2 = await call("draftCard", { transcript: t2, authorName: "山田（親方）", triggerQuestionId: questionId }, vet);
 await call("publishCard", { cardId: d2.cardId, authorName: "山田（親方）", showAuthorName: false, edits: { ...d2.draft, tags: ["朝礼", "集合時間", "新規入場"] } }, vet);
 if (u.mode === "claude") for (const s of u.sentences) console.log(`     [${s.source}] ${s.text}`);
-const q = await (await fetch(`${FS}/questions/${questionId}`, { headers: { Authorization: `Bearer ${young}` } })).json();
-check("question marked answered", q.fields?.status?.stringValue === "answered");
+const mineQ = (await call("myQuestions", {}, young)).questions.find((x) => x.id === questionId);
+check("question marked answered", mineQ?.status === "answered" && !!mineQ.answeredCardTitle, mineQ?.answeredCardTitle);
 // The veteran chose not to show the name: the public card must not carry it (nor the raw interview).
 const hidden = await (await fetch(`${FS}/cards/${d2.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).json();
+check("no device id on the public card", !hidden.fields?.authorId && !JSON.stringify(hidden.fields?.confirmations ?? {}).includes('"by"'));
 check("hidden name is not in the public card", hidden.fields?.authorName?.stringValue === "" && !JSON.stringify(hidden).includes("山田"), hidden.fields?.authorName?.stringValue);
 check("raw interview is not in the public card", !(hidden.fields?.transcript?.arrayValue?.values ?? []).length);
-check("cards and questions need a signed-in device", (await clientGet(`cards/${d.cardId}`)) === 403 && (await clientGet(`questions/${questionId}`)) === 403);
+check("cards need a signed-in device; questions are not readable at all", (await clientGet(`cards/${d.cardId}`)) === 403 && (await fetch(`${FS}/questions/${questionId}`, { headers: { Authorization: `Bearer ${young}` } })).status === 403);
+const box = await call("openQuestions", {}, vet);
+check("question box lists without photos or device ids", Array.isArray(box.questions) && !JSON.stringify(box).includes("askerId") && !JSON.stringify(box).includes("data:image"));
 const a2 = await call("ask", { text: "新しい現場の朝礼は何時からですか？", askerRole: "young" }, young);
 check("same question now answered from the new card", a2.grounded && a2.cards.some((c) => c.id === d2.cardId && c.author === "社内のベテラン" && c.triggerAskerName === "テスト若手"));
 
@@ -77,6 +80,12 @@ const mine = await call("myCards", {}, vet);
 const pf = mine.cards.find((c) => c.id === d.cardId);
 check("helped count reached the veteran", pf?.helpedCount === 1, `cards=${mine.cards.length}`);
 check("clients cannot write directly", (await fetch(`${FS}/cards?documentId=x`, { method: "POST", body: JSON.stringify({ fields: { title: { stringValue: "x" } } }) })).status === 403);
+
+// 5b. Editing a hidden card keeps it hidden.
+await call("setCardStatus", { cardId: d.cardId, status: "private" }, vet);
+await call("publishCard", { cardId: d.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...d.draft, title: "直した題名", tags: ["PF"] } }, vet);
+check("editing a hidden card keeps it hidden", (await call("myCards", {}, vet)).cards.find((c) => c.id === d.cardId)?.status === "private");
+await call("setCardStatus", { cardId: d.cardId, status: "published" }, vet);
 
 // 6. A draft left behind can be opened again or removed; it never shows to others.
 const left = await call("draftCard", { transcript: [{ role: "veteran", text: "（テスト用）下書きのまま置いておく話。" }], authorName: "山田（親方）" }, vet);
