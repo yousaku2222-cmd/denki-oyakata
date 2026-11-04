@@ -31,7 +31,9 @@ const TABS: Record<Role, { id: Tab; icon: string; label: string }[]> = {
 };
 
 export default function App() {
-  const [role, setRoleState] = useState<Role | null>(getRole());
+  // every start is at the choice of role (a shared phone, or a veteran handing it to a young worker); the last one
+  // is marked there so it is one press away
+  const [role, setRoleState] = useState<Role | null>(null);
   const [tab, setTab] = useState<Tab>(role === "veteran" ? "talk" : "ask");
   // a question sent to the 質問箱 lands on わたし (where the answer will come back): a dot until it is opened
   const [meDot, setMeDot] = useState(false);
@@ -97,7 +99,7 @@ export default function App() {
     setThemeState(next);
   }
 
-  if (!role) return <Entry onChoose={choose} />;
+  if (!role) return <Entry onChoose={choose} last={getRole()} />;
 
   const startTalk = (t: Topic | null, resume: string | null = null, force = false) => {
     // starting another story replaces the one on 話す: do not drop what was told without asking
@@ -114,7 +116,10 @@ export default function App() {
       <div className="top-wrap">
       <header className="top">
         <span className="logo">⚡ でんきの親方</span>
-        <span className="role-badge">{role === "veteran" ? "🧰ベテラン" : "🔰若手"}</span>
+        <span className="role-badge" aria-label={role === "veteran" ? "ベテラン" : "若手"}>
+          {role === "veteran" ? "🧰" : "🔰"}
+          <span className="badge-word">{role === "veteran" ? "ベテラン" : "若手"}</span>
+        </span>
         <button className="icon-btn" aria-label="明るさの切り替え" onClick={toggleTheme}>
           ◐
         </button>
@@ -226,7 +231,7 @@ function VeteranAsk({ role }: { role: Role }) {
 }
 
 
-function Entry({ onChoose }: { onChoose: (r: Role, trial?: boolean) => void }) {
+function Entry({ onChoose, last }: { onChoose: (r: Role, trial?: boolean) => void; last: Role | null }) {
   return (
     <div className="entry">
       <div className="entry-logo">⚡</div>
@@ -244,10 +249,12 @@ function Entry({ onChoose }: { onChoose: (r: Role, trial?: boolean) => void }) {
         ]}
       />
       <button className="role-btn" onClick={() => onChoose("veteran")}>
+        {last === "veteran" && <span className="last-chip">前回</span>}
         ベテランとして使う
         <small>話すだけで、知恵がカードになります</small>
       </button>
       <button className="role-btn young" onClick={() => onChoose("young")}>
+        {last === "young" && <span className="last-chip">前回</span>}
         若手として使う
         <small>現場の疑問に、根拠つきで答えます</small>
       </button>

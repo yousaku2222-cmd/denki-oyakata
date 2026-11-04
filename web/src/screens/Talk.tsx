@@ -3,6 +3,7 @@ import { CardBirth, IntoTheBag } from "../CardMotion";
 import { call, errorText } from "../firebase";
 import { getName, setName } from "../local";
 import { MicInput, Notice } from "../components";
+import { FlowSteps } from "../FlowSteps";
 
 type Turn = { role: "veteran" | "ai"; text: string };
 interface Draft {
@@ -335,6 +336,17 @@ export function Talk({
         </ol>
       )}
 
+      {fresh && !turns.length && (
+        <FlowSteps
+          label="話すと"
+          steps={[
+            { icon: "🎙️", label: "話す" },
+            { icon: "🤖", label: "聞き返し" },
+            { icon: "🗂️", label: "カードに" },
+            { icon: "✅", label: "確かめて\n公開" },
+          ]}
+        />
+      )}
       {fresh && !turns.length && !aiQuestion && !text.trim() && (
         <div className="talk-seeds">
           {boxOpen > 0 && onOpenBox && (

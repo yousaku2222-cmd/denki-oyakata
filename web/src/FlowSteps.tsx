@@ -8,7 +8,7 @@ export interface Step {
 /** A row of steps joined by arrows (a column on a narrow phone): how something works, in pictures before words. */
 export function FlowSteps({ steps, label }: { steps: Step[]; label: string }) {
   return (
-    <ol className="flow-steps" aria-label={label}>
+    <ol className={`flow-steps ${steps.length >= 4 ? "many" : ""}`} aria-label={label}>
       {steps.map((s, i) => (
         <Fragment key={s.label}>
           {i > 0 && (

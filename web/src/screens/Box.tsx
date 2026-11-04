@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { fmtDate } from "../components";
@@ -30,6 +30,31 @@ function grouped(items: Q[], seenBefore: number) {
 }
 
 /** A few stars spring out of the button when a veteran says いい質問 (the asker sees it on わたし). */
+/**
+ * A question's photo, small beside it. It is read when it comes into view (each is up to 300KB: reading all of
+ * them at once is slow on a site's signal); a tap makes it large.
+ */
+function QPhoto({ photo, load }: { photo: string | null | undefined; load: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [big, setBig] = useState(false);
+  useEffect(() => {
+    if (photo !== undefined || !ref.current) return;
+    const io = new IntersectionObserver((seen) => {
+      if (seen.some((e) => e.isIntersecting)) {
+        io.disconnect();
+        load();
+      }
+    });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [photo, load]);
+  return (
+    <button ref={ref} type="button" className={`qphoto ${big ? "big" : ""}`} onClick={() => photo && setBig(!big)} aria-label={big ? "写真を小さくする" : "写真を大きくする"}>
+      {photo ? <img src={photo} alt="若手が撮った写真" /> : <span>{photo === "" ? "📷✕" : "📷"}</span>}
+    </button>
+  );
+}
+
 function StarBurst() {
   return (
     <span className="star-burst" aria-hidden>
@@ -155,42 +180,33 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i, 6) * 0.12, duration: 0.4, ease: "easeOut" }}
             >
-              {q.lastAskedAt > seenBefore && <span className="new-chip">新着</span>}
-              {q.hasPhoto &&
-                (q.id in photos ? (
-                  photos[q.id] === null ? (
-                    <p className="hint">写真を読み込み中…</p>
-                  ) : photos[q.id] ? (
-                    <img className="photo-preview" src={photos[q.id]!} alt="若手が撮った写真" />
-                  ) : (
-                    <p className="hint">写真はありません（または読み込めませんでした）。</p>
-                  )
-                ) : (
-                  <button className="link" onClick={() => openPhoto(q)}>
-                    📷 写真を見る
-                  </button>
-                ))}
-              {q.hasPhoto && q.photoPart && <p className="src-meta">📷 写真の物（AIの判定）：{q.photoPart}</p>}
-              {q.followUp && (
-                <p className="follow-chip">
-                  🔗 続き：前の質問「{q.followUp.text}」{q.followUp.cardTitle ? `→ カード「${q.followUp.cardTitle}」` : ""}
-                </p>
-              )}
-              <p className="qtext">{q.text}</p>
-              <p className="src-meta">
-                {q.askerName}さん{q.askerRole === "veteran" ? "（ベテラン）" : ""}
-                {q.askers > 1 ? `ほか${q.askers - 1}人` : ""}・{fmtDate(q.createdAt)}
-              </p>
-              {q.askers > 1 && <span className="same-chip">👥 同じ質問：{q.askers}人</span>}
-              <div className="row">
-                <button className="primary" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp })}>
-                  🎤 話して答える
-                </button>
-                <button className={`secondary good-btn ${q.good ? "done" : ""}`} disabled={q.good} onClick={() => good(q)}>
-                  {q.good ? "⭐ いい質問！" : "⭐ いい質問"}
-                  {q.good && <StarBurst key={q.id} />}
-                </button>
+              {/* photo on the left, the question beside it; いい質問 is a star in the corner */}
+              <div className="qrow">
+                {q.hasPhoto && <QPhoto photo={photos[q.id]} load={() => openPhoto(q)} />}
+                <div className="qmain">
+                  <div className="qtop">
+                    {q.lastAskedAt > seenBefore ? <span className="new-chip">新着</span> : <span />}
+                    <button className={`star-btn ${q.good ? "done" : ""}`} disabled={q.good} onClick={() => good(q)} aria-label={q.good ? "いい質問と伝えました" : "いい質問と伝える"} title="いい質問">
+                      {q.good ? "⭐" : "☆"}
+                      {q.good && <StarBurst key={q.id} />}
+                    </button>
+                  </div>
+                  {q.followUp && (
+                    <p className="follow-chip">
+                      🔗 続き：前の質問「{q.followUp.text}」{q.followUp.cardTitle ? `→ カード「${q.followUp.cardTitle}」` : ""}
+                    </p>
+                  )}
+                  <p className="qtext">{q.text}</p>
+                  {q.hasPhoto && q.photoPart && <p className="src-meta">📷 写真の物（AIの判定）：{q.photoPart}</p>}
+                  <p className="src-meta">
+                    {q.askerName}さん{q.askerRole === "veteran" ? "（ベテラン）" : ""}・{fmtDate(q.createdAt)}
+                    {q.askers > 1 ? `・👥 ${q.askers}人が同じ質問` : ""}
+                  </p>
+                </div>
               </div>
+              <button className="secondary answer-btn" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp })}>
+                🎤 話して答える
+              </button>
             </motion.div>
             ))}
           </div>

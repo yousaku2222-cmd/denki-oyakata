@@ -53,6 +53,7 @@ export function MyCards({ onEdit }: { onEdit: (cardId: string) => void }) {
   const [cards, setCards] = useState<Mine[] | null>(null);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  const [openCard, setOpenCard] = useState<string | null>(null);
   // what was seen before this opening (kept for the whole visit; the new counts are saved as seen once shown)
   const [seen] = useState(helpedSeen);
   useEffect(() => {
@@ -111,26 +112,38 @@ export function MyCards({ onEdit }: { onEdit: (cardId: string) => void }) {
       {cards?.length === 0 && <p className="empty">まだカードがありません。「話す」から始めましょう。</p>}
       {cards?.map((c) => (
         <div key={c.id} className="qcard">
-          <p className="qtext">{c.title}</p>
-          <p className="src-meta">
-            {STATUS[c.status]}・👍 {c.helpedCount}
-            {freshOf.has(c.id) && <span className="fresh-chip">+{freshOf.get(c.id)} 新しく</span>}・{fmtDate(c.updatedAt)}
-            {c.triggerAskerName ? `・きっかけ: ${c.triggerAskerName}さんの質問` : ""}
-          </p>
-          <div className="row">
-            <button className="secondary" disabled={!!busy} onClick={() => onEdit(c.id)}>
-              {c.status === "draft" ? "続きを直して公開する" : "直す"}
-            </button>
-            {c.status === "draft" ? (
-              <button className="secondary" disabled={!!busy} onClick={() => confirm("この下書きを消しますか？") && act(c, "deleteDraft", {})}>
-                下書きを消す
-              </button>
-            ) : (
-              <button className="secondary" disabled={!!busy} onClick={() => act(c, "setCardStatus", { status: c.status === "published" ? "private" : "published" })}>
-                {c.status === "published" ? "非公開にする" : "もう一度公開する"}
-              </button>
-            )}
-          </div>
+          {/* one line per card; what can be done with it opens on a tap */}
+          <button className="qopen" onClick={() => setOpenCard(openCard === c.id ? null : c.id)} aria-expanded={openCard === c.id}>
+            <span>
+              <span className="qtext">{c.title}</span>
+              <span className="src-meta card-line">
+                {STATUS[c.status]}・👍 {c.helpedCount}
+                {freshOf.has(c.id) && <span className="fresh-chip">+{freshOf.get(c.id)} 新しく</span>}・{fmtDate(c.updatedAt)}
+              </span>
+            </span>
+            <span className="qopen-mark" aria-hidden>
+              {openCard === c.id ? "▲" : "▼"}
+            </span>
+          </button>
+          {openCard === c.id && (
+            <div className="q-detail">
+              {c.triggerAskerName && <p className="src-meta">きっかけ: {c.triggerAskerName}さんの質問</p>}
+              <div className="row">
+                <button className="secondary" disabled={!!busy} onClick={() => onEdit(c.id)}>
+                  {c.status === "draft" ? "続きを直して公開する" : "直す"}
+                </button>
+                {c.status === "draft" ? (
+                  <button className="secondary" disabled={!!busy} onClick={() => confirm("この下書きを消しますか？") && act(c, "deleteDraft", {})}>
+                    下書きを消す
+                  </button>
+                ) : (
+                  <button className="secondary" disabled={!!busy} onClick={() => act(c, "setCardStatus", { status: c.status === "published" ? "private" : "published" })}>
+                    {c.status === "published" ? "非公開にする" : "もう一度公開する"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       ))}
       <Transfer what="あなたのカード" onMoved={load} />
