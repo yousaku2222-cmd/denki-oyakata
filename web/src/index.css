@@ -1757,3 +1757,11 @@ input[inputmode="decimal"] {
   font-size: 1.1rem;
   margin-right: 2px;
 }
+/* 場面で探す: the labels are longer than 場所/種類, so two to a row and on one line */
+.scene-tiles {
+  grid-template-columns: repeat(2, 1fr);
+}
+.scene-tiles .tile {
+  min-height: 48px;
+  white-space: nowrap;
+}

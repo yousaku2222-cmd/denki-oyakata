@@ -58,7 +58,7 @@ function LawList() {
       <p className="hint">電気設備の技術基準の解釈（電技解釈）・電気設備に関する技術基準を定める省令（電技省令）・電気工事士法・建設業法施行令・公共建築工事標準仕様書（標準仕様書）から、現場でよく使う条文を収めています。</p>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="言葉で探す（例: PF 支持 / 接地 / 軽微）" />
       <p className="hint">場面で探す</p>
-      <div className="tiles">
+      <div className="tiles scene-tiles">
         {LAW_SCENES.map((x) => (
           <Tile key={x.label} label={x.label} on={scene === x.label} onClick={() => setScene(scene === x.label ? null : x.label)} />
         ))}
