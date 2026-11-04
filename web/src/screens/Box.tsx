@@ -118,7 +118,13 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
   return (
     <section className="screen">
       <h1 className="screen-title">答えてほしい質問</h1>
-      <p className="hint">若手が親方に聞きたい質問です。「話して答える」を押すと、そのまま話して答えられ、答えは知恵カードになります。「⭐ いい質問」を押すと、聞いた若手に届きます。</p>
+      <div className="hint">
+        話して答えると、知恵カードになります。
+        <details className="more-info">
+          <summary>？</summary>
+          若手が親方に聞きたい質問です。「話して答える」を押すと、そのまま話して答えられ、答えは知恵カードになります。「⭐ いい質問」を押すと、聞いた若手に届きます。
+        </details>
+      </div>
       {!!items?.length && (
         <p className="box-count">
           📮 {items.length}件の質問が届いています
@@ -193,7 +199,13 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
       {shownAiOnly.length > 0 && (
         <div className="box-group ai-only">
           <p className="box-group-head">🤖 AIだけで答えた質問（親方の知恵がまだありません）</p>
-          <p className="hint">若手がAIに聞いて、法令や一般知識だけで答えた質問です。親方には送られていないので、答えても聞いた本人には届きませんが、次に同じことを聞いた若手の答えに使われます。</p>
+          <div className="hint">
+            答えると、次に聞いた若手の答えに使われます。
+            <details className="more-info">
+              <summary>？</summary>
+              若手がAIに聞いて、法令や一般知識だけで答えた質問です。親方には送られていないので、答えても聞いた本人には届きませんが、次に同じことを聞いた若手の答えに使われます。
+            </details>
+          </div>
           {shownAiOnly.map((text) => (
             <div key={text} className="qcard">
               <p className="qtext">{text}</p>

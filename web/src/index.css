@@ -512,11 +512,20 @@ input[type="text"] {
   font-size: 1.25rem;
   font-weight: 700;
 }
-.promise {
+.promise-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   margin: 8px 0 0;
-  padding-left: 1.2em;
+  padding: 0;
+  list-style: none;
+}
+.promise-chips li {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 .field {
   display: flex;
@@ -673,23 +682,42 @@ input[type="text"] {
     animation: none;
   }
 }
-.steps {
+/* how it works, as pictures joined by arrows (FlowSteps) */
+.flow-steps {
   list-style: none;
   padding: 0;
   margin: 8px 0;
   display: flex;
-  justify-content: space-between;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   font-size: 0.85rem;
+  font-weight: 700;
 }
-.steps li {
+.flow-step {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 4px;
+  text-align: center;
 }
-.steps span {
+.flow-icon {
   font-size: 1.8rem;
+  line-height: 1.2;
+}
+.flow-step img {
+  width: 100%;
+  max-width: 120px;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+.flow-arrow {
+  flex: none;
+  color: var(--yellow);
+  font-size: 1.2rem;
+  font-weight: 900;
 }
 .role-btn {
   min-height: 84px;
@@ -1763,6 +1791,10 @@ input[inputmode="decimal"] {
 }
 .scene-tiles .tile {
   min-height: 48px;
+  min-width: 0;
+  padding: 0 2px;
+  font-size: 0.85rem;
+  letter-spacing: -0.02em;
   white-space: nowrap;
 }
 
@@ -1822,12 +1854,19 @@ input[inputmode="decimal"] {
 }
 /* 聞く: how to check an answer, said where the answer starts */
 .how-to-check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
   margin: 0;
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--law-bg);
   font-size: 0.88rem;
-  line-height: 1.6;
+  line-height: 1.5;
+}
+.how-to-check .htc-title {
+  font-weight: 700;
 }
 /* 話す: what to start from */
 .talk-seeds {
@@ -1859,4 +1898,45 @@ input[inputmode="decimal"] {
 /* 質問箱: questions only the AI answered (no one sent them) */
 .box-group.ai-only .qcard {
   border-style: dashed;
+}
+/* the rest of an explanation, behind 「？」 */
+.more-info {
+  display: inline;
+}
+.more-info summary {
+  display: inline;
+  cursor: pointer;
+  color: var(--law);
+  font-weight: 700;
+  margin-left: 4px;
+}
+.more-info[open] {
+  display: block;
+  margin-top: 4px;
+}
+/* 計算: the tools as pictures */
+.calc-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.calc-tile {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  min-height: 92px;
+  padding: 10px 6px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: center;
+  cursor: pointer;
+}
+.calc-icon {
+  font-size: 1.9rem;
+  line-height: 1;
 }

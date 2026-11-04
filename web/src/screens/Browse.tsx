@@ -26,14 +26,14 @@ export function Browse() {
 type LawItem = LawRef & { summary: string; keywords: string[]; points: string[]; scenes: string[] };
 
 // 場面で探す: by the article's heading (and a few named by id), so every one of the articles is under some button
-const LAW_SCENES: { label: string; words: string[]; ids?: string[] }[] = [
-  { label: "配管", words: ["管"] },
-  { label: "ケーブル・ラック", words: ["ケーブル", "ラック"], ids: ["kaishaku-120"] },
-  { label: "配線の方法・電線", words: ["施設場所による工事の種類", "がいし", "線ぴ", "裸電線", "使用する電線", "高圧配線", "特殊な低圧屋内配線", "メタルラス", "用語の定義"] },
-  { label: "接地", words: ["接地"] },
-  { label: "絶縁・漏電", words: ["絶縁", "漏電", "地絡", "対地電圧"] },
-  { label: "分岐・ブレーカー", words: ["分岐", "開閉器", "幹線"], ids: ["kaishaku-146"] },
-  { label: "資格・工事の範囲", words: ["電気工事", "資格", "軽微", "技術者", "金額"], ids: ["335AC0000000139-2"] },
+const LAW_SCENES: { label: string; icon: string; words: string[]; ids?: string[] }[] = [
+  { label: "配管", icon: "🔧", words: ["管"] },
+  { label: "ケーブル・ラック", icon: "🧵", words: ["ケーブル", "ラック"], ids: ["kaishaku-120"] },
+  { label: "配線・電線", icon: "〰️", words: ["施設場所による工事の種類", "がいし", "線ぴ", "裸電線", "使用する電線", "高圧配線", "特殊な低圧屋内配線", "メタルラス", "用語の定義"] },
+  { label: "接地", icon: "🌏", words: ["接地"] },
+  { label: "絶縁・漏電", icon: "⚡", words: ["絶縁", "漏電", "地絡", "対地電圧"] },
+  { label: "分岐・ブレーカー", icon: "🔌", words: ["分岐", "開閉器", "幹線"], ids: ["kaishaku-146"] },
+  { label: "資格・工事範囲", icon: "🪪", words: ["電気工事", "資格", "軽微", "技術者", "金額"], ids: ["335AC0000000139-2"] },
 ];
 const inScene = (l: LawItem, s: (typeof LAW_SCENES)[number]) => !!s.ids?.includes(l.id) || s.words.some((w) => l.heading.normalize("NFKC").includes(w));
 const wordsOf = (q: string) => q.normalize("NFKC").trim().split(/\s+/).filter(Boolean);
@@ -43,6 +43,7 @@ function LawList() {
   const [q, setQ] = useState("");
   const [scene, setScene] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [all, setAll] = useState(false); // 52 articles at once is a wall of text: a scene or a word first
   const terms = useGlossary();
   useEffect(() => {
     call<{ laws: LawItem[] }>("listLaws", {})
@@ -64,12 +65,18 @@ function LawList() {
   return (
     <section className="screen">
       <h1 className="screen-title">法令・基準</h1>
-      <p className="hint">電気設備の技術基準の解釈（電技解釈）・電気設備に関する技術基準を定める省令（電技省令）・電気工事士法・建設業法施行令・公共建築工事標準仕様書（標準仕様書）から、現場でよく使う条文を収めています。</p>
+      <div className="hint">
+        現場でよく使う条文 {laws?.length ?? ""}件。場面を選ぶか、言葉で探してください。
+        <details className="more-info">
+          <summary>？ どの法令から</summary>
+          電気設備の技術基準の解釈（電技解釈）・電気設備に関する技術基準を定める省令（電技省令）・電気工事士法・建設業法施行令・公共建築工事標準仕様書（標準仕様書）から収めています。
+        </details>
+      </div>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="言葉で探す（例: PF 支持 / 接地 / 軽微）" />
       <p className="hint">場面で探す</p>
       <div className="tiles scene-tiles">
         {LAW_SCENES.map((x) => (
-          <Tile key={x.label} label={x.label} on={scene === x.label} onClick={() => setScene(scene === x.label ? null : x.label)} />
+          <Tile key={x.label} label={`${x.icon} ${x.label}`} on={scene === x.label} onClick={() => setScene(scene === x.label ? null : x.label)} />
         ))}
       </div>
       {meant.map((t) => (
@@ -79,9 +86,14 @@ function LawList() {
         </div>
       ))}
       {laws === null && <p className="hint">読み込み中…</p>}
-      {laws && <p className="hint">{shown.length}件</p>}
+      {laws && !s && !words.length && !all && (
+        <button className="link" onClick={() => setAll(true)}>
+          すべての条文を見る（{laws.length}件）
+        </button>
+      )}
+      {laws && (s || words.length > 0 || all) && <p className="hint">{shown.length}件</p>}
       {laws && shown.length === 0 && <p className="empty">合う条文がありません。言葉や場面を変えてみてください。</p>}
-      {shown.map((l) => (
+      {(s || words.length > 0 || all ? shown : []).map((l) => (
         <button key={l.id} className="card-row law-row" onClick={() => setOpen(l.id)}>
           <strong>{l.heading}</strong>
           {l.points?.[0] && <span className="law-gist">{l.points[0]}</span>}

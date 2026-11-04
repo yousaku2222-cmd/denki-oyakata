@@ -9,6 +9,7 @@ import { Me, lastSeen as meLastSeen } from "./screens/Me";
 import { Browse } from "./screens/Browse";
 import { Calc } from "./screens/Calc";
 import { Photo, type CalcStart } from "./screens/Photo";
+import { FlowSteps } from "./FlowSteps";
 import { call } from "./firebase";
 
 type Tab = "ask" | "browse" | "calc" | "photo" | "me" | "talk" | "box" | "mycards";
@@ -227,17 +228,14 @@ function Entry({ onChoose }: { onChoose: (r: Role, trial?: boolean) => void }) {
       <div className="entry-logo">⚡</div>
       <h1>でんきの親方</h1>
       <p className="catch">あなたの一言が、業界の未来へつながる</p>
-      <ol className="steps">
-        <li>
-          <span>🎙️</span>ベテランが話す
-        </li>
-        <li>
-          <span>🗂️</span>知恵カードになる
-        </li>
-        <li>
-          <span>🙋</span>若手が聞ける
-        </li>
-      </ol>
+      <FlowSteps
+        label="しくみ"
+        steps={[
+          { icon: "🎙️", label: "親方が話す" },
+          { icon: "🗂️", label: "知恵カードに" },
+          { icon: "🙋", label: "若手の答えに" },
+        ]}
+      />
       <button className="role-btn" onClick={() => onChoose("veteran")}>
         ベテランとして使う
         <small>話すだけで、知恵がカードになります</small>

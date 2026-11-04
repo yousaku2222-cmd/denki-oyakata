@@ -40,6 +40,22 @@ const LEAD: Record<string, string> = {
   engineer_requirement: "工事の金額で、監理技術者や専任が要るか",
 };
 
+// the list is a grid of pictures and short names; what each one does is said on its own screen
+const TILE: Record<string, [string, string]> = {
+  conduit_fill: ["🔧", "管に何本入る"],
+  voltage_drop: ["📉", "電圧降下"],
+  wire_for_load: ["⚙️", "kWから電線の太さ"],
+  wire_ampacity: ["🌡️", "許容電流"],
+  branch_wire: ["🔌", "ブレーカーから電線の太さ"],
+  cable_rack_layout: ["🧵", "ラックの並べ方"],
+  insulation_check: ["🛡️", "絶縁抵抗の合否"],
+  grounding_check: ["🌏", "接地抵抗の合否"],
+  support_spacing: ["📏", "管・ケーブルを留める間隔"],
+  rack_support_spacing: ["📐", "ラックを支える間隔"],
+  license_scope: ["🪪", "この資格でできる工事"],
+  engineer_requirement: ["👷", "監理技術者が要るか"],
+};
+
 export function Calc({ start }: { start?: { name: string; params: Record<string, string | number | boolean> } | null }) {
   const [defs, setDefs] = useState<CalcDef[] | null>(null);
   const [cur, setCur] = useState<CalcDef | null>(null);
@@ -58,14 +74,24 @@ export function Calc({ start }: { start?: { name: string; params: Record<string,
   return (
     <section className="screen">
       <h1 className="screen-title">計算・判定</h1>
-      <p className="hint">「聞く」で話しかけても使えます（例: 三相200Vで絶縁抵抗0.15MΩは大丈夫？）。</p>
+      <div className="hint">
+        使う物を選んでください。
+        <details className="more-info">
+          <summary>？</summary>
+          「聞く」で話しかけても使えます（例: 三相200Vで絶縁抵抗0.15MΩは大丈夫？）。
+        </details>
+      </div>
       {defs === null && <p className="hint">読み込み中…</p>}
-      {defs?.map((d) => (
-        <button key={d.name} className="card-row" onClick={() => setCur(d)}>
-          <strong>🧮 {d.label}</strong>
-          <span className="src-meta">{LEAD[d.name] ?? d.description.split("。")[0] + "。"}</span>
-        </button>
-      ))}
+      <div className="calc-tiles">
+        {defs?.map((d) => (
+          <button key={d.name} className="calc-tile" onClick={() => setCur(d)} title={LEAD[d.name] ?? d.description}>
+            <span className="calc-icon" aria-hidden>
+              {TILE[d.name]?.[0] ?? "🧮"}
+            </span>
+            <span>{TILE[d.name]?.[1] ?? d.label}</span>
+          </button>
+        ))}
+      </div>
     </section>
   );
 }
@@ -156,7 +182,10 @@ function CalcForm({ def, onBack, preset }: { def: CalcDef; onBack: () => void; p
       <button className="link" onClick={onBack}>
         ← 一覧へ
       </button>
-      <h1 className="screen-title">🧮 {def.label}</h1>
+      <h1 className="screen-title">
+        {TILE[def.name]?.[0] ?? "🧮"} {def.label}
+      </h1>
+      {LEAD[def.name] && <p className="hint">{LEAD[def.name]}</p>}
       {def.fields.filter(shown).map((f) =>
         f.type === "boolean" ? (
           <label key={f.key} className="toggle">

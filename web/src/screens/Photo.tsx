@@ -5,6 +5,7 @@ import { call, errorText } from "../firebase";
 import { addPart, getName } from "../local";
 import { LawSheet } from "../LawSheet";
 import { MicInput } from "../components";
+import { FlowSteps } from "../FlowSteps";
 
 export interface CalcStart {
   name: string;
@@ -130,13 +131,19 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
       <p className="hint">印字や型番が写るように撮ると、読み取って確かめます。写真の一覧からも選べます。</p>
       {!preview && (
         <div className="photo-sample">
-          <p className="part-sub">撮ると、こんなことが分かります</p>
-          <ul>
-            <li>部材の名前と、現場での呼び名（例：ねじなしボックスコネクタ ＝「ねじなしコネクタ」）</li>
-            <li>何に使うか、一緒に使う物、間違えやすい部材</li>
-            <li>関係する親方の知恵カードと条文、そのまま使える計算</li>
-            <li>分からない時は、写真ごと親方に聞けます</li>
-          </ul>
+          <FlowSteps
+            label="撮ると分かること"
+            steps={[
+              { icon: "📷", label: "撮る" },
+              { icon: "🔍", label: "名前と使い方" },
+              { icon: "🧰", label: "知恵と条文" },
+              { icon: "📮", label: "親方に聞ける" },
+            ]}
+          />
+          <details className="more-info">
+            <summary>？ くわしく</summary>
+            部材の名前と現場での呼び名（例：ねじなしボックスコネクタ ＝「ねじなしコネクタ」）、何に使うか・一緒に使う物・間違えやすい部材、関係する親方の知恵カードと条文、そのまま使える計算が出ます。分からない時は、写真ごと親方に聞けます。
+          </details>
         </div>
       )}
 

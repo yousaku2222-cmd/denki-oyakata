@@ -387,14 +387,18 @@ export function Talk({
 
       <label className="toggle small">
         <input type="checkbox" checked={listenerMode} onChange={(e) => setListenerMode(e.target.checked)} />
-        若手と2人で使う（若手がスマホを持ち、AIの質問を読み上げる）
+        👥 若手と2人で使う
+        <details className="more-info">
+          <summary>？</summary>
+          若手がスマホを持ち、AIの質問を親方に読み上げます。親方はスマホに触らず、話すだけです。
+        </details>
       </label>
 
-      <ul className="promise">
-        <li>声は残しません。文字だけを使います</li>
-        <li>方言・話し言葉のままで大丈夫です</li>
-        <li>あなたが確かめるまで、公開しません</li>
-        <li>名前を出すかどうか、毎回選べます</li>
+      <ul className="promise-chips" aria-label="安心の約束">
+        <li title="声は残しません。文字だけを使います">🔇 声は残さない</li>
+        <li title="方言・話し言葉のままで大丈夫です">🗣️ 方言のままOK</li>
+        <li title="あなたが確かめるまで、公開しません">🔒 確かめるまで非公開</li>
+        <li title="名前を出すかどうか、毎回選べます">👤 名前は選べる</li>
       </ul>
     </section>
   );

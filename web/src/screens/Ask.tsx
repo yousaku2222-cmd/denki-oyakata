@@ -233,9 +233,19 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
           </p>
           {/* a tester went to look it up on the internet: the way to check is already here */}
           {answer.sentences.some((s) => s.source === "law") && (
-            <p className="how-to-check">
-              🔍 本当か確かめるには：<strong>📜 引用元</strong>を押すと、国の法令・基準の原文が開きます。<strong>✔ 引用は原文と一致</strong>は、原文と一字一句合っている印です。ネットで探し直さなくて大丈夫です。
-            </p>
+            <div className="how-to-check">
+              <span className="htc-title">🔍 確かめ方</span>
+              <span>
+                <b>📜 引用元</b> 押すと国の原文
+              </span>
+              <span>
+                <b>✔ 一致</b> 原文と一字一句同じ
+              </span>
+              <details className="more-info">
+                <summary>？</summary>
+                ネットで探し直さなくても、ここから国の法令・基準の原文で確かめられます。
+              </details>
+            </div>
           )}
           {answer.mode === "dummy" && <p className="hint">※ 試験用のダミー応答です（AIの接続前）</p>}
           {answer.calcs?.map((c, i) => <CalcCard key={i} c={c} compact />)}
