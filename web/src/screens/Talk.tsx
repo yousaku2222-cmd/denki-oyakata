@@ -318,7 +318,10 @@ export function Talk({
 
   return (
     <section className="screen">
-      <p className="catch">あなたの一言が、業界の未来へつながる</p>
+      <p className="catch">
+        <span>あなたの一言が、</span>
+        <span>業界の未来へつながる</span>
+      </p>
       {topicNote}
 
 

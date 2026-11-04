@@ -712,6 +712,10 @@ input[type="text"] {
   max-width: 120px;
   aspect-ratio: 1;
   object-fit: contain;
+  /* the pictures are stickers on white: a white card keeps them looking that way on the navy entry */
+  background: #fff;
+  border-radius: 16px;
+  border: 2px solid #1b1b1b;
 }
 .flow-arrow {
   flex: none;
@@ -1939,4 +1943,14 @@ input[inputmode="decimal"] {
 .calc-icon {
   font-size: 1.9rem;
   line-height: 1;
+}
+
+/* a phrase is broken only between its parts (「あなたの一言が、／業界の未来へつながる」) */
+.catch span {
+  display: inline-block;
+}
+.flow-step span,
+.calc-tile span:last-child {
+  white-space: pre-line; /* the labels say where they break (
+) */
 }

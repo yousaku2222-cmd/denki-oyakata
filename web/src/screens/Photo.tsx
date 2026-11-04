@@ -135,9 +135,9 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
             label="撮ると分かること"
             steps={[
               { icon: "📷", label: "撮る" },
-              { icon: "🔍", label: "名前と使い方" },
-              { icon: "🧰", label: "知恵と条文" },
-              { icon: "📮", label: "親方に聞ける" },
+              { icon: "🔍", label: "名前と\n使い方" },
+              { icon: "🧰", label: "知恵と\n条文" },
+              { icon: "📮", label: "親方に\n聞ける" },
             ]}
           />
           <details className="more-info">

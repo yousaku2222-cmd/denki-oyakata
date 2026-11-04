@@ -227,13 +227,16 @@ function Entry({ onChoose }: { onChoose: (r: Role, trial?: boolean) => void }) {
     <div className="entry">
       <div className="entry-logo">⚡</div>
       <h1>でんきの親方</h1>
-      <p className="catch">あなたの一言が、業界の未来へつながる</p>
+      <p className="catch">
+        <span>あなたの一言が、</span>
+        <span>業界の未来へつながる</span>
+      </p>
       <FlowSteps
         label="しくみ"
         steps={[
-          { icon: "🎙️", label: "親方が話す" },
-          { icon: "🗂️", label: "知恵カードに" },
-          { icon: "🙋", label: "若手の答えに" },
+          { icon: "/flow/talk.webp", label: "親方が話す" },
+          { icon: "/flow/card.webp", label: "カードになる" },
+          { icon: "/flow/answer.webp", label: "若手に届く" },
         ]}
       />
       <button className="role-btn" onClick={() => onChoose("veteran")}>

@@ -40,20 +40,21 @@ const LEAD: Record<string, string> = {
   engineer_requirement: "工事の金額で、監理技術者や専任が要るか",
 };
 
-// the list is a grid of pictures and short names; what each one does is said on its own screen
+// the list is a grid of pictures and short names (\n: where a name breaks on a phone); what each one does is
+// said on its own screen
 const TILE: Record<string, [string, string]> = {
   conduit_fill: ["🔧", "管に何本入る"],
   voltage_drop: ["📉", "電圧降下"],
-  wire_for_load: ["⚙️", "kWから電線の太さ"],
+  wire_for_load: ["⚙️", "kWから\n電線の太さ"],
   wire_ampacity: ["🌡️", "許容電流"],
-  branch_wire: ["🔌", "ブレーカーから電線の太さ"],
+  branch_wire: ["🔌", "ブレーカーから\n電線の太さ"],
   cable_rack_layout: ["🧵", "ラックの並べ方"],
-  insulation_check: ["🛡️", "絶縁抵抗の合否"],
-  grounding_check: ["🌏", "接地抵抗の合否"],
-  support_spacing: ["📏", "管・ケーブルを留める間隔"],
-  rack_support_spacing: ["📐", "ラックを支える間隔"],
-  license_scope: ["🪪", "この資格でできる工事"],
-  engineer_requirement: ["👷", "監理技術者が要るか"],
+  insulation_check: ["🛡️", "絶縁抵抗の\n合否"],
+  grounding_check: ["🌏", "接地抵抗の\n合否"],
+  support_spacing: ["📏", "管・ケーブルを\n留める間隔"],
+  rack_support_spacing: ["📐", "ラックを\n支える間隔"],
+  license_scope: ["🪪", "この資格で\nできる工事"],
+  engineer_requirement: ["👷", "監理技術者が\n要るか"],
 };
 
 export function Calc({ start }: { start?: { name: string; params: Record<string, string | number | boolean> } | null }) {
