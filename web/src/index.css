@@ -1820,3 +1820,12 @@ input[inputmode="decimal"] {
   font-size: 0.9rem;
   padding: 6px 0;
 }
+/* 聞く: how to check an answer, said where the answer starts */
+.how-to-check {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--law-bg);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
