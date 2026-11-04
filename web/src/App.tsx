@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { getRole, getTheme, getTrial, setRole as saveRole, setTheme as saveTheme, setTrial, type Role } from "./local";
+import {
+  getRole,
+  getTheme,
+  getTrial,
+  setRole as saveRole,
+  setTheme as saveTheme,
+  setTrial,
+  type Role,
+} from "./local";
 import { Ask } from "./screens/Ask";
 import { SENT_TO_BOX } from "./FlyToMe";
 import { Talk, type Topic } from "./screens/Talk";
@@ -11,7 +19,8 @@ import { Calc } from "./screens/Calc";
 import { Photo, type CalcStart } from "./screens/Photo";
 import { call } from "./firebase";
 
-type Tab = "ask" | "browse" | "calc" | "photo" | "me" | "talk" | "box" | "mycards";
+type Tab =
+  "ask" | "browse" | "calc" | "photo" | "me" | "talk" | "box" | "mycards";
 
 const TABS: Record<Role, { id: Tab; icon: string; label: string }[]> = {
   young: [
@@ -35,12 +44,20 @@ export default function App() {
   // a question sent to the 質問箱 lands on わたし (where the answer will come back): a dot until it is opened
   const [meDot, setMeDot] = useState(false);
   // わたし →「答えを聞く」: the question is asked again on 聞く (now the veteran's card is there to answer it)
-  const [askSeed, setAskSeed] = useState<{ text: string; questionId: string; n: number } | null>(null);
+  const [askSeed, setAskSeed] = useState<{
+    text: string;
+    questionId: string;
+    n: number;
+  } | null>(null);
   // an answer that came back since わたし was last opened: dot on わたし when the app opens
   useEffect(() => {
     if (role !== "young") return;
     call<{ questions: { answeredAt: number }[] }>("myQuestions", {})
-      .then((r) => r.questions.some((q) => q.answeredAt > meLastSeen()) && setMeDot(true))
+      .then(
+        (r) =>
+          r.questions.some((q) => q.answeredAt > meLastSeen()) &&
+          setMeDot(true),
+      )
       .catch(() => {}); // only a hint: without it, わたし still shows the news when opened
   }, [role]);
   // 質問箱: how many came in (or were joined) since it was last opened, counted when the app opens and on each
@@ -49,14 +66,21 @@ export default function App() {
   useEffect(() => {
     if (role !== "veteran" || tab === "box") return;
     call<{ questions: { lastAskedAt: number }[] }>("openQuestions", {})
-      .then((r) => setBoxNew(r.questions.filter((q) => q.lastAskedAt > boxLastSeen()).length))
+      .then((r) =>
+        setBoxNew(
+          r.questions.filter((q) => q.lastAskedAt > boxLastSeen()).length,
+        ),
+      )
       .catch(() => {}); // only a hint
   }, [role, tab]);
   // a veteran's card that helped someone since わたしのカード was last opened: dot on that tab when the app opens
   const [cardsDot, setCardsDot] = useState(false);
   useEffect(() => {
     if (role !== "veteran") return;
-    call<{ cards: { id: string; helpedCount: number; status: string }[] }>("myCards", {})
+    call<{ cards: { id: string; helpedCount: number; status: string }[] }>(
+      "myCards",
+      {},
+    )
       .then((r) => newlyHelped(r.cards).length > 0 && setCardsDot(true))
       .catch(() => {}); // only a hint
   }, [role]);
@@ -86,7 +110,9 @@ export default function App() {
   }
 
   function toggleTheme() {
-    const dark = theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    const dark = theme
+      ? theme === "dark"
+      : matchMedia("(prefers-color-scheme: dark)").matches;
     const next = dark ? "light" : "dark";
     saveTheme(next);
     setThemeState(next);
@@ -94,9 +120,18 @@ export default function App() {
 
   if (!role) return <Entry onChoose={choose} />;
 
-  const startTalk = (t: Topic | null, resume: string | null = null, force = false) => {
+  const startTalk = (
+    t: Topic | null,
+    resume: string | null = null,
+    force = false,
+  ) => {
     // starting another story replaces the one on 話す: do not drop what was told without asking
-    if (!force && talkDirty && !confirm("「話す」で話している途中の内容は消えます。よろしいですか？")) return;
+    if (
+      !force &&
+      talkDirty &&
+      !confirm("「話す」で話している途中の内容は消えます。よろしいですか？")
+    )
+      return;
     setTalkDirty(false);
     setTopic(t);
     setResumeId(resume);
@@ -107,30 +142,62 @@ export default function App() {
   return (
     <div className="app" data-role={role}>
       <div className="top-wrap">
-      <header className="top">
-        <span className="logo">⚡ でんきの親方</span>
-        <span className="role-badge">{role === "veteran" ? "🧰ベテラン" : "🔰若手"}</span>
-        <button className="icon-btn" aria-label="明るさの切り替え" onClick={toggleTheme}>
-          ◐
-        </button>
-        <button className="icon-btn" onClick={() => (role !== "veteran" || !talkDirty || confirm("「話す」で話している途中の内容は消えます。切り替えますか？")) && choose(null)}>
-          切替
-        </button>
-      </header>
-      {getTrial() && (
-        <p className="trial-note">
-          🧪 審査員モード：公開したカードと送った質問は、この端末にだけ見えます
-          <button className="link" onClick={() => choose(null, false)}>
-            終える
+        <header className="top">
+          <span className="logo">⚡ でんきの親方</span>
+          <span className="role-badge">
+            {role === "veteran" ? "🧰ベテラン" : "🔰若手"}
+          </span>
+          <button
+            className="icon-btn"
+            aria-label="明るさの切り替え"
+            onClick={toggleTheme}
+          >
+            ◐
           </button>
-        </p>
-      )}
+          <button
+            className="icon-btn"
+            onClick={() =>
+              (role !== "veteran" ||
+                !talkDirty ||
+                confirm(
+                  "「話す」で話している途中の内容は消えます。切り替えますか？",
+                )) &&
+              choose(null)
+            }
+          >
+            切替
+          </button>
+        </header>
+        {getTrial() && (
+          <p className="trial-note">
+            🧪
+            審査員モード：公開したカードと送った質問は、この端末にだけ見えます
+            <button className="link" onClick={() => choose(null, false)}>
+              終える
+            </button>
+          </p>
+        )}
       </div>
 
       <main>
-        {tab === "ask" && (role === "veteran" ? <VeteranAsk role={role} /> : <Ask key={askSeed?.n ?? 0} role={role} seed={askSeed?.text} seedQuestionId={askSeed?.questionId} />)}
+        {tab === "ask" &&
+          (role === "veteran" ? (
+            <VeteranAsk role={role} />
+          ) : (
+            <Ask
+              key={askSeed?.n ?? 0}
+              role={role}
+              seed={askSeed?.text}
+              seedQuestionId={askSeed?.questionId}
+            />
+          ))}
         {tab === "browse" && <Browse />}
-        {tab === "calc" && <Calc key={calcStart ? JSON.stringify(calcStart) : "list"} start={calcStart} />}
+        {tab === "calc" && (
+          <Calc
+            key={calcStart ? JSON.stringify(calcStart) : "list"}
+            start={calcStart}
+          />
+        )}
         {tab === "photo" && (
           <Photo
             onCalc={(s) => {
@@ -150,12 +217,25 @@ export default function App() {
         {/* kept mounted while other tabs are open, so a half-told story is not lost */}
         {role === "veteran" && (
           <div hidden={tab !== "talk"}>
-            <Talk key={talkKey} topic={topic} resumeCardId={resumeId} active={tab === "talk"} onDirty={setTalkDirty} onDone={() => startTalk(null, null, true)} />
+            <Talk
+              key={talkKey}
+              topic={topic}
+              resumeCardId={resumeId}
+              active={tab === "talk"}
+              onDirty={setTalkDirty}
+              onDone={() => startTalk(null, null, true)}
+              onBack={() => {
+                startTalk(null, null, true);
+                setTab("mycards");
+              }}
+            />
           </div>
         )}
         {tab === "box" && <Box onAnswer={startTalk} />}
         {tab === "mycards" && <MyCards onEdit={(id) => startTalk(null, id)} />}
-        <p className="disclaimer">最終判断は、有資格者・責任者が行ってください。</p>
+        <p className="disclaimer">
+          最終判断は、有資格者・責任者が行ってください。
+        </p>
       </main>
 
       <nav className="tabs">
@@ -175,7 +255,10 @@ export default function App() {
           >
             <span className="tab-icon">
               {t.icon}
-              {((t.id === "me" && meDot) || (t.id === "mycards" && cardsDot)) && <span className="tab-dot" aria-label="新しい知らせ" />}
+              {((t.id === "me" && meDot) ||
+                (t.id === "mycards" && cardsDot)) && (
+                <span className="tab-dot" aria-label="新しい知らせ" />
+              )}
               {t.id === "box" && boxNew > 0 && (
                 <span className="tab-count" aria-label={`新着${boxNew}件`}>
                   {boxNew > 9 ? "9+" : boxNew}
@@ -196,21 +279,35 @@ function VeteranAsk({ role }: { role: Role }) {
   return (
     <>
       <div className="segmented">
-        <button className={view === "ask" ? "on" : ""} onClick={() => setView("ask")}>
+        <button
+          className={view === "ask" ? "on" : ""}
+          onClick={() => setView("ask")}
+        >
           聞く
         </button>
-        <button className={view === "browse" ? "on" : ""} onClick={() => setView("browse")}>
+        <button
+          className={view === "browse" ? "on" : ""}
+          onClick={() => setView("browse")}
+        >
           探す
         </button>
-        <button className={view === "calc" ? "on" : ""} onClick={() => setView("calc")}>
+        <button
+          className={view === "calc" ? "on" : ""}
+          onClick={() => setView("calc")}
+        >
           計算
         </button>
       </div>
-      {view === "ask" ? <Ask role={role} /> : view === "browse" ? <Browse /> : <Calc start={null} />}
+      {view === "ask" ? (
+        <Ask role={role} />
+      ) : view === "browse" ? (
+        <Browse />
+      ) : (
+        <Calc start={null} />
+      )}
     </>
   );
 }
-
 
 function Entry({ onChoose }: { onChoose: (r: Role, trial?: boolean) => void }) {
   return (
@@ -238,7 +335,9 @@ function Entry({ onChoose }: { onChoose: (r: Role, trial?: boolean) => void }) {
         <small>現場の疑問に、根拠つきで答えます</small>
       </button>
       {getTrial() ? (
-        <p className="trial-note entry-trial">🧪 審査員モード中です。役割を選ぶと、そのまま続きます。</p>
+        <p className="trial-note entry-trial">
+          🧪 審査員モード中です。役割を選ぶと、そのまま続きます。
+        </p>
       ) : (
         <button className="link" onClick={() => onChoose("young", true)}>
           審査員の方はこちら（デモ）

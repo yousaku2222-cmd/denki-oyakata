@@ -26,12 +26,14 @@ export function Talk({
   resumeCardId,
   active = true,
   onDone,
+  onBack,
   onDirty,
 }: {
   topic: Topic | null;
   resumeCardId?: string | null;
   active?: boolean; // false while another tab is shown (this screen stays mounted)
   onDone: () => void;
+  onBack?: () => void; // opened from わたしのカード: going back there is where the veteran came from
   onDirty?: (dirty: boolean) => void; // something told or edited that is not published yet
 }) {
   const [topic, setTopic] = useState(topicIn);
@@ -50,13 +52,19 @@ export function Talk({
   const [published, setPublished] = useState(false);
   const [birth, setBirth] = useState(false); // a new draft is shown being made before it can be edited
   const endBirth = useCallback(() => setBirth(false), []);
-  const [status, setStatus] = useState<"draft" | "published" | "private">("draft");
-  const [savedStatus, setSavedStatus] = useState<"published" | "private">("published");
+  const [status, setStatus] = useState<"draft" | "published" | "private">(
+    "draft",
+  );
+  const [savedStatus, setSavedStatus] = useState<"published" | "private">(
+    "published",
+  );
   // the card as last saved on the server (a new draft is saved when made): only changes since then would be lost
   const [saved, setSaved] = useState("");
   const snapshot = JSON.stringify([draft, tagsText, showName, name]);
 
-  const dirty = !published && (draft ? snapshot !== saved : turns.length > 0 || !!text.trim());
+  const dirty =
+    !published &&
+    (draft ? snapshot !== saved : turns.length > 0 || !!text.trim());
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
 
   // the interview behind an opened card (a new draft uses the turns of this session)
@@ -64,7 +72,15 @@ export function Talk({
   // opened from わたしのカード: go on with a draft (or fix a published card)
   useEffect(() => {
     if (!resumeCardId) return;
-    call<{ cardId: string; status: "draft" | "published" | "private"; draft: Draft; authorName: string; showAuthorName: boolean; topic: { questionId: string; text: string; askerName: string } | null; transcript: Turn[] }>("myCard", { cardId: resumeCardId })
+    call<{
+      cardId: string;
+      status: "draft" | "published" | "private";
+      draft: Draft;
+      authorName: string;
+      showAuthorName: boolean;
+      topic: { questionId: string; text: string; askerName: string } | null;
+      transcript: Turn[];
+    }>("myCard", { cardId: resumeCardId })
       .then((r) => {
         setCardId(r.cardId);
         setStatus(r.status);
@@ -72,11 +88,22 @@ export function Talk({
         setTagsText(r.draft.tags.join("、"));
         setShowName(r.showAuthorName);
         if (r.authorName) setNameState(r.authorName);
-        setSaved(JSON.stringify([r.draft, r.draft.tags.join("、"), r.showAuthorName, r.authorName || name]));
+        setSaved(
+          JSON.stringify([
+            r.draft,
+            r.draft.tags.join("、"),
+            r.showAuthorName,
+            r.authorName || name,
+          ]),
+        );
         if (r.topic) setTopic(r.topic);
         setTold(r.transcript ?? []);
       })
-      .catch((e) => setErr(errorText(e, "カードを開けませんでした。もう一度お試しください。")))
+      .catch((e) =>
+        setErr(
+          errorText(e, "カードを開けませんでした。もう一度お試しください。"),
+        ),
+      )
       .finally(() => setBusy(false));
   }, [resumeCardId]);
 
@@ -84,11 +111,14 @@ export function Talk({
   // the young worker's photo, to look at again while telling and while checking the draft
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoBig, setPhotoBig] = useState(false);
-  const photoQuestion = topic?.hasPhoto === false ? "" : (topic?.questionId ?? "");
+  const photoQuestion =
+    topic?.hasPhoto === false ? "" : (topic?.questionId ?? "");
   useEffect(() => {
     if (!photoQuestion) return;
     let live = true;
-    call<{ photo: string | null }>("questionPhoto", { questionId: photoQuestion })
+    call<{ photo: string | null }>("questionPhoto", {
+      questionId: photoQuestion,
+    })
       .then((r) => live && setPhoto(r.photo))
       .catch(() => {}); // the question still shows; only the photo is missing
     return () => {
@@ -99,14 +129,23 @@ export function Talk({
     <Notice>
       {topic.followUp && (
         <span className="follow-chip">
-          🔗 続き：前の質問「{topic.followUp.text}」{topic.followUp.cardTitle ? `→ カード「${topic.followUp.cardTitle}」` : ""}
+          🔗 続き：前の質問「{topic.followUp.text}」
+          {topic.followUp.cardTitle
+            ? `→ カード「${topic.followUp.cardTitle}」`
+            : ""}
         </span>
       )}
       📮 {topic.askerName}さんの質問に答えます：<strong>{topic.text}</strong>
       {photo && (
-        <button className={`topic-photo ${photoBig ? "big" : ""}`} onClick={() => setPhotoBig((b) => !b)} aria-label={photoBig ? "写真を小さくする" : "写真を大きくする"}>
+        <button
+          className={`topic-photo ${photoBig ? "big" : ""}`}
+          onClick={() => setPhotoBig((b) => !b)}
+          aria-label={photoBig ? "写真を小さくする" : "写真を大きくする"}
+        >
           <img src={photo} alt={`${topic.askerName}さんが撮った写真`} />
-          <span>{photoBig ? "押すと小さくなります" : "押すと大きくなります"}</span>
+          <span>
+            {photoBig ? "押すと小さくなります" : "押すと大きくなります"}
+          </span>
         </button>
       )}
     </Notice>
@@ -114,7 +153,11 @@ export function Talk({
 
   async function next(finish = false) {
     const t: Turn[] = text.trim()
-      ? [...turns, ...(aiQuestion ? [{ role: "ai" as const, text: aiQuestion }] : []), { role: "veteran", text: text.trim() }]
+      ? [
+          ...turns,
+          ...(aiQuestion ? [{ role: "ai" as const, text: aiQuestion }] : []),
+          { role: "veteran", text: text.trim() },
+        ]
       : turns;
     if (!t.some((x) => x.role === "veteran")) return;
     if (text.trim().length > 3000) {
@@ -126,7 +169,12 @@ export function Talk({
     try {
       const r = finish
         ? { done: true, question: "" }
-        : await call<{ done: boolean; question: string }>("interviewNext", { transcript: t, questionText: topic?.followUp ? `前の質問「${topic.followUp.text}」の続きです。${topic.text}` : topic?.text });
+        : await call<{ done: boolean; question: string }>("interviewNext", {
+            transcript: t,
+            questionText: topic?.followUp
+              ? `前の質問「${topic.followUp.text}」の続きです。${topic.text}`
+              : topic?.text,
+          });
       // only now: if the call failed, what was said stays in the box and can be sent again
       setTurns(t);
       setText("");
@@ -143,7 +191,9 @@ export function Talk({
         setDraft(d.draft);
         setBirth(true);
         setTagsText(d.draft.tags.join("、"));
-        setSaved(JSON.stringify([d.draft, d.draft.tags.join("、"), showName, name]));
+        setSaved(
+          JSON.stringify([d.draft, d.draft.tags.join("、"), showName, name]),
+        );
       }
     } catch (e) {
       setErr(errorText(e, "うまく送れませんでした。もう一度お試しください。"));
@@ -158,59 +208,128 @@ export function Talk({
     setErr("");
     try {
       setName("veteran", name);
-      const r = await call<{ status?: "published" | "private" }>("publishCard", {
-        cardId,
-        authorName: name,
-        showAuthorName: showName,
-        edits: { ...draft, tags: tagsText.split(/[、,\n]+/).map((x) => x.trim()).filter(Boolean) }, // a word may keep its spaces (「VVF 2.0」)
-      });
+      const r = await call<{ status?: "published" | "private" }>(
+        "publishCard",
+        {
+          cardId,
+          authorName: name,
+          showAuthorName: showName,
+          edits: {
+            ...draft,
+            tags: tagsText
+              .split(/[、,\n]+/)
+              .map((x) => x.trim())
+              .filter(Boolean),
+          }, // a word may keep its spaces (「VVF 2.0」)
+        },
+      );
       // what the card is now (it may have been made public or hidden from わたしのカード meanwhile)
       setSavedStatus(r.status ?? "published");
       setPublished(true);
     } catch (e) {
-      setErr(errorText(e, "保存できませんでした。題名とやり方が入っているか、長すぎないか確かめてください。"));
+      setErr(
+        errorText(
+          e,
+          "保存できませんでした。題名とやり方が入っているか、長すぎないか確かめてください。",
+        ),
+      );
     } finally {
       setBusy(false);
     }
   }
 
+  const back = resumeCardId ? onBack : undefined;
+  const leaveTo = back ? "わたしのカードへ戻る" : "新しく話す";
+  const leaveAsk = back ? "戻りますか？" : "新しく話しますか？";
+
   if (published) {
     return (
       <section className="screen center">
-        {savedStatus === "published" && status === "draft" && draft ? <IntoTheBag title={draft.title} /> : <div className="big-emoji">🗂️</div>}
-        <h1 className="screen-title">{savedStatus === "private" ? "直しました（非公開のまま）" : status === "draft" ? "知恵袋に入りました" : "直しました"}</h1>
-        {savedStatus !== "private" && <p>若手が聞けば、あなたの話が答えに出てきます。{status === "draft" && topic && `${topic.askerName}さんにも届きます。`}</p>}
-        <button className="primary" onClick={onDone}>
-          続けて話す
-        </button>
+        {savedStatus === "published" && status === "draft" && draft ? (
+          <IntoTheBag title={draft.title} />
+        ) : (
+          <div className="big-emoji">🗂️</div>
+        )}
+        <h1 className="screen-title">
+          {savedStatus === "private"
+            ? "直しました（非公開のまま）"
+            : status === "draft"
+              ? "知恵袋に入りました"
+              : "直しました"}
+        </h1>
+        {savedStatus !== "private" && (
+          <p>
+            若手が聞けば、あなたの話が答えに出てきます。
+            {status === "draft" &&
+              topic &&
+              `${topic.askerName}さんにも届きます。`}
+          </p>
+        )}
+        {back ? (
+          <>
+            <button className="primary" onClick={back}>
+              ← わたしのカードへ戻る
+            </button>
+            <button className="link" onClick={onDone}>
+              新しく話す
+            </button>
+          </>
+        ) : (
+          <button className="primary" onClick={onDone}>
+            続けて話す
+          </button>
+        )}
       </section>
     );
   }
 
   if (draft && birth) {
-    return <CardBirth said={turns.filter((t) => t.role === "veteran").map((t) => t.text)} draft={draft} onDone={endBirth} />;
+    return (
+      <CardBirth
+        said={turns.filter((t) => t.role === "veteran").map((t) => t.text)}
+        draft={draft}
+        onDone={endBirth}
+      />
+    );
   }
 
   if (draft) {
     // the same limits as the server (functions/src/interview.ts CARD_LIMITS)
-    const MAX: Record<string, number> = { title: 60, scene: 500, body: 1500, reason: 1000, caution: 1000 };
+    const MAX: Record<string, number> = {
+      title: 60,
+      scene: 500,
+      body: 1500,
+      reason: 1000,
+      caution: 1000,
+    };
     const field = (key: keyof Draft, label: string, rows = 2) => (
       <label className="field">
         <span>{label}</span>
-        <textarea rows={rows} maxLength={MAX[key]} value={draft[key] as string} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
+        <textarea
+          rows={rows}
+          maxLength={MAX[key]}
+          value={draft[key] as string}
+          onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+        />
       </label>
     );
     return (
       <section className="screen">
-        <h1 className="screen-title">{status === "draft" ? "知恵カードの下書き" : "知恵カードを直す"}</h1>
+        <h1 className="screen-title">
+          {status === "draft" ? "知恵カードの下書き" : "知恵カードを直す"}
+        </h1>
         {topicNote}
         {toldShown.length > 0 && (
           <details className="told">
-            <summary>🎙️ 聞き取りのやりとり（直す前に、話した内容を確かめる）</summary>
+            <summary>
+              🎙️ 聞き取りのやりとり（直す前に、話した内容を確かめる）
+            </summary>
             <ol className="transcript">
               {toldShown.map((x, i) => (
                 <li key={i} className={x.role}>
-                  <span className="who">{x.role === "ai" ? "AI" : "あなた"}</span>
+                  <span className="who">
+                    {x.role === "ai" ? "AI" : "あなた"}
+                  </span>
                   {x.text}
                 </li>
               ))}
@@ -231,22 +350,54 @@ export function Talk({
         {field("caution", "新人がよく間違えること")}
         <label className="field">
           <span>探す時の言葉（現場の呼び名など）</span>
-          <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} />
+          <input
+            value={tagsText}
+            onChange={(e) => setTagsText(e.target.value)}
+          />
         </label>
         <fieldset className="field">
           <span>名前の出し方</span>
           <label className="radio">
-            <input type="radio" checked={showName} onChange={() => setShowName(true)} /> 名前を出す
+            <input
+              type="radio"
+              checked={showName}
+              onChange={() => setShowName(true)}
+            />{" "}
+            名前を出す
           </label>
-          {showName && <input placeholder="例: 山田（親方）" maxLength={30} value={name} onChange={(e) => setNameState(e.target.value)} />}
-          {showName && !name.trim() && <p className="hint">名前が空のままだと「社内のベテラン」と表示されます。</p>}
+          {showName && (
+            <input
+              placeholder="例: 山田（親方）"
+              maxLength={30}
+              value={name}
+              onChange={(e) => setNameState(e.target.value)}
+            />
+          )}
+          {showName && !name.trim() && (
+            <p className="hint">
+              名前が空のままだと「社内のベテラン」と表示されます。
+            </p>
+          )}
           <label className="radio">
-            <input type="radio" checked={!showName} onChange={() => setShowName(false)} /> 出さない（「社内のベテラン」と表示）
+            <input
+              type="radio"
+              checked={!showName}
+              onChange={() => setShowName(false)}
+            />{" "}
+            出さない（「社内のベテラン」と表示）
           </label>
         </fieldset>
         {err && <p className="hint error">{err}</p>}
-        <button className="primary" disabled={busy || !draft.title.trim() || !draft.body.trim()} onClick={publish}>
-          {busy ? "保存しています…" : status === "draft" ? "確かめたので公開する" : "直して保存する"}
+        <button
+          className="primary"
+          disabled={busy || !draft.title.trim() || !draft.body.trim()}
+          onClick={publish}
+        >
+          {busy
+            ? "保存しています…"
+            : status === "draft"
+              ? "確かめたので公開する"
+              : "直して保存する"}
         </button>
         <button
           className="link"
@@ -255,13 +406,15 @@ export function Talk({
             confirm(
               dirty
                 ? status === "draft"
-                  ? "直した所は保存されません（下書きは直す前のまま「わたしのカード」に残ります）。新しく話しますか？"
-                  : "直した所は保存されません。新しく話しますか？"
-                : "この下書きは「わたしのカード」に残ります。新しく話しますか？",
-            ) && onDone()
+                  ? `直した所は保存されません（下書きは直す前のまま「わたしのカード」に残ります）。${leaveAsk}`
+                  : `直した所は保存されません。${leaveAsk}`
+                : `この下書きは「わたしのカード」に残ります。${leaveAsk}`,
+            ) && (back ?? onDone)()
           }
         >
-          {status === "draft" ? "下書きのまま置いて、新しく話す" : "保存しないで、新しく話す"}
+          {status === "draft"
+            ? `下書きのまま置いて、${leaveTo}`
+            : `保存しないで、${leaveTo}`}
         </button>
       </section>
     );
@@ -271,7 +424,6 @@ export function Talk({
     <section className="screen">
       <p className="catch">あなたの一言が、業界の未来へつながる</p>
       {topicNote}
-
 
       {turns.length > 0 && (
         <ol className="transcript">
@@ -285,7 +437,9 @@ export function Talk({
 
       {aiQuestion && (
         <div className="ai-question">
-          <span className="src-tag">{listenerMode ? "📣 親方に読み上げてください" : "🤖 聞き手から"}</span>
+          <span className="src-tag">
+            {listenerMode ? "📣 親方に読み上げてください" : "🤖 聞き手から"}
+          </span>
           <p>{aiQuestion}</p>
         </div>
       )}
@@ -297,22 +451,42 @@ export function Talk({
         onChange={setText}
         micLabel={turns.length ? "答える" : "話す"}
         rows={4}
-        placeholder={turns.length ? "話した内容がここに入ります" : "例: PF管はな、90度の曲がりが3つあったら線が通らん。プルボックスを入れる。"}
+        placeholder={
+          turns.length
+            ? "話した内容がここに入ります"
+            : "例: PF管はな、90度の曲がりが3つあったら線が通らん。プルボックスを入れる。"
+        }
       />
       {err && <p className="hint error">{err}</p>}
       <div className="row">
-        <button className="primary" disabled={busy || !text.trim()} onClick={() => next(false)}>
-          {busy ? "考えています…" : turns.length ? "答えを送る" : "話した内容を送る"}
+        <button
+          className="primary"
+          disabled={busy || !text.trim()}
+          onClick={() => next(false)}
+        >
+          {busy
+            ? "考えています…"
+            : turns.length
+              ? "答えを送る"
+              : "話した内容を送る"}
         </button>
         {turns.length > 0 && (
-          <button className="secondary" disabled={busy} onClick={() => next(true)}>
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={() => next(true)}
+          >
             カードにする
           </button>
         )}
       </div>
 
       <label className="toggle small">
-        <input type="checkbox" checked={listenerMode} onChange={(e) => setListenerMode(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={listenerMode}
+          onChange={(e) => setListenerMode(e.target.checked)}
+        />
         若手と2人で使う（若手がスマホを持ち、AIの質問を読み上げる）
       </label>
 

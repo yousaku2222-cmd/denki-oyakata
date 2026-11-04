@@ -1765,3 +1765,19 @@ input[inputmode="decimal"] {
   min-height: 48px;
   white-space: nowrap;
 }
+
+/* ---- 撮る: from the name the AI read on to the veteran ---- */
+.photo-bridge {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+}
+.photo-bridge p {
+  margin: 0;
+}
+.photo-ask {
+  scroll-margin-top: 72px;
+}
