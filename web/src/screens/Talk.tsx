@@ -4,6 +4,7 @@ import { call, errorText } from "../firebase";
 import { getName, setName } from "../local";
 import { MicInput, Notice } from "../components";
 import { FlowSteps } from "../FlowSteps";
+import { ic } from "../Icon";
 
 type Turn = { role: "veteran" | "ai"; text: string };
 interface Draft {
@@ -340,9 +341,9 @@ export function Talk({
         <FlowSteps
           label="話すと"
           steps={[
-            { icon: "🎙️", label: "話す" },
+            { icon: ic("talk"), label: "話す" },
             { icon: "🤖", label: "聞き返し" },
-            { icon: "🗂️", label: "カードに" },
+            { icon: ic("cards"), label: "カードに" },
             { icon: "✅", label: "確かめて\n公開" },
           ]}
         />

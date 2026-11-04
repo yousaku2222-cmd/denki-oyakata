@@ -6,6 +6,7 @@ import { addPart, getName } from "../local";
 import { LawSheet } from "../LawSheet";
 import { MicInput } from "../components";
 import { FlowSteps } from "../FlowSteps";
+import { ic } from "../Icon";
 
 export interface CalcStart {
   name: string;
@@ -134,10 +135,10 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
           <FlowSteps
             label="撮ると分かること"
             steps={[
-              { icon: "📷", label: "撮る" },
-              { icon: "🔍", label: "名前と\n使い方" },
-              { icon: "🧰", label: "知恵と\n条文" },
-              { icon: "📮", label: "親方に\n聞ける" },
+              { icon: ic("camera"), label: "撮る" },
+              { icon: ic("search"), label: "名前と\n使い方" },
+              { icon: ic("wisdom"), label: "知恵と\n条文" },
+              { icon: ic("box"), label: "親方に\n聞ける" },
             ]}
           />
           <details className="more-info">

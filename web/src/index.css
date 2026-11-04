@@ -718,7 +718,7 @@ input[type="text"] {
   font-size: 1.8rem;
   line-height: 1.2;
 }
-.flow-step img {
+.entry .flow-step img {
   width: 100%;
   max-width: 120px;
   aspect-ratio: 1;
@@ -2182,4 +2182,42 @@ input[inputmode="decimal"] {
 }
 .flow-steps.many .flow-icon {
   font-size: 1.5rem;
+}
+
+/* drawn icons (web/public/icons): the size where each one stands */
+img.icon {
+  display: inline-block;
+  width: 1.4em;
+  height: 1.4em;
+  object-fit: contain;
+  vertical-align: -0.35em;
+}
+.tab-icon img.icon {
+  width: 26px;
+  height: 26px;
+  vertical-align: middle;
+}
+img.flow-icon {
+  width: 40px;
+  height: 40px;
+}
+.flow-steps.many img.flow-icon {
+  width: 34px;
+  height: 34px;
+}
+img.calc-icon {
+  width: 46px;
+  height: 46px;
+}
+img.tile-icon {
+  width: 30px;
+  height: 30px;
+}
+img.pick-icon {
+  width: 46px;
+  height: 46px;
+}
+img.title-icon {
+  width: 1.2em;
+  height: 1.2em;
 }

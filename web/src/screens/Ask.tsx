@@ -10,6 +10,7 @@ import { useFlyToMe } from "../FlyToMe";
 import { AnswerSample } from "../AnswerSample";
 import { GlossSheet, Glossed, firstMentions, useGlossary, type Term } from "../Glossary";
 import { FlowSteps } from "../FlowSteps";
+import { Icon, ic } from "../Icon";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
 // The list starts moving when it scrolls into view (a calculation card above can push it below the fold).
@@ -56,9 +57,9 @@ const TICK_MS = 450; // every step shows ✓ for this long before the list folds
 // examples that show every kind of source (law, a veteran's card): the first thing a judge taps
 // the questions young workers ask most, each with the picture of its kind
 const EXAMPLES: [string, string][] = [
-  ["🪪", "資格が無くても出来る作業はありますか？"],
-  ["🔧", "PF管って何回まで曲げていい？"],
-  ["📎", "VE管とPF管のサドルの違いは？"],
+  [ic("license_scope"), "資格が無くても出来る作業はありますか？"],
+  [ic("piping"), "PF管って何回まで曲げていい？"],
+  [ic("support_spacing"), "VE管とPF管のサドルの違いは？"],
 ];
 const GENERAL_PREVIEW = 2; // general sentences shown before 「もっと見る」 when a checked source comes first
 
@@ -223,15 +224,15 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
           <FlowSteps
             label="聞くと"
             steps={[
-              { icon: "🎤", label: "聞く" },
-              { icon: "⚖️", label: "出どころ\nつきの答え" },
-              { icon: "📮", label: "親方に\n聞ける" },
+              { icon: ic("mic"), label: "聞く" },
+              { icon: ic("law"), label: "出どころ\nつきの答え" },
+              { icon: ic("box"), label: "親方に\n聞ける" },
             ]}
           />
           <p className="hint">よく聞かれる質問</p>
           {EXAMPLES.map(([icon, q]) => (
             <button key={q} className="chip example-chip" onClick={() => submit(q)}>
-              <span aria-hidden>{icon}</span> {q}
+              <Icon of={icon} /> {q}
             </button>
           ))}
           <details className="sample-fold">
@@ -279,7 +280,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
                 <motion.div key={src} className={`src-group src-${src}`} variants={GROUP}>
                   <div className="src-head">
                     <span className="src-tag">
-                      {SOURCE_LABEL[src].icon} {SOURCE_LABEL[src].label} {count}
+                      <Icon of={SOURCE_LABEL[src].icon} /> {SOURCE_LABEL[src].label} {count}
                     </span>
                   </div>
                   {shownRows.map((s, i) => {

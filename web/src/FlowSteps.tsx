@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { Icon } from "./Icon";
 
 export interface Step {
   icon: string; // an emoji, or a picture under /public (path starting with "/")
@@ -17,7 +18,7 @@ export function FlowSteps({ steps, label }: { steps: Step[]; label: string }) {
             </li>
           )}
           <li className="flow-step">
-            {s.icon.startsWith("/") ? <img src={s.icon} alt="" /> : <span className="flow-icon">{s.icon}</span>}
+            <Icon of={s.icon} className="flow-icon" />
             <span>{s.label}</span>
           </li>
         </Fragment>

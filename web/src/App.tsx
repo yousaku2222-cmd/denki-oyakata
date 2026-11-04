@@ -10,23 +10,24 @@ import { Browse } from "./screens/Browse";
 import { Calc } from "./screens/Calc";
 import { Photo, type CalcStart } from "./screens/Photo";
 import { FlowSteps } from "./FlowSteps";
+import { Icon, ic } from "./Icon";
 import { call } from "./firebase";
 
 type Tab = "ask" | "browse" | "calc" | "photo" | "me" | "talk" | "box" | "mycards";
 
 const TABS: Record<Role, { id: Tab; icon: string; label: string }[]> = {
   young: [
-    { id: "ask", icon: "🎤", label: "聞く" },
-    { id: "browse", icon: "🔎", label: "探す" },
-    { id: "calc", icon: "🧮", label: "計算" },
-    { id: "photo", icon: "📷", label: "撮る" },
-    { id: "me", icon: "🙂", label: "わたし" },
+    { id: "ask", icon: ic("mic"), label: "聞く" },
+    { id: "browse", icon: ic("search"), label: "探す" },
+    { id: "calc", icon: ic("calc"), label: "計算" },
+    { id: "photo", icon: ic("camera"), label: "撮る" },
+    { id: "me", icon: ic("young"), label: "わたし" },
   ],
   veteran: [
-    { id: "talk", icon: "🎙️", label: "話す" },
-    { id: "box", icon: "📮", label: "質問箱" },
-    { id: "ask", icon: "🔎", label: "調べる" },
-    { id: "mycards", icon: "🗂️", label: "わたしの\nカード" },
+    { id: "talk", icon: ic("talk"), label: "話す" },
+    { id: "box", icon: ic("box"), label: "質問箱" },
+    { id: "ask", icon: ic("search"), label: "調べる" },
+    { id: "mycards", icon: ic("cards"), label: "わたしの\nカード" },
   ],
 };
 
@@ -193,7 +194,7 @@ export default function App() {
             }}
           >
             <span className="tab-icon">
-              {t.icon}
+              <Icon of={t.icon} />
               {((t.id === "me" && meDot) || (t.id === "mycards" && cardsDot)) && <span className="tab-dot" aria-label="新しい知らせ" />}
               {t.id === "box" && boxNew > 0 && (
                 <span className="tab-count" aria-label={`新着${boxNew}件`}>

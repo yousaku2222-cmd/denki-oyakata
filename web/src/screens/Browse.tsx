@@ -5,10 +5,11 @@ import { CATEGORY_LABEL, LOCATION_LABEL, authorOf, fmtDate, type Card } from "..
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
 import { Meanings, useGlossary } from "../Glossary";
 import { FlowSteps } from "../FlowSteps";
+import { Icon, ic } from "../Icon";
 
 // pictures first: the same icons wherever a place or a kind is shown
-const LOCATION_ICON: Record<string, string> = { ceiling: "🏠", floor: "🕳️", outdoor: "🌳", panel: "🗄️", other: "…" };
-const CATEGORY_ICON: Record<string, string> = { piping: "🔧", wiring: "〰️", grounding: "🌏", license: "🪪", calc: "🧮", safety: "⛑️", other: "…" };
+const LOCATION_ICON: Record<string, string> = { ceiling: ic("ceiling"), floor: ic("floor"), outdoor: ic("outdoor"), panel: ic("panel"), other: "…" };
+const CATEGORY_ICON: Record<string, string> = { piping: ic("piping"), wiring: ic("wiring"), grounding: ic("ground"), license: ic("license_scope"), calc: ic("calc"), safety: ic("safety"), other: "…" };
 const MEDALS = ["🥇", "🥈", "🥉"];
 
 export function Browse() {
@@ -17,16 +18,12 @@ export function Browse() {
     <>
       <div className="browse-pick">
         <button className={`pick ${view === "cards" ? "on" : ""}`} onClick={() => setView("cards")}>
-          <span className="pick-icon" aria-hidden>
-            🧰
-          </span>
+          <Icon of={ic("wisdom")} className="pick-icon" />
           <strong>親方の知恵</strong>
           <small>現場の知恵カード</small>
         </button>
         <button className={`pick ${view === "laws" ? "on" : ""}`} onClick={() => setView("laws")}>
-          <span className="pick-icon" aria-hidden>
-            ⚖️
-          </span>
+          <Icon of={ic("law")} className="pick-icon" />
           <strong>法令・基準</strong>
           <small>国の決まり・原文つき</small>
         </button>
@@ -35,9 +32,9 @@ export function Browse() {
         <FlowSteps
           label="探し方"
           steps={[
-            { icon: "🔎", label: "探す" },
+            { icon: ic("search"), label: "探す" },
             { icon: "📖", label: "読む" },
-            { icon: "🎤", label: "聞く" },
+            { icon: ic("mic"), label: "聞く" },
           ]}
         />
         <details className="more-info hint">
@@ -54,13 +51,13 @@ type LawItem = LawRef & { summary: string; keywords: string[]; points: string[];
 
 // 場面で探す: by the article's heading (and a few named by id), so every one of the articles is under some button
 const LAW_SCENES: { label: string; icon: string; words: string[]; ids?: string[] }[] = [
-  { label: "配管", icon: "🔧", words: ["管"] },
-  { label: "ケーブル・ラック", icon: "🧵", words: ["ケーブル", "ラック"], ids: ["kaishaku-120"] },
-  { label: "配線・電線", icon: "〰️", words: ["施設場所による工事の種類", "がいし", "線ぴ", "裸電線", "使用する電線", "高圧配線", "特殊な低圧屋内配線", "メタルラス", "用語の定義"] },
-  { label: "接地", icon: "🌏", words: ["接地"] },
-  { label: "絶縁・漏電", icon: "⚡", words: ["絶縁", "漏電", "地絡", "対地電圧"] },
-  { label: "分岐・ブレーカー", icon: "🔌", words: ["分岐", "開閉器", "幹線"], ids: ["kaishaku-146"] },
-  { label: "資格・工事範囲", icon: "🪪", words: ["電気工事", "資格", "軽微", "技術者", "金額"], ids: ["335AC0000000139-2"] },
+  { label: "配管", icon: ic("piping"), words: ["管"] },
+  { label: "ケーブル・ラック", icon: ic("cable"), words: ["ケーブル", "ラック"], ids: ["kaishaku-120"] },
+  { label: "配線・電線", icon: ic("wiring"), words: ["施設場所による工事の種類", "がいし", "線ぴ", "裸電線", "使用する電線", "高圧配線", "特殊な低圧屋内配線", "メタルラス", "用語の定義"] },
+  { label: "接地", icon: ic("ground"), words: ["接地"] },
+  { label: "絶縁・漏電", icon: ic("leak"), words: ["絶縁", "漏電", "地絡", "対地電圧"] },
+  { label: "分岐・ブレーカー", icon: ic("outlet"), words: ["分岐", "開閉器", "幹線"], ids: ["kaishaku-146"] },
+  { label: "資格・工事範囲", icon: ic("license_scope"), words: ["電気工事", "資格", "軽微", "技術者", "金額"], ids: ["335AC0000000139-2"] },
 ];
 const inScene = (l: LawItem, s: (typeof LAW_SCENES)[number]) => !!s.ids?.includes(l.id) || s.words.some((w) => l.heading.normalize("NFKC").includes(w));
 const wordsOf = (q: string) => q.normalize("NFKC").trim().split(/\s+/).filter(Boolean);
@@ -212,7 +209,7 @@ function CardList() {
         {who.cards.map((c) => (
           <button key={c.id} className="card-row" onClick={() => setOpen(c)}>
             <strong>
-              <span aria-hidden>{CATEGORY_ICON[c.category] ?? "🗂️"}</span> {c.title}
+              <Icon of={CATEGORY_ICON[c.category] ?? ic("cards")} /> {c.title}
             </strong>
             <span className="src-meta">
               👍 {c.helpedCount}
@@ -262,7 +259,7 @@ function CardList() {
       {shown.map((c) => (
         <button key={c.id} className="card-row" onClick={() => setOpen(c)}>
           <strong>
-              <span aria-hidden>{CATEGORY_ICON[c.category] ?? "🗂️"}</span> {c.title}
+              <Icon of={CATEGORY_ICON[c.category] ?? ic("cards")} /> {c.title}
             </strong>
           <span className="src-meta">
             {authorOf(c)}・👍 {c.helpedCount}
@@ -306,9 +303,7 @@ function Tile({ icon, label, on, onClick }: { icon?: string; label: string; on: 
   return (
     <button className={`tile ${icon ? "icon-tile" : ""} ${on ? "on" : ""}`} onClick={onClick}>
       {icon && (
-        <span className="tile-icon" aria-hidden>
-          {icon}
-        </span>
+        <Icon of={icon} className="tile-icon" />
       )}
       <span>{label}</span>
     </button>

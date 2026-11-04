@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { useSpeech } from "./speech";
+import { ic } from "./Icon";
 
 export type Source = "law" | "wisdom" | "general";
 export interface Sentence {
@@ -28,9 +29,9 @@ export interface Card {
 }
 
 export const SOURCE_LABEL: Record<Source, { icon: string; label: string }> = {
-  law: { icon: "⚖️", label: "法令・基準" },
-  wisdom: { icon: "🧰", label: "親方の知恵" },
-  general: { icon: "💡", label: "一般知識（要確認）" },
+  law: { icon: ic("law"), label: "法令・基準" },
+  wisdom: { icon: ic("wisdom"), label: "親方の知恵" },
+  general: { icon: ic("general"), label: "一般知識（要確認）" },
 };
 
 export const CATEGORY_LABEL: Record<string, string> = {

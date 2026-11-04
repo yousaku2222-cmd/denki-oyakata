@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { call, errorText } from "../firebase";
 import { CalcCard, type CalcOutput } from "../CalcCard";
+import { Icon, ic } from "../Icon";
 
 interface Field {
   key: string;
@@ -86,9 +87,7 @@ export function Calc({ start }: { start?: { name: string; params: Record<string,
       <div className="calc-tiles">
         {defs?.map((d) => (
           <button key={d.name} className="calc-tile" onClick={() => setCur(d)} title={LEAD[d.name] ?? d.description}>
-            <span className="calc-icon" aria-hidden>
-              {TILE[d.name]?.[0] ?? "🧮"}
-            </span>
+            <Icon of={TILE[d.name] ? ic(d.name) : "🧮"} className="calc-icon" />
             <span>{TILE[d.name]?.[1] ?? d.label}</span>
           </button>
         ))}
@@ -184,7 +183,7 @@ function CalcForm({ def, onBack, preset }: { def: CalcDef; onBack: () => void; p
         ← 一覧へ
       </button>
       <h1 className="screen-title">
-        {TILE[def.name]?.[0] ?? "🧮"} {def.label}
+        <Icon of={TILE[def.name] ? ic(def.name) : "🧮"} className="title-icon" /> {def.label}
       </h1>
       {LEAD[def.name] && <p className="hint">{LEAD[def.name]}</p>}
       {def.fields.filter(shown).map((f) =>

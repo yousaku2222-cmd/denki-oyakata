@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { SOURCE_LABEL } from "./components";
+import { Icon } from "./Icon";
 
 // Shown on 聞く before the first question: what one answer is made of. The lines are a real answer, shortened
 // (標準仕様書 2.3.3 and a veteran's card on bending PF pipe), with no one's name.
@@ -22,7 +23,7 @@ export function AnswerSample({ onAsk }: { onAsk: (q: string) => void }) {
       {ROWS.map((r) => (
         <motion.div key={r.src} className={`sample-row src-${r.src}`} variants={ROW}>
           <span className="src-tag">
-            {SOURCE_LABEL[r.src].icon} {SOURCE_LABEL[r.src].label}
+            <Icon of={SOURCE_LABEL[r.src].icon} /> {SOURCE_LABEL[r.src].label}
           </span>
           <p>{r.text}</p>
           {r.meta && <p className="src-meta">{r.meta}</p>}
