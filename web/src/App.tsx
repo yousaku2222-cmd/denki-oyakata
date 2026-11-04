@@ -111,6 +111,7 @@ export default function App() {
     setResumeId(resume);
     setTalkKey((k) => k + 1);
     setTab("talk");
+    window.scrollTo(0, 0); // the question being answered is at the top of 話す
   };
 
   return (
@@ -130,9 +131,10 @@ export default function App() {
         </button>
       </header>
       {getTrial() && (
-        <p className="trial-note">
-          🧪 審査員モード：公開したカードと送った質問は、この端末にだけ見えます
-          <button className="link" onClick={() => choose(null, false)}>
+        // one line: the rest of the screen is the demo
+        <p className="trial-note" title="公開したカードと送った質問は、この端末にだけ見えます">
+          <span>🧪 審査員モード（作った物はこの端末だけ）</span>
+          <button className="trial-end" onClick={() => choose(null, false)}>
             終える
           </button>
         </p>
@@ -263,10 +265,13 @@ function Entry({ onChoose, last }: { onChoose: (r: Role, trial?: boolean) => voi
       {getTrial() ? (
         <p className="trial-note entry-trial">🧪 審査員モード中です。役割を選ぶと、そのまま続きます。</p>
       ) : (
-        <button className="link" onClick={() => onChoose("young", true)}>
-          審査員の方はこちら（デモ）
+        // as strong as the two roles: the judges are the first ones to open this
+        <button className="role-btn judge" onClick={() => onChoose("young", true)}>
+          🧪 審査員の方はこちら
+          <small>見本の質問と見本の話で、すぐ試せます</small>
         </button>
       )}
+      <p className="entry-ai">AI は Claude：質問の仕分けに Haiku、答え・聞き取り・写真に Sonnet、条文の整理と点検に Opus</p>
     </div>
   );
 }

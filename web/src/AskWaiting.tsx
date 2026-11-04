@@ -66,7 +66,7 @@ export function AskWaiting({ question, finished = false }: { question: string; f
 
 /** What the answer was checked against, in one line that stays above it. Counts come from the answer itself. */
 export function CheckedLine({ laws, cards, calcs, cached }: { laws: number; cards: number; calcs: number; cached: boolean }) {
-  const found = [laws && `法令・基準 ${laws}件`, cards && `親方の知恵 ${cards}件`, calcs && `計算 ${calcs}件`].filter(Boolean);
+  const found = [laws && `法令・基準 ${laws}件`, cards && `親方のカード ${cards}枚`, calcs && `計算 ${calcs}件`].filter(Boolean);
   const text = cached
     ? "前に確かめた答えです"
     : found.length

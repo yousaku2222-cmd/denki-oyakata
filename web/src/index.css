@@ -13,6 +13,13 @@
   --general: #5d6470;
   --general-bg: #eef0f3;
   --danger: #b3261e;
+  --danger-solid: #b3261e; /* behind white words: the same red in both themes */
+  /* what is chosen in a segmented control or a pair of picks */
+  --sel-bg: var(--navy);
+  --sel-fg: #fff;
+  /* the 審査員モード strip and notices */
+  --note-bg: #fff1b3;
+  --note-fg: #4a3b00;
   --primary-bg: var(--navy);
   --primary-fg: #fff;
   color-scheme: light;
@@ -38,6 +45,11 @@
     --general-bg: #262d3d;
     --primary-bg: var(--yellow);
     --primary-fg: var(--navy);
+    --danger: #ff8a80;
+    --sel-bg: var(--yellow);
+    --sel-fg: var(--navy);
+    --note-bg: #3a3214;
+    --note-fg: #ffe28a;
     color-scheme: dark;
   }
 }
@@ -55,6 +67,11 @@
   --general-bg: #262d3d;
   --primary-bg: var(--yellow);
   --primary-fg: var(--navy);
+  --danger: #ff8a80;
+  --sel-bg: var(--yellow);
+  --sel-fg: var(--navy);
+  --note-bg: #3a3214;
+  --note-fg: #ffe28a;
   color-scheme: dark;
 }
 
@@ -320,7 +337,7 @@ button {
   gap: 12px;
 }
 .mic.on {
-  background: var(--danger);
+  background: var(--danger-solid);
   color: #fff;
   animation: pulse 1.2s infinite;
 }
@@ -449,23 +466,23 @@ input[type="text"] {
   margin-top: 4px;
   white-space: nowrap;
   font-size: 0.85rem;
-  border: 2px solid var(--danger);
-  color: var(--danger);
+  border: 2px solid var(--wisdom);
+  color: var(--wisdom);
+  background: var(--wisdom-bg);
   border-radius: 6px;
   padding: 0 6px;
   font-weight: 800;
-  transform: rotate(-4deg);
 }
 .stamp-ring {
   position: absolute;
   inset: -3px;
-  border: 2px solid var(--danger);
+  border: 2px solid var(--wisdom);
   border-radius: 8px;
   pointer-events: none;
 }
 .notice {
-  background: #fff6d6;
-  color: #4a3b00;
+  background: var(--note-bg);
+  color: var(--note-fg);
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 0.95rem;
@@ -631,8 +648,8 @@ input[type="text"] {
   font-weight: 700;
 }
 .segmented button.on {
-  background: var(--navy);
-  color: #fff;
+  background: var(--sel-bg);
+  color: var(--sel-fg);
 }
 
 /* wisdom card */
@@ -1131,9 +1148,10 @@ input[inputmode="decimal"] {
   padding: 6px 16px;
   font-size: 13px;
   font-weight: 700;
-  background: #fff1b3;
-  color: #4a3b00;
+  background: var(--note-bg);
+  color: var(--note-fg);
   border-bottom: 2px solid var(--bag-tie);
+  white-space: nowrap;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -1730,7 +1748,7 @@ input[inputmode="decimal"] {
   height: 20px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--danger);
+  background: var(--danger-solid);
   color: #fff;
   font-size: 0.72rem;
   font-weight: 800;
@@ -2004,9 +2022,9 @@ input[inputmode="decimal"] {
   cursor: pointer;
 }
 .pick.on {
-  border-color: var(--navy);
-  background: var(--navy);
-  color: #fff;
+  border-color: var(--sel-bg);
+  background: var(--sel-bg);
+  color: var(--sel-fg);
 }
 .pick-icon {
   font-size: 2rem;
@@ -2169,10 +2187,10 @@ input[inputmode="decimal"] {
 .star-btn.done {
   color: var(--yellow);
 }
+/* the one thing to do with a question: as big as 話す's own button */
 .answer-btn {
-  justify-self: start;
-  margin-top: 6px;
-  min-height: 40px;
+  width: 100%;
+  margin-top: 8px;
 }
 
 /* four steps or more: smaller words, so each stays on its line */
@@ -2237,4 +2255,109 @@ img.title-icon {
   border-radius: 24%;
   padding: 3px;
   box-sizing: border-box;
+}
+
+/* ---- review of looks and ease of use (11/4) ---- */
+/* a press shows at once, so a slow signal is not pressed twice */
+button:not(:disabled):active {
+  filter: brightness(0.92);
+  transform: scale(0.98);
+}
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active {
+    transform: none;
+  }
+}
+/* 審査員モード: one line under the header */
+.trial-note > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trial-end {
+  flex: none;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-weight: 800;
+}
+/* 聞く: each quote that matched, quietly (the stamp on the group says it once) */
+.match-mark {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--wisdom);
+  white-space: nowrap;
+}
+.how-to-check .htc-who {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.src-head .stamp {
+  margin-top: 0;
+  font-size: 0.8rem;
+}
+/* a list on its way */
+.skeleton-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.skeleton {
+  display: block;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--line) 0%, var(--surface) 50%, var(--line) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+  opacity: 0.7;
+}
+.skeleton-row {
+  height: 64px;
+}
+.skeleton-tile {
+  min-height: 96px;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+.load-failed {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+/* 話す: making the card is apart from 答えを送る */
+.finish-talk {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+  display: grid;
+  gap: 4px;
+}
+.finish-talk .hint {
+  margin: 0;
+}
+/* 入口: the judges' way in, as strong as the two roles */
+.role-btn.judge {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--yellow);
+  color: var(--yellow);
+  min-height: 72px;
+}
+.role-btn.judge small {
+  color: #fff;
+}
+.entry-ai {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: #c9d1e3;
 }

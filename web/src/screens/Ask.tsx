@@ -9,7 +9,6 @@ import { AskWaiting, CheckedLine } from "../AskWaiting";
 import { useFlyToMe } from "../FlyToMe";
 import { AnswerSample } from "../AnswerSample";
 import { GlossSheet, Glossed, firstMentions, meaningsFor, useGlossary, type Term } from "../Glossary";
-import { FlowSteps } from "../FlowSteps";
 import { Icon, ic } from "../Icon";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
@@ -22,18 +21,19 @@ const GROUP = {
 };
 const SOURCES = ["law", "wisdom", "general"] as const;
 const STAMP = {
-  hidden: { opacity: 0, scale: 1.9, rotate: -16 },
-  shown: { opacity: 1, scale: 1, rotate: -4, transition: { delay: 0.4, type: "spring" as const, stiffness: 520, damping: 18 } },
+  hidden: { opacity: 0, scale: 1.9, rotate: -10 },
+  shown: { opacity: 1, scale: 1, rotate: 0, transition: { delay: 0.4, type: "spring" as const, stiffness: 520, damping: 18 } },
 };
 const RING = {
   hidden: { opacity: 0, scale: 1 },
-  shown: { opacity: [0, 0.55, 0], scale: [1, 1, 1.7], transition: { delay: 0.52, duration: 0.6, times: [0, 0.05, 1] } },
+  shown: { opacity: [0, 0.55, 0], scale: [1, 1, 1.3], transition: { delay: 0.52, duration: 0.6, times: [0, 0.05, 1] } },
 };
 
-function Stamp() {
+/** Once per law group: how many of its quotes the program found word for word in the original. */
+function Stamp({ n, of }: { n: number; of: number }) {
   return (
     <motion.span className="stamp" variants={STAMP}>
-      ✔ 引用は原文と一致
+      ✔ {n === of ? (of > 1 ? `引用${of}件すべて原文と一致` : "引用は原文と一致") : `引用${of}件中${n}件が原文と一致`}
       <motion.span className="stamp-ring" aria-hidden variants={RING} />
     </motion.span>
   );
@@ -200,9 +200,12 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
         <>
           <h1 className="screen-title">現場の疑問を、聞いてみよう</h1>
           <MicInput value={text} onChange={setText} maxLength={500} micLabel="話して聞く" placeholder="例: VE管とPF管の支持の違いは？（話し言葉・方言のままでOK）" />
-          <button className="primary" disabled={!text.trim()} onClick={() => submit()}>
-            聞く
-          </button>
+          {/* shown once there is something to ask: a grey button that cannot be pressed only gets in the way */}
+          {!!text.trim() && (
+            <button className="primary" onClick={() => submit()}>
+              聞く
+            </button>
+          )}
           <p className="hint">親方の知恵が無かった質問は、名前を伏せて親方の話のきっかけになります。</p>
         </>
       )}
@@ -223,14 +226,6 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
 
       {!folded && (
         <div className="examples">
-          <FlowSteps
-            label="聞くと"
-            steps={[
-              { icon: ic("mic"), label: "聞く" },
-              { icon: ic("law"), label: "出どころ\nつきの答え" },
-              { icon: ic("box"), label: "親方に\n聞ける" },
-            ]}
-          />
           <p className="hint">よく聞かれる質問</p>
           {EXAMPLES.map(([icon, q]) => (
             <button key={q} className="chip example-chip" onClick={() => submit(q)}>
@@ -255,6 +250,8 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
           {answer.sentences.some((s) => s.source === "law") && (
             <div className="how-to-check">
               <span className="htc-title">🔍 確かめ方</span>
+              {/* the judges should see what Claude does and what the program checks after it */}
+              <span className="htc-who">Claude が条文を選んで答え → プログラムが引用を国の原文と照合</span>
               <span>
                 <b>📜 引用元</b> 押すと国の原文
               </span>
@@ -277,13 +274,17 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
               // when a checked source comes first, general knowledge shows its first sentences and the rest waits behind a tap
               const partial = src === "general" && answer.sentences.some((s) => s.source !== "general") && rows.length > GENERAL_PREVIEW;
               const shownRows = partial && !openGeneral ? rows.slice(0, GENERAL_PREVIEW) : rows;
-              const count = src === "wisdom" ? `カード${new Set(rows.map((r) => r.cardId)).size}枚から` : `${rows.length}件`;
+              // the same counts as the line above the answer: laws and cards, not sentences
+              const count = src === "wisdom" ? `カード${new Set(rows.map((r) => r.cardId)).size}枚から` : src === "law" ? `${new Set(rows.map((r) => r.lawId)).size}件` : `${rows.length}件`;
+              const quoted = rows.filter((r) => r.quote).length;
+              const matched = rows.filter((r) => r.verified).length;
               return (
                 <motion.div key={src} className={`src-group src-${src}`} variants={GROUP}>
                   <div className="src-head">
                     <span className="src-tag">
                       <Icon of={SOURCE_LABEL[src].icon} /> {SOURCE_LABEL[src].label} {count}
                     </span>
+                    {src === "law" && matched > 0 && <Stamp n={matched} of={quoted} />}
                   </div>
                   {shownRows.map((s, i) => {
                       const c = s.source === "wisdom" ? cardOf(s.cardId) : undefined;
@@ -307,7 +308,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
                                 📜 引用元：{law.short} {law.article} ›
                               </button>
                               {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
-                              {s.verified && <Stamp />}
+                              {s.verified && <span className="match-mark">✔ 一致</span>}
                             </div>
                           )}
                         </motion.div>
@@ -354,7 +355,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
             )}
             {!fromMe && (
             <button className={answer.grounded ? "secondary" : "primary"} disabled={sent} onClick={sendToBox}>
-              {sent ? "📮 質問箱に入れました" : answer.grounded ? "📮 親方にも聞く" : "📮 親方に聞いてみる"}
+              {sent ? "📮 質問箱に入れました" : "📮 親方に聞く"}
             </button>
             )}
           </div>

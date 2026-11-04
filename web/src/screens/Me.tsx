@@ -148,7 +148,7 @@ export function Me({ onAskAgain, onAsk }: { onAskAgain: (text: string, questionI
       <h2 className="sub">親方に聞いた質問</h2>
       {err && <p className="hint error">{err}</p>}
       {items === null && !err && <p className="hint">読み込み中…</p>}
-      {items?.length === 0 && <p className="empty">まだありません。答えが見つからない時は「親方に聞いてみる」を押しましょう。</p>}
+      {items?.length === 0 && <p className="empty">まだありません。答えが見つからない時は「親方に聞く」を押しましょう。</p>}
       {items?.map((q) => (
         <div key={q.id} className={`qcard ${q.status}`}>
           <button className="qopen" onClick={() => toggleQ(q)} aria-expanded={openQ === q.id}>

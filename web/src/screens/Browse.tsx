@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { call, db, spaces } from "../firebase";
-import { CATEGORY_LABEL, LOCATION_LABEL, authorOf, fmtDate, type Card } from "../components";
+import { CATEGORY_LABEL, LOCATION_LABEL, LoadFailed, Skeleton, authorOf, fmtDate, type Card } from "../components";
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
 import { Meanings, useGlossary } from "../Glossary";
-import { FlowSteps } from "../FlowSteps";
 import { Icon, ic } from "../Icon";
 
 // pictures first: the same icons wherever a place or a kind is shown
@@ -29,14 +28,6 @@ export function Browse() {
         </button>
       </div>
       <div className="browse-lead">
-        <FlowSteps
-          label="探し方"
-          steps={[
-            { icon: ic("search"), label: "探す" },
-            { icon: "📖", label: "読む" },
-            { icon: ic("mic"), label: "聞く" },
-          ]}
-        />
         <details className="more-info hint">
           <summary>？ 探すとは</summary>
           AI を通さず、自分で知恵カードと条文を見る所です。答えが欲しい時は「聞く」へ。
@@ -79,11 +70,14 @@ function LawList() {
   const [open, setOpen] = useState<string | null>(null);
   const [all, setAll] = useState(false); // a hundred articles at once is a wall of text: a scene or a word first
   const terms = useGlossary();
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
   useEffect(() => {
+    setFailed(false);
     call<{ laws: LawItem[] }>("listLaws", {})
       .then((r) => setLaws(r.laws))
-      .catch(() => setLaws([]));
-  }, []);
+      .catch(() => setFailed(true));
+  }, [tries]);
   const words = wordsOf(q);
   const s = LAW_SCENES.find((x) => x.label === scene);
   // a word typed that is one of the words explained: its meaning first (the exact word before longer ones), then the articles
@@ -100,7 +94,7 @@ function LawList() {
     <section className="screen">
       <h1 className="screen-title">法令・基準</h1>
       <div className="hint">
-        現場でよく使う条文 {laws?.length ?? ""}件。場面を選ぶか、言葉で探してください。
+        現場でよく使う条文{laws ? ` ${laws.length}件` : ""}。場面を選ぶか、言葉で探してください。
         <details className="more-info">
           <summary>？ どの法令から</summary>
           電気設備の技術基準の解釈（電技解釈）・電気設備に関する技術基準を定める省令（電技省令）・電気工事士法・建設業法施行令・公共建築工事標準仕様書（標準仕様書）から収めています。
@@ -119,7 +113,7 @@ function LawList() {
           <Meanings term={t} onLaw={setOpen} />
         </div>
       ))}
-      {laws === null && <p className="hint">読み込み中…</p>}
+      {laws === null && (failed ? <LoadFailed what="条文" onRetry={() => setTries((n) => n + 1)} /> : (s || words.length > 0) && <Skeleton />)}
       {laws && !s && !words.length && !all && (
         <button className="link" onClick={() => setAll(true)}>
           すべての条文を見る（{laws.length}件）
@@ -146,21 +140,22 @@ function CardList() {
   const [cards, setCards] = useState<Card[] | null>(null);
   const [filter, setFilter] = useState<{ kind: "category" | "location"; value: string } | null>(null);
   const [open, setOpen] = useState<Card | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
 
-  useEffect(
-    () =>
-      onSnapshot(
-        query(collection(db, "cards"), where("companyId", "in", spaces()), where("status", "==", "published")),
-        (snap) =>
-          setCards(
-            snap.docs
-              .map((d) => ({ id: d.id, ...(d.data() as Omit<Card, "id">) }))
-              .sort((a, b) => (b.publishedAt?.toMillis() ?? 0) - (a.publishedAt?.toMillis() ?? 0)),
-          ),
-        () => setCards([]),
-      ),
-    [],
-  );
+  useEffect(() => {
+    setFailed(false);
+    return onSnapshot(
+      query(collection(db, "cards"), where("companyId", "in", spaces()), where("status", "==", "published")),
+      (snap) =>
+        setCards(
+          snap.docs
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Card, "id">) }))
+            .sort((a, b) => (b.publishedAt?.toMillis() ?? 0) - (a.publishedAt?.toMillis() ?? 0)),
+        ),
+      () => setFailed(true),
+    );
+  }, [tries]);
 
   const [q, setQ] = useState("");
   const words = wordsOf(q);
@@ -264,7 +259,7 @@ function CardList() {
           <Tile key={k} icon={CATEGORY_ICON[k]} label={v} on={filter?.kind === "category" && filter.value === k} onClick={() => setFilter(filter?.value === k ? null : { kind: "category", value: k })} />
         ))}
       </div>
-      {cards === null && <p className="hint">読み込み中…</p>}
+      {cards === null && (failed ? <LoadFailed what="知恵カード" onRetry={() => setTries((n) => n + 1)} /> : <Skeleton />)}
       {cards && shown.length === 0 && <p className="empty">{cards.length ? "合う知恵カードがありません。言葉や絞り込みを変えてみてください。" : "まだカードがありません。"}</p>}
       {shown.map((c) => (
         <button key={c.id} className="card-row" onClick={() => setOpen(c)}>

@@ -5,8 +5,6 @@ import { call, errorText } from "../firebase";
 import { addPart, getName } from "../local";
 import { LawSheet } from "../LawSheet";
 import { MicInput } from "../components";
-import { FlowSteps } from "../FlowSteps";
-import { ic } from "../Icon";
 
 export interface CalcStart {
   name: string;
@@ -132,17 +130,8 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
       <p className="hint">印字や型番が写るように撮ると、読み取って確かめます。写真の一覧からも選べます。</p>
       {!preview && (
         <div className="photo-sample">
-          <FlowSteps
-            label="撮ると分かること"
-            steps={[
-              { icon: ic("camera"), label: "撮る" },
-              { icon: ic("search"), label: "名前と\n使い方" },
-              { icon: ic("wisdom"), label: "知恵と\n条文" },
-              { icon: ic("box"), label: "親方に\n聞ける" },
-            ]}
-          />
           <details className="more-info">
-            <summary>？ くわしく</summary>
+            <summary>？ 撮ると分かること</summary>
             部材の名前と現場での呼び名（例：ねじなしボックスコネクタ ＝「ねじなしコネクタ」）、何に使うか・一緒に使う物・間違えやすい部材、関係する親方の知恵カードと条文、そのまま使える計算が出ます。分からない時は、写真ごと親方に聞けます。
           </details>
         </div>

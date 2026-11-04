@@ -206,7 +206,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
                   </p>
                 </div>
               </div>
-              <button className="secondary answer-btn" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp })}>
+              <button className="primary answer-btn" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp })}>
                 🎤 話して答える
               </button>
             </motion.div>
@@ -227,8 +227,8 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
           {shownAiOnly.map((text) => (
             <div key={text} className="qcard">
               <p className="qtext">{text}</p>
-              <button className="secondary" onClick={() => onAnswer({ questionId: "", text, askerName: "若手", hasPhoto: false })}>
-                🎙️ 話して答える
+              <button className="secondary answer-btn" onClick={() => onAnswer({ questionId: "", text, askerName: "若手", hasPhoto: false })}>
+                🎤 話して答える
               </button>
             </div>
           ))}

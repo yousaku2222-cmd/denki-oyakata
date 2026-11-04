@@ -105,3 +105,26 @@ export function MicInput(props: {
 export function Notice({ children }: { children: ReactNode }) {
   return <div className="notice">{children}</div>;
 }
+
+/** Grey shapes where the list will be, so a slow signal does not look like an empty screen. */
+export function Skeleton({ n = 3, tiles = false }: { n?: number; tiles?: boolean }) {
+  return (
+    <div className={tiles ? "calc-tiles" : "skeleton-list"} aria-label="読み込み中" role="status">
+      {Array.from({ length: n }, (_, i) => (
+        <span key={i} className={tiles ? "skeleton skeleton-tile" : "skeleton skeleton-row"} />
+      ))}
+    </div>
+  );
+}
+
+/** A list that could not be read says so (not 「ありません」) and can be read again. */
+export function LoadFailed({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <div className="load-failed" role="alert">
+      <p className="hint error">{what}を読み込めませんでした。電波の良い所で、もう一度お試しください。</p>
+      <button className="secondary" onClick={onRetry}>
+        ↻ もう一度読み込む
+      </button>
+    </div>
+  );
+}

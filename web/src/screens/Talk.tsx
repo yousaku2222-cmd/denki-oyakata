@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { CardBirth, IntoTheBag } from "../CardMotion";
 import { call, errorText } from "../firebase";
-import { getName, setName } from "../local";
+import { getName, getTrial, setName } from "../local";
 import { MicInput, Notice } from "../components";
-import { FlowSteps } from "../FlowSteps";
-import { ic } from "../Icon";
 
 type Turn = { role: "veteran" | "ai"; text: string };
 interface Draft {
@@ -37,6 +35,8 @@ const STARTERS = [
   "先輩から教わって、今も守っていることは？",
 ];
 const STARTERS_SHOWN = 3;
+// 審査員モード: a story to send, for a judge who has none of their own
+const SAMPLE_STORY = "PF管はな、90度の曲がりが3つあったら線が通らん。そん時は途中にプルボックスを入れる。新人は無理に引っぱって、線の被覆を傷めることが多いけん、通らんと思ったら手を止めさせよる。";
 
 export function Talk({
   topic: topicIn,
@@ -229,11 +229,41 @@ export function Talk({
               新しく話す
             </button>
           </>
+        ) : topic?.questionId && onOpenBox ? (
+          // answered from 質問箱: the next question waits there
+          <>
+            <button
+              className="primary"
+              onClick={() => {
+                onDone();
+                onOpenBox();
+              }}
+            >
+              📮 質問箱に戻る
+            </button>
+            <button className="link" onClick={onDone}>
+              新しく話す
+            </button>
+          </>
         ) : (
-          <button className="primary" onClick={onDone}>
-            続けて話す
-          </button>
+          <>
+            <button className="primary" onClick={onDone}>
+              続けて話す
+            </button>
+            {boxOpen > 0 && onOpenBox && (
+              <button
+                className="secondary"
+                onClick={() => {
+                  onDone();
+                  onOpenBox();
+                }}
+              >
+                📮 質問箱を見る（{boxOpen}件）
+              </button>
+            )}
+          </>
         )}
+        {savedStatus !== "private" && <p className="hint">あとで「わたしのカード」から直したり、非公開に戻したりできます。</p>}
       </section>
     );
   }
@@ -299,6 +329,7 @@ export function Talk({
         <button className="primary" disabled={busy || !draft.title.trim() || !draft.body.trim()} onClick={publish}>
           {busy ? "保存しています…" : status === "draft" ? "確かめたので公開する" : "直して保存する"}
         </button>
+        {status === "draft" && <p className="hint">公開したあとも、「わたしのカード」で非公開に戻せます。</p>}
         <button
           className="link"
           disabled={busy}
@@ -318,14 +349,11 @@ export function Talk({
     );
   }
 
+  // 話す first: the mic comes right under the question; the ways to start and the promises go below it
+  const blank = fresh && !turns.length && !aiQuestion && !text.trim();
   return (
     <section className="screen">
-      <p className="catch">
-        <span>あなたの一言が、</span>
-        <span>業界の未来へつながる</span>
-      </p>
       {topicNote}
-
 
       {turns.length > 0 && (
         <ol className="transcript">
@@ -337,40 +365,11 @@ export function Talk({
         </ol>
       )}
 
-      {fresh && !turns.length && (
-        <FlowSteps
-          label="話すと"
-          steps={[
-            { icon: ic("talk"), label: "話す" },
-            { icon: "🤖", label: "聞き返し" },
-            { icon: ic("cards"), label: "カードに" },
-            { icon: "✅", label: "確かめて\n公開" },
-          ]}
-        />
-      )}
-      {fresh && !turns.length && !aiQuestion && !text.trim() && (
-        <div className="talk-seeds">
-          {boxOpen > 0 && onOpenBox && (
-            <button className="seed young-q" onClick={onOpenBox}>
-              📮 質問箱に若手の質問が{boxOpen}件あります →
-            </button>
-          )}
-          <p className="part-sub">🎙️ 何から話しますか？ 押すと、聞き手がその質問から始めます</p>
-          {starters.map((q) => (
-            <button key={q} className="seed" onClick={() => setAiQuestion(q)}>
-              {q}
-            </button>
-          ))}
-          <button className="link" onClick={() => setRound((r) => r + 1)}>
-            別のきっかけ ↻
-          </button>
-          <p className="hint">押さずに、思いついたことをそのまま話しても大丈夫です。</p>
-        </div>
-      )}
+      {fresh && !turns.length && !aiQuestion && <h1 className="screen-title">現場の話を、聞かせてください</h1>}
 
       {aiQuestion && (
         <div className="ai-question">
-          <span className="src-tag">{listenerMode ? "📣 親方に読み上げてください" : "🤖 聞き手から"}</span>
+          <span className="src-tag">{listenerMode ? "📣 親方に読み上げてください（聞き手：Claude）" : "🤖 聞き手（Claude）から"}</span>
           <p>{aiQuestion}</p>
           {fresh && !turns.length && (
             <button className="link" onClick={() => setAiQuestion("")}>
@@ -390,16 +389,48 @@ export function Talk({
         placeholder={turns.length ? "話した内容がここに入ります" : "例: PF管はな、90度の曲がりが3つあったら線が通らん。プルボックスを入れる。"}
       />
       {err && <p className="hint error">{err}</p>}
-      <div className="row">
-        <button className="primary" disabled={busy || !text.trim()} onClick={() => next(false)}>
+      {/* shown once something was said: a grey button that cannot be pressed only gets in the way */}
+      {(busy || !!text.trim()) && (
+        <button className="primary" disabled={busy} onClick={() => next(false)}>
           {busy ? "考えています…" : turns.length ? "答えを送る" : "話した内容を送る"}
         </button>
-        {turns.length > 0 && (
-          <button className="secondary" disabled={busy} onClick={() => next(true)}>
-            カードにする
+      )}
+      {/* a judge without a site's story to tell can still see the interview */}
+      {blank && getTrial() && (
+        <button className="secondary" onClick={() => setText(SAMPLE_STORY)}>
+          🧪 見本の話で試す
+        </button>
+      )}
+
+      {blank && (
+        <div className="talk-seeds">
+          {boxOpen > 0 && onOpenBox && (
+            <button className="seed young-q" onClick={onOpenBox}>
+              📮 質問箱に若手の質問が{boxOpen}件あります →
+            </button>
+          )}
+          <p className="part-sub">🎙️ 何から話しますか？ 押すと、聞き手がその質問から始めます</p>
+          {starters.map((q) => (
+            <button key={q} className="seed" onClick={() => setAiQuestion(q)}>
+              {q}
+            </button>
+          ))}
+          <button className="link" onClick={() => setRound((r) => r + 1)}>
+            別のきっかけ ↻
           </button>
-        )}
-      </div>
+          <p className="hint">押さずに、思いついたことをそのまま話しても大丈夫です。</p>
+        </div>
+      )}
+
+      {/* away from 「答えを送る」: a wrong press would end the interview */}
+      {turns.length > 0 && (
+        <div className="finish-talk">
+          <p className="hint">話し終えたら</p>
+          <button className="secondary" disabled={busy} onClick={() => confirm("ここまでの話で、知恵カードの下書きを作りますか？（下書きは、公開する前に直せます）") && next(true)}>
+            🗂️ ここまでの話をカードにする
+          </button>
+        </div>
+      )}
 
       <label className="toggle small">
         <input type="checkbox" checked={listenerMode} onChange={(e) => setListenerMode(e.target.checked)} />

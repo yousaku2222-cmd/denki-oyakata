@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { call, errorText } from "../firebase";
 import { CalcCard, type CalcOutput } from "../CalcCard";
 import { Icon, ic } from "../Icon";
+import { LoadFailed, Skeleton } from "../components";
 
 interface Field {
   key: string;
@@ -61,7 +62,10 @@ const TILE: Record<string, [string, string]> = {
 export function Calc({ start }: { start?: { name: string; params: Record<string, string | number | boolean> } | null }) {
   const [defs, setDefs] = useState<CalcDef[] | null>(null);
   const [cur, setCur] = useState<CalcDef | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
   useEffect(() => {
+    setFailed(false);
     call<{ calcs: CalcDef[] }>("listCalcs", {})
       .then((r) => {
         setDefs(r.calcs);
@@ -69,8 +73,8 @@ export function Calc({ start }: { start?: { name: string; params: Record<string,
         const d = start && r.calcs.find((c) => c.name === start.name);
         if (d) setCur(d);
       })
-      .catch(() => setDefs([]));
-  }, []);
+      .catch(() => setFailed(true));
+  }, [tries]);
 
   if (cur) return <CalcForm def={cur} preset={start?.name === cur.name ? start.params : undefined} onBack={() => setCur(null)} />;
   return (
@@ -83,7 +87,7 @@ export function Calc({ start }: { start?: { name: string; params: Record<string,
           「聞く」で話しかけても使えます（例: 三相200Vで絶縁抵抗0.15MΩは大丈夫？）。
         </details>
       </div>
-      {defs === null && <p className="hint">読み込み中…</p>}
+      {defs === null && (failed ? <LoadFailed what="計算の一覧" onRetry={() => setTries((n) => n + 1)} /> : <Skeleton n={6} tiles />)}
       <div className="calc-tiles">
         {defs?.map((d) => (
           <button key={d.name} className="calc-tile" onClick={() => setCur(d)} title={LEAD[d.name] ?? d.description}>
