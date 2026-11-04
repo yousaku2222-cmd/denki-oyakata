@@ -1,7 +1,7 @@
 // One-off: adds `plain` to each law card in functions/data/laws.json: the gist in 2-4 short points for a
 // beginner, and the hard words said plainly. The longer `summary` stays (search uses it; the sheet shows it
 // under くわしい要約). A point with a number the original text does not have is dropped, like answers are.
-// Usage: node scripts/laws/plain.mjs   (reads ANTHROPIC_API_KEY from functions/.secret.local, needs a build of functions/)
+// Usage: node scripts/laws/plain.mjs [--all]   (reads ANTHROPIC_API_KEY from functions/.secret.local, needs a build of functions/)
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
@@ -50,6 +50,8 @@ async function plainOf(l) {
 for (let i = 0; i < laws.length; i += 6) {
   await Promise.all(
     laws.slice(i, i + 6).map(async (l) => {
+      // only the ones without it: points already there may have been fixed by hand (--all makes them all again)
+      if (l.plain && !process.argv.includes("--all")) return;
       l.plain = await plainOf(l);
       console.log(`${l.id}: ${l.plain.points.length} points`);
     }),

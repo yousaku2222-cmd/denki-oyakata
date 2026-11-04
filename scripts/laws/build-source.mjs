@@ -13,7 +13,14 @@ const KAISHAKU = {
   short: "電技解釈",
   edition: "令和7年11月20日改正",
   sourceUrl: "https://www.meti.go.jp/policy/safety_security/industrial_safety/law/kijyunkaisyaku.html",
-  articles: [17, 29, 36, 120, 142, 143, 144, 145, 146, 147, 148, 149, 156, 157, 158, 159, 160, 161, 164, 165, 167, 168],
+  // 第1章 総則: 電線・接続・絶縁・接地・過電流遮断器・地絡遮断・避雷器
+  // 第3章 電線路: 屋側電線路・架空引込線・地中電線路
+  // 第5章 電気使用場所の施設: 全部(発電所・電気鉄道・系統連系の章は若手の質問に縁が薄いので入れない)
+  articles: [
+    1, 3, 5, 7, 8, 9, 12, 13, 14, 16, 17, 18, 19, 24, 28, 29, 33, 35, 36, 37,
+    110, 116, 120,
+    142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200,
+  ],
 };
 const SHIYO = {
   lawName: "公共建築工事標準仕様書（電気設備工事編）",
@@ -43,18 +50,23 @@ const clean = (lines) =>
 
 function kaishaku() {
   const lines = readFileSync(kaishakuPath, "utf8").replace(/\f/g, "").split(/\r?\n/);
+  // 【見出し】（省令…） then 第N条; a long heading wraps onto a second line (第173・183・195・197条), so the
+  // article line may be two lines below. i: the heading line (where the article before ends), at: the article line.
   const starts = [];
   for (let i = 0; i < lines.length - 1; i++) {
     const h = lines[i].match(/^【(.+?)】/);
-    const a = lines[i + 1].match(/^第(\d+)条(?:の(\d+))? /);
-    if (h && a) starts.push({ i, heading: h[1], num: Number(a[1]), sub: a[2] });
+    if (!h) continue;
+    const at = [i + 1, i + 2].find((j) => /^第\d+条(?:の\d+)? /.test(lines[j] ?? ""));
+    if (at === undefined) continue;
+    const a = lines[at].match(/^第(\d+)条(?:の(\d+))? /);
+    starts.push({ i, at, heading: h[1], num: Number(a[1]), sub: a[2] });
   }
   const out = [];
   for (const n of KAISHAKU.articles) {
     const k = starts.findIndex((s) => s.num === n && !s.sub);
     if (k < 0) throw new Error(`解釈 第${n}条 not found`);
     const s = starts[k];
-    const text = clean(lines.slice(s.i + 1, starts[k + 1]?.i ?? lines.length));
+    const text = clean(lines.slice(s.at, starts[k + 1]?.i ?? lines.length));
     out.push({ id: `kaishaku-${n}`, lawName: KAISHAKU.lawName, short: KAISHAKU.short, edition: KAISHAKU.edition, article: `第${n}条`, heading: s.heading, text, sourceUrl: KAISHAKU.sourceUrl });
   }
   return out;

@@ -53,10 +53,20 @@ type LawItem = LawRef & { summary: string; keywords: string[]; points: string[];
 const LAW_SCENES: { label: string; icon: string; words: string[]; ids?: string[] }[] = [
   { label: "配管", icon: ic("piping"), words: ["管"] },
   { label: "ケーブル・ラック", icon: ic("cable"), words: ["ケーブル", "ラック"], ids: ["kaishaku-120"] },
-  { label: "配線・電線", icon: ic("wiring"), words: ["施設場所による工事の種類", "がいし", "線ぴ", "裸電線", "使用する電線", "高圧配線", "特殊な低圧屋内配線", "メタルラス", "用語の定義"] },
+  {
+    label: "配線・電線",
+    icon: ic("wiring"),
+    words: ["施設場所による工事の種類", "がいし", "線ぴ", "裸電線", "使用する電線", "高圧配線", "特殊な低圧屋内配線", "メタルラス", "用語の定義", "電線の規格", "コード", "電線の接続", "ダクト", "屋側", "屋外配線", "電球線", "移動電線", "特殊な配線", "引込線"],
+  },
   { label: "接地", icon: ic("ground"), words: ["接地"] },
-  { label: "絶縁・漏電", icon: ic("leak"), words: ["絶縁", "漏電", "地絡", "対地電圧"] },
-  { label: "分岐・ブレーカー", icon: ic("outlet"), words: ["分岐", "開閉器", "幹線"], ids: ["kaishaku-146"] },
+  { label: "絶縁・漏電", icon: ic("leak"), words: ["絶縁", "漏電", "地絡", "対地電圧", "混触", "避雷器"] },
+  { label: "分岐・ブレーカー", icon: ic("outlet"), words: ["分岐", "開閉器", "幹線", "過電流遮断器", "配線器具"], ids: ["kaishaku-146"] },
+  {
+    label: "機器・照明",
+    icon: ic("ceiling"),
+    words: ["電気機械器具", "電熱", "電動機", "蓄電池", "電磁障害", "放電灯", "ネオン", "照明", "信号灯", "表示灯", "小勢力", "溶接", "集じん", "電気さく", "殺虫", "エックス線", "温床", "浴器", "電気防食", "遊戯用", "小規模発電"],
+  },
+  { label: "特殊な場所", icon: ic("safety"), words: ["粉じん", "可燃性ガス", "危険物", "火薬庫", "トンネル", "臨時配線", "接触電線", "滑走路"] },
   { label: "資格・工事範囲", icon: ic("license_scope"), words: ["電気工事", "資格", "軽微", "技術者", "金額"], ids: ["335AC0000000139-2"] },
 ];
 const inScene = (l: LawItem, s: (typeof LAW_SCENES)[number]) => !!s.ids?.includes(l.id) || s.words.some((w) => l.heading.normalize("NFKC").includes(w));
@@ -67,7 +77,7 @@ function LawList() {
   const [q, setQ] = useState("");
   const [scene, setScene] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const [all, setAll] = useState(false); // 52 articles at once is a wall of text: a scene or a word first
+  const [all, setAll] = useState(false); // a hundred articles at once is a wall of text: a scene or a word first
   const terms = useGlossary();
   useEffect(() => {
     call<{ laws: LawItem[] }>("listLaws", {})

@@ -164,5 +164,7 @@ const TABLE_NOTES: Record<string, string> = {
 export async function getLaw(data: Record<string, unknown>) {
   const l = typeof data.id === "string" ? getLawById(data.id) : undefined;
   if (!l) return { law: null };
-  return { law: { ...l, keywords: undefined, note: TABLE_NOTES[l.id] ?? null } };
+  // any other article with a table: the same warning in general words
+  const note = TABLE_NOTES[l.id] ?? (/\d+-\d+表/.test(l.text) ? "表の部分は、PDF から取り出した文字のため並びが崩れていることがあります。数値は出典の原文で確かめてください。" : null);
+  return { law: { ...l, keywords: undefined, note } };
 }
