@@ -33,6 +33,16 @@ export function say(text: string) {
 export function hush() {
   if (canSay()) speechSynthesis.cancel();
 }
+// iPhone reads out only what was started by a tap: a silent word on the first tap lets the later questions
+// (which arrive after the network) be read out too
+let unlocked = false;
+export function unlockSay() {
+  if (unlocked || !canSay()) return;
+  unlocked = true;
+  const u = new SpeechSynthesisUtterance(" ");
+  u.volume = 0;
+  speechSynthesis.speak(u);
+}
 
 /** Appends what was heard to the text via onText(final, interim); onEnd when listening has stopped (all heard). */
 export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
@@ -56,6 +66,7 @@ export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
       return;
     }
     setError("");
+    unlockSay(); // this press is the tap that lets the next question be read out
     hush(); // the mic would hear the question being read out
     r.lang = "ja-JP";
     r.continuous = true;

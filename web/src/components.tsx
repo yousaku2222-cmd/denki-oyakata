@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { useSpeech } from "./speech";
+import { unlockSay, useSpeech } from "./speech";
 import { ic } from "./Icon";
 
 export type Source = "law" | "wisdom" | "general";
@@ -90,6 +90,7 @@ export function MicInput(props: {
     },
   );
   const finish = () => {
+    unlockSay(); // a tap: the reply that comes after the network can be read out
     sendAfter.current = true;
     stop();
   };

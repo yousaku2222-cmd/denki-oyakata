@@ -3,7 +3,7 @@ import { CardBirth, IntoTheBag } from "../CardMotion";
 import { call, errorText } from "../firebase";
 import { getName, getTrial, setName } from "../local";
 import { MicInput, Notice } from "../components";
-import { canSay, hush, say } from "../speech";
+import { canSay, hush, say, unlockSay } from "../speech";
 
 type Turn = { role: "veteran" | "ai"; text: string };
 interface Draft {
@@ -440,7 +440,10 @@ export function Talk({
           )}
           <p className="part-sub">🎙️ 何から話しますか？ 押すと、聞き手がその質問から始めます</p>
           {starters.map((q) => (
-            <button key={q} className="seed" onClick={() => setAiQuestion(q)}>
+            <button key={q} className="seed" onClick={() => {
+                unlockSay();
+                setAiQuestion(q);
+              }}>
               {q}
             </button>
           ))}

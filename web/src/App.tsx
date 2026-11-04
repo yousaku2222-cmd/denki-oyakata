@@ -11,6 +11,7 @@ import { Calc } from "./screens/Calc";
 import { Photo, type CalcStart } from "./screens/Photo";
 import { FlowSteps } from "./FlowSteps";
 import { Icon } from "./Icon";
+import { UpdateNote } from "./UpdateNote";
 import { call } from "./firebase";
 
 type Tab = "ask" | "browse" | "calc" | "photo" | "me" | "talk" | "box" | "mycards";
@@ -131,6 +132,7 @@ export default function App() {
           切替
         </button>
       </header>
+      <UpdateNote />
       {getTrial() && (
         // one line: the rest of the screen is the demo
         <p className="trial-note" title="公開したカードと送った質問は、この端末にだけ見えます">
@@ -252,6 +254,7 @@ function Entry({ onChoose, last }: { onChoose: (r: Role, trial?: boolean) => voi
   return (
     <div className="entry">
       <PcNote />
+      <UpdateNote />
       <div className="entry-logo">⚡</div>
       <h1>でんきの親方</h1>
       <p className="catch">
