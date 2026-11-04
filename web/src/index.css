@@ -2221,3 +2221,20 @@ img.title-icon {
   width: 1.2em;
   height: 1.2em;
 }
+/* the drawn icons are navy with black lines: on a dark background they sit on a light sticker */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) img.icon {
+    background: #eef1f7;
+    border-radius: 24%;
+    padding: 3px;
+    box-sizing: border-box;
+  }
+}
+:root[data-theme="dark"] img.icon,
+.pick.on img.icon,
+.entry img.icon:not(.flow-icon) {
+  background: #eef1f7;
+  border-radius: 24%;
+  padding: 3px;
+  box-sizing: border-box;
+}
