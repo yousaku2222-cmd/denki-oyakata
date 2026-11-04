@@ -8,7 +8,7 @@ import { db } from "./common";
 // Anonymous accounts cost nothing to make, so each cap also counts per network address (ip): a new
 // account on the same connection does not start from zero. The overall cap is what bounds the bill.
 export const PER_USER_PER_DAY = 40;
-export const PER_IP_PER_DAY = 150; // several judges on one Wi-Fi share this
+export const PER_IP_PER_DAY = 300; // several judges on one Wi-Fi share this (the overall cap below still bounds the cost)
 export const ALL_USERS_PER_DAY = 600;
 export const BOX_PER_USER_PER_DAY = 20;
 export const BOX_ALL_USERS_PER_DAY = 300;
