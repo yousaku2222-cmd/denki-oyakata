@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { call } from "./firebase";
 import { LawSheet } from "./LawSheet";
+import { Sheet } from "./Sheet";
 
 export interface Meaning {
   plain: string;
@@ -117,15 +118,10 @@ export function GlossSheet({ term, onClose }: { term: Term; onClose: () => void 
   const [law, setLaw] = useState<string | null>(null);
   if (law) return <LawSheet id={law} onClose={() => setLaw(null)} />;
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <section className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="言葉の意味">
-        <button className="link sheet-close" onClick={onClose}>
-          ✕ 閉じる
-        </button>
-        <h1 className="screen-title">📖 {term.term}</h1>
-        <Meanings term={term} onLaw={setLaw} />
-      </section>
-    </div>
+    <Sheet label="言葉の意味" onClose={onClose}>
+      <h1 className="screen-title">📖 {term.term}</h1>
+      <Meanings term={term} onLaw={setLaw} />
+    </Sheet>
   );
 }
 

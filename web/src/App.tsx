@@ -116,6 +116,7 @@ export default function App() {
 
   return (
     <div className="app" data-role={role}>
+      <PcNote />
       <div className="top-wrap">
       <header className="top">
         <span className="logo">⚡ でんきの親方</span>
@@ -235,9 +236,22 @@ function VeteranAsk({ role }: { role: Role }) {
 }
 
 
+/** Beside the app on a wide screen only: the mic and camera are for phones. */
+function PcNote() {
+  return (
+    <aside className="pc-note">
+      <strong>📱 スマホでも開けます</strong>
+      話す（マイク）と撮る（カメラ）は、スマホで開くとそのまま使えます。
+      <br />
+      denki-oyakata.web.app
+    </aside>
+  );
+}
+
 function Entry({ onChoose, last }: { onChoose: (r: Role, trial?: boolean) => void; last: Role | null }) {
   return (
     <div className="entry">
+      <PcNote />
       <div className="entry-logo">⚡</div>
       <h1>でんきの親方</h1>
       <p className="catch">

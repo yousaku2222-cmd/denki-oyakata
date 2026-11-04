@@ -69,27 +69,47 @@ export function MicInput(props: {
   rows?: number;
   paused?: boolean; // the screen is hidden: stop listening, so words said elsewhere do not land here
   maxLength?: number; // the server's limit for this text
+  onDone?: (text: string) => void; // one press ends speaking and sends what was said
+  doneLabel?: string;
 }) {
   const { value, onChange, paused } = props;
   // several final results can arrive before the next render: append to the latest text, not to this render's copy
   const latest = useRef(value);
   latest.current = value;
-  const { listening, interim, error, start, stop } = useSpeech((t) => {
-    latest.current = (latest.current ? latest.current + " " : "") + t;
-    onChange(latest.current);
-  });
+  // 「話し終わった」: the last words arrive after stop, so it is sent when listening has ended
+  const sendAfter = useRef(false);
+  const { listening, interim, error, start, stop } = useSpeech(
+    (t) => {
+      latest.current = (latest.current ? latest.current + " " : "") + t;
+      onChange(latest.current);
+    },
+    () => {
+      if (!sendAfter.current) return;
+      sendAfter.current = false;
+      if (latest.current.trim()) props.onDone?.(latest.current);
+    },
+  );
+  const finish = () => {
+    sendAfter.current = true;
+    stop();
+  };
   useEffect(() => {
     if (paused) stop();
   }, [paused, stop]);
   return (
     <div className="mic-input">
-      <button type="button" className={`mic ${listening ? "on" : ""}`} onClick={listening ? stop : start}>
+      <button type="button" className={`mic ${listening ? "on" : ""}`} onClick={listening ? (props.onDone ? finish : stop) : start}>
         <span className="mic-icon" aria-hidden>
           {listening ? "■" : "🎤"}
         </span>
-        {listening ? "止める" : props.micLabel}
+        {listening ? (props.onDone ? (props.doneLabel ?? "話し終わった（送る）") : "止める") : props.micLabel}
       </button>
       {listening && <p className="hint live">聞いています… {interim}</p>}
+      {listening && props.onDone && (
+        <button type="button" className="link" onClick={stop}>
+          送らずに止める（直してから送る）
+        </button>
+      )}
       {error && <p className="hint error">{error}</p>}
       <textarea
         value={value}

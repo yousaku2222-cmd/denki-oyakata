@@ -3,6 +3,7 @@ import { CardBirth, IntoTheBag } from "../CardMotion";
 import { call, errorText } from "../firebase";
 import { getName, getTrial, setName } from "../local";
 import { MicInput, Notice } from "../components";
+import { canSay, hush, say } from "../speech";
 
 type Turn = { role: "veteran" | "ai"; text: string };
 interface Draft {
@@ -148,12 +149,22 @@ export function Talk({
     </Notice>
   );
 
-  async function next(finish = false) {
-    const t: Turn[] = text.trim()
-      ? [...turns, ...(aiQuestion ? [{ role: "ai" as const, text: aiQuestion }] : []), { role: "veteran", text: text.trim() }]
+  // the listener's question is read out as it comes (not when the young read it out for the veteran)
+  useEffect(() => {
+    if (aiQuestion && active && !listenerMode) say(aiQuestion);
+  }, [aiQuestion]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!active) hush();
+  }, [active]);
+  useEffect(() => hush, []);
+
+  // said: what the one-press 「話し終わった」 sends (the box's text may not be updated yet)
+  async function next(finish = false, said = text) {
+    const t: Turn[] = said.trim()
+      ? [...turns, ...(aiQuestion ? [{ role: "ai" as const, text: aiQuestion }] : []), { role: "veteran", text: said.trim() }]
       : turns;
     if (!t.some((x) => x.role === "veteran")) return;
-    if (text.trim().length > 3000) {
+    if (said.trim().length > 3000) {
       setErr("1回に送れるのは3000字までです。分けて送ってください。");
       return;
     }
@@ -211,8 +222,15 @@ export function Talk({
   }
 
   const back = resumeCardId ? onBack : undefined;
-  const leaveTo = back ? "わたしのカードへ戻る" : "新しく話す";
-  const leaveAsk = back ? "戻りますか？" : "新しく話しますか？";
+  // opened from 質問箱 (a question sent there, or one only the AI answered): going back there
+  const fromBox = !!topicIn && !resumeCardId && !!onOpenBox;
+  const toBox = () => {
+    onDone();
+    onOpenBox?.();
+  };
+  const leave = back ?? (fromBox ? toBox : undefined);
+  const leaveTo = back ? "わたしのカードへ戻る" : fromBox ? "質問箱に戻る" : "新しく話す";
+  const leaveAsk = back || fromBox ? "戻りますか？" : "新しく話しますか？";
 
   if (published) {
     return (
@@ -340,7 +358,7 @@ export function Talk({
                   ? `直した所は保存されません（下書きは直す前のまま「わたしのカード」に残ります）。${leaveAsk}`
                   : `直した所は保存されません。${leaveAsk}`
                 : `この下書きは「わたしのカード」に残ります。${leaveAsk}`,
-            ) && (back ?? onDone)()
+            ) && (leave ?? onDone)()
           }
         >
           {status === "draft" ? `下書きのまま置いて、${leaveTo}` : `保存しないで、${leaveTo}`}
@@ -353,6 +371,11 @@ export function Talk({
   const blank = fresh && !turns.length && !aiQuestion && !text.trim();
   return (
     <section className="screen">
+      {fromBox && (
+        <button className="link back-link" disabled={busy} onClick={() => (!dirty || confirm("話している途中の内容は消えます。質問箱に戻りますか？")) && toBox()}>
+          ← 質問箱に戻る
+        </button>
+      )}
       {topicNote}
 
       {turns.length > 0 && (
@@ -371,6 +394,11 @@ export function Talk({
         <div className="ai-question">
           <span className="src-tag">{listenerMode ? "📣 親方に読み上げてください（聞き手：Claude）" : "🤖 聞き手（Claude）から"}</span>
           <p>{aiQuestion}</p>
+          {canSay() && !listenerMode && (
+            <button className="link" onClick={() => say(aiQuestion)}>
+              🔊 もう一度聞く
+            </button>
+          )}
           {fresh && !turns.length && (
             <button className="link" onClick={() => setAiQuestion("")}>
               ← 別のきっかけにする
@@ -385,6 +413,7 @@ export function Talk({
         value={text}
         onChange={setText}
         micLabel={turns.length ? "答える" : "話す"}
+        onDone={busy ? undefined : (said) => void next(false, said)}
         rows={4}
         placeholder={turns.length ? "話した内容がここに入ります" : "例: PF管はな、90度の曲がりが3つあったら線が通らん。プルボックスを入れる。"}
       />

@@ -28,6 +28,40 @@ const ROUTER_SYSTEM = `電気工事の現場の若手からの質問を受け取
 - kind: law=法令・基準・資格／calc=計算・判定／part=部材・工具の名前や用途／howto=やり方・コツ／other
 - searchTerms: 社内の知恵カードと法令を探すための言い換え・正式名・別名・関係する作業名・法令の用語を3〜8個`;
 
+const CONCLUSION_SYSTEM = `電気工事の若手への答え（文の並び）を受け取ります。答えのいちばん上に見せる「結論」を書いてください。
+- 日本語で1〜2文、合わせて70字以内
+- 渡された文に書いてあることだけを使う。新しい数字・条件・言い切りを足さない
+- 値や「できる／できない」が文にあれば、それを先に言う
+- 文に答えが無い時（聞き返しだけ、など）は空文字にする`;
+
+/**
+ * The conclusion first, written from the finished sentences only (the answer itself is not changed by it).
+ * The program drops it when it has a number the sentences do not have.
+ */
+export function conclusionChecked(conclusion: string, sentences: Sentence[]): string | null {
+  const c = conclusion.trim();
+  if (!c || c.length > 90) return null;
+  const said = sentences.map((x) => x.text).join(" ").normalize("NFKC");
+  const nums = c.normalize("NFKC").match(/\d+(?:\.\d+)?/g) ?? [];
+  return nums.every((n) => said.includes(n)) ? c : null;
+}
+
+async function conclude(sentences: Sentence[]): Promise<string | null> {
+  if (sentences.length < 2) return null;
+  try {
+    const r = await jsonCall<{ conclusion: string }>({
+      model: MODEL_ROUTER,
+      system: CONCLUSION_SYSTEM,
+      user: sentences.map((x, i) => `${i + 1}. ${x.text}`).join("\n"),
+      schema: { type: "object", properties: { conclusion: { type: "string" } }, required: ["conclusion"], additionalProperties: false },
+      maxTokens: 1000,
+    });
+    return conclusionChecked(r.conclusion, sentences);
+  } catch {
+    return null; // only extra: the answer shows without it
+  }
+}
+
 const ANSWER_SYSTEM = `あなたは電気工事会社の「でんきの親方」アプリで、若手の質問に答えます。
 答えは一文ずつ、出どころ(source)を付けて返します。
 - law: 渡された「法令・基準」の条文に書かれていることだけ。必ず lawId と quote を付ける。quote は条文の原文から一続きでそのまま抜き出した部分（12〜80字。言い換え・省略・漢数字の書き換えをしない。「〜とする。」「〜こと。」など意味の切れ目で終える）。プログラムが原文と照合し、一致しなければ法令として表示されない。
@@ -198,6 +232,7 @@ async function compose(text: string, cards: Card[]) {
   let hits: Card[];
   let laws: Law[];
   let strongCard: Card | undefined;
+  let conclusion: string | null = null;
   const calcs: CalcOutput[] = [];
   const calcErrors: string[] = [];
   let mode: "claude" | "dummy" = "dummy";
@@ -307,6 +342,8 @@ async function compose(text: string, cards: Card[]) {
       const at = sentences.findIndex((s) => s.source === "general");
       sentences.splice(at < 0 ? sentences.length : at, 0, { text: `${strongCard.title}。`, source: "wisdom", cardId: strongCard.id });
     }
+    conclusion = await conclude(sentences);
+    if (conclusion) models.conclusion = MODEL_ROUTER;
   } else {
     hits = searchCards(text, cards, 5).map((r) => r.card);
     laws = searchLaws(text, 4);
@@ -322,6 +359,7 @@ async function compose(text: string, cards: Card[]) {
     usedLawIds,
     models,
     interpretedAs,
+    conclusion,
     sentences,
     grounded,
     mode,

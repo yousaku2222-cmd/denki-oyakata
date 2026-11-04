@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { call } from "./firebase";
+import { Sheet } from "./Sheet";
 
 export interface LawRef {
   id: string;
@@ -32,11 +33,7 @@ export function LawSheet({ id, highlight, onClose }: { id: string; highlight?: s
   }, [id]);
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <section className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="条文">
-        <button className="link sheet-close" onClick={onClose}>
-          ✕ 閉じる
-        </button>
+    <Sheet label="条文" onClose={onClose}>
         {failed && <p className="hint error">条文を読み込めませんでした。</p>}
         {!law && !failed && <p className="hint">読み込み中…</p>}
         {law && (
@@ -83,8 +80,7 @@ export function LawSheet({ id, highlight, onClose }: { id: string; highlight?: s
             <pre className="law-text">{highlightQuote(law.text, highlight)}</pre>
           </>
         )}
-      </section>
-    </div>
+    </Sheet>
   );
 }
 

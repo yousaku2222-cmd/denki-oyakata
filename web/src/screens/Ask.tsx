@@ -42,6 +42,7 @@ function Stamp({ n, of }: { n: number; of: number }) {
 interface Answer {
   answerId: string;
   interpretedAs: string;
+  conclusion?: string | null; // written from the sentences below (Haiku), numbers checked by the program
   sentences: Sentence[];
   grounded: boolean;
   mode: "claude" | "dummy";
@@ -246,6 +247,13 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
           <p className="interpreted">
             こう受け取りました：<strong>{answer.interpretedAs}</strong>
           </p>
+          {answer.conclusion && (
+            <div className="conclusion">
+              <span className="conclusion-tag">結論</span>
+              <p>{answer.conclusion}</p>
+              <span className="src-meta">下の答えをまとめたものです。根拠は下の文で確かめてください。</span>
+            </div>
+          )}
           {/* a tester went to look it up on the internet: the way to check is already here */}
           {answer.sentences.some((s) => s.source === "law") && (
             <div className="how-to-check">

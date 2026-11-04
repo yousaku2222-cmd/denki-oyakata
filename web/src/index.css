@@ -12,6 +12,17 @@
   --wisdom-bg: #e6f5ea;
   --general: #5d6470;
   --general-bg: #eef0f3;
+  /* four corner sizes and six text sizes, used everywhere (icons keep their own) */
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 18px;
+  --r-pill: 999px;
+  --fs-xs: 0.78rem;
+  --fs-s: 0.85rem;
+  --fs-m: 0.93rem;
+  --fs-l: 1.08rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.45rem;
   --danger: #b3261e;
   --danger-solid: #b3261e; /* behind white words: the same red in both themes */
   /* what is chosen in a segmented control or a pair of picks */
@@ -137,7 +148,7 @@ button {
 }
 @media (max-width: 380px) {
   .logo {
-    font-size: 0.92rem;
+    font-size: var(--fs-m);
   }
   /* the role in the bar: its picture is enough on a narrow phone (the bar colour says it too) */
   .badge-word {
@@ -147,16 +158,16 @@ button {
 .role-badge {
   background: var(--role-badge);
   color: var(--navy);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 2px 10px;
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   font-weight: 700;
 }
 .icon-btn {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.4);
   color: #fff;
-  border-radius: 8px;
+  border-radius: var(--r-s);
   min-height: 40px;
   min-width: 44px;
   padding: 0 10px;
@@ -194,11 +205,11 @@ button {
   font-weight: 700;
 }
 .tab-icon {
-  font-size: 1.4rem;
+  font-size: var(--fs-2xl);
   line-height: 1;
 }
 .tab-label {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   white-space: pre-line;
   line-height: 1.15;
   text-align: center;
@@ -216,11 +227,11 @@ button {
   padding-top: 48px;
 }
 .screen-title {
-  font-size: 1.3rem;
+  font-size: var(--fs-xl);
   margin: 4px 0;
 }
 .sub {
-  font-size: 1.05rem;
+  font-size: var(--fs-l);
   margin: 12px 0 0;
 }
 .big-emoji {
@@ -230,14 +241,14 @@ button {
   font-weight: 800;
   color: var(--navy);
   background: var(--yellow);
-  border-radius: 10px;
+  border-radius: var(--r-m);
   padding: 8px 12px;
   text-align: center;
   margin: 0;
 }
 .hint {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-m);
   margin: 0;
 }
 .hint.error {
@@ -253,7 +264,7 @@ button {
 }
 .disclaimer {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   text-align: center;
   margin: 24px 16px;
 }
@@ -262,10 +273,10 @@ button {
 .primary,
 .secondary {
   min-height: 56px;
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 0 18px;
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: var(--fs-l);
 }
 .primary {
   background: var(--primary-bg);
@@ -312,7 +323,7 @@ button {
   min-height: 48px;
   border: 1px solid var(--line);
   background: var(--surface);
-  border-radius: 10px;
+  border-radius: var(--r-m);
   padding: 8px 12px;
   margin-top: 6px;
 }
@@ -325,11 +336,11 @@ button {
 }
 .mic {
   min-height: 88px;
-  border-radius: 18px;
+  border-radius: var(--r-l);
   border: none;
   background: var(--yellow);
   color: var(--navy);
-  font-size: 1.3rem;
+  font-size: var(--fs-xl);
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -360,7 +371,7 @@ input[type="text"] {
   width: 100%;
   border: 2px solid var(--line);
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 10px 12px;
   resize: vertical;
 }
@@ -374,11 +385,11 @@ input[type="text"] {
 }
 .interpreted {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--fs-m);
 }
 .sentence {
   border-left: 6px solid;
-  border-radius: 10px;
+  border-radius: var(--r-m);
   padding: 8px 12px;
 }
 .sentence p {
@@ -397,7 +408,7 @@ input[type="text"] {
   background: var(--general-bg);
 }
 .src-tag {
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   font-weight: 700;
 }
 .src-law .src-tag,
@@ -412,7 +423,7 @@ input[type="text"] {
 }
 .src-meta {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   margin: 2px 0 0;
 }
 .sentences {
@@ -424,7 +435,7 @@ input[type="text"] {
   display: grid;
   gap: 8px;
   border-left: 6px solid;
-  border-radius: 10px;
+  border-radius: var(--r-m);
   padding: 8px 12px;
 }
 .src-row p {
@@ -442,17 +453,17 @@ input[type="text"] {
   margin-top: 4px;
 }
 .cite-chip {
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   font-weight: 700;
   color: var(--law);
   background: var(--surface);
   border: 1px solid var(--law);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 2px 10px;
   min-height: 32px;
 }
 .src-head .link {
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
 }
 .src-head {
   display: flex;
@@ -465,11 +476,11 @@ input[type="text"] {
   display: inline-block;
   margin-top: 4px;
   white-space: nowrap;
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   border: 2px solid var(--wisdom);
   color: var(--wisdom);
   background: var(--wisdom-bg);
-  border-radius: 6px;
+  border-radius: var(--r-s);
   padding: 0 6px;
   font-weight: 800;
 }
@@ -477,19 +488,19 @@ input[type="text"] {
   position: absolute;
   inset: -3px;
   border: 2px solid var(--wisdom);
-  border-radius: 8px;
+  border-radius: var(--r-s);
   pointer-events: none;
 }
 .notice {
   background: var(--note-bg);
   color: var(--note-fg);
-  border-radius: 10px;
+  border-radius: var(--r-m);
   padding: 10px 12px;
-  font-size: 0.95rem;
+  font-size: var(--fs-m);
 }
 .no-ground {
   border: 2px dashed var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 10px 12px;
 }
 .no-ground p {
@@ -502,7 +513,7 @@ input[type="text"] {
   gap: 8px;
   align-items: center;
   min-height: 44px;
-  font-size: 0.95rem;
+  font-size: var(--fs-m);
 }
 .toggle input,
 .radio input {
@@ -518,7 +529,7 @@ input[type="text"] {
   gap: 6px;
 }
 .transcript li {
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 8px 12px;
   max-width: 90%;
 }
@@ -531,13 +542,13 @@ input[type="text"] {
 }
 .ai-question {
   border: 3px solid var(--yellow);
-  border-radius: 14px;
+  border-radius: var(--r-m);
   padding: 10px 14px;
   background: var(--surface);
 }
 .ai-question p {
   margin: 4px 0 0;
-  font-size: 1.25rem;
+  font-size: var(--fs-xl);
   font-weight: 700;
 }
 .promise-chips {
@@ -550,10 +561,10 @@ input[type="text"] {
 }
 .promise-chips li {
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1px solid var(--line);
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
 }
 .field {
   display: flex;
@@ -565,7 +576,7 @@ input[type="text"] {
 }
 .field > span {
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: var(--fs-m);
 }
 .radio {
   display: flex;
@@ -579,7 +590,7 @@ input[type="text"] {
 .card-row {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -607,7 +618,7 @@ input[type="text"] {
   align-items: baseline;
   gap: 8px;
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 12px;
   border: 1px solid var(--line);
 }
@@ -623,7 +634,7 @@ input[type="text"] {
 }
 .tile {
   min-height: 56px;
-  border-radius: 10px;
+  border-radius: var(--r-m);
   border: 2px solid var(--line);
   background: var(--surface);
   font-weight: 700;
@@ -637,7 +648,7 @@ input[type="text"] {
   display: flex;
   margin: 12px 16px 0;
   border: 2px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   overflow: hidden;
 }
 .segmented button {
@@ -656,21 +667,21 @@ input[type="text"] {
 .wisdom-card {
   background: var(--surface);
   border: 2px solid var(--wisdom);
-  border-radius: 16px;
+  border-radius: var(--r-l);
   padding: 16px;
 }
 .wisdom-card h1 {
-  font-size: 1.3rem;
+  font-size: var(--fs-xl);
   margin: 4px 0 8px;
 }
 .wc-author {
   color: var(--wisdom);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: var(--fs-m);
   margin: 0;
 }
 .wc-part span {
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   font-weight: 700;
   color: var(--muted);
 }
@@ -719,7 +730,7 @@ input[type="text"] {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   font-weight: 700;
 }
 .flow-step {
@@ -742,23 +753,23 @@ input[type="text"] {
   object-fit: contain;
   /* the pictures are stickers on white: a white card keeps them looking that way on the navy entry */
   background: #fff;
-  border-radius: 16px;
+  border-radius: var(--r-l);
   border: 2px solid #1b1b1b;
 }
 .flow-arrow {
   flex: none;
   color: var(--yellow);
-  font-size: 1.2rem;
+  font-size: var(--fs-xl);
   font-weight: 900;
 }
 .role-btn {
   min-height: 84px;
-  border-radius: 16px;
+  border-radius: var(--r-l);
   border: none;
   /* the same colours as each role's bar */
   background: #4a2f1a;
   color: #fff;
-  font-size: 1.25rem;
+  font-size: var(--fs-xl);
   font-weight: 800;
   display: flex;
   flex-direction: column;
@@ -771,7 +782,7 @@ input[type="text"] {
   box-shadow: inset 0 0 0 2px #8fd6ff;
 }
 .role-btn small {
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   font-weight: 500;
 }
 .entry .link {
@@ -787,13 +798,13 @@ input[type="text"] {
   margin-top: 6px;
   background: var(--surface);
   border: 1px solid var(--law);
-  border-radius: 8px;
+  border-radius: var(--r-s);
   padding: 6px 10px;
   min-height: 44px;
 }
 .law-cite q {
   display: block;
-  font-size: 0.92rem;
+  font-size: var(--fs-m);
 }
 .law-row strong {
   color: var(--law);
@@ -813,7 +824,7 @@ input[type="text"] {
   max-width: 560px;
   max-height: 88dvh;
   overflow-y: auto;
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--r-l) var(--r-l) 0 0;
   padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
 }
 .sheet-close {
@@ -826,13 +837,13 @@ input[type="text"] {
 }
 .law-summary {
   background: var(--law-bg);
-  border-radius: 10px;
+  border-radius: var(--r-m);
   padding: 8px 12px;
   margin: 10px 0;
 }
 .law-summary span,
 .field-label {
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   font-weight: 700;
   color: var(--muted);
 }
@@ -842,11 +853,11 @@ input[type="text"] {
 .law-text {
   white-space: pre-wrap;
   font-family: inherit;
-  font-size: 0.92rem;
+  font-size: var(--fs-m);
   line-height: 1.7;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-m);
   padding: 10px 12px;
   margin: 4px 0 0;
 }
@@ -858,7 +869,7 @@ input[type="text"] {
 /* calculation card */
 .calc-card {
   border: 2px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 10px 12px;
   background: var(--surface);
   display: flex;
@@ -877,7 +888,7 @@ input[type="text"] {
 }
 .calc-verdict {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: var(--fs-xl);
   font-weight: 800;
 }
 .calc-card.pass .calc-verdict {
@@ -889,7 +900,7 @@ input[type="text"] {
 .calc-steps {
   margin: 4px 0 0;
   padding-left: 1.3em;
-  font-size: 0.92rem;
+  font-size: var(--fs-m);
 }
 .calc-card summary {
   min-height: 40px;
@@ -902,7 +913,7 @@ input[type="text"] {
   color: var(--law);
 }
 .stamp.small {
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   align-self: flex-start;
 }
 .fill-fig {
@@ -911,7 +922,7 @@ input[type="text"] {
   text-align: center;
 }
 .fill-fig figcaption {
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   color: var(--muted);
 }
 .fill-fig.rack {
@@ -922,7 +933,7 @@ select {
   min-height: 48px;
   border: 2px solid var(--line);
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 8px 10px;
   font: inherit;
   color: inherit;
@@ -932,7 +943,7 @@ input[inputmode="decimal"] {
   min-height: 48px;
   border: 2px solid var(--line);
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 8px 12px;
 }
 
@@ -955,13 +966,13 @@ input[inputmode="decimal"] {
   min-width: 48px;
   padding: 0 14px;
   border: 1.5px solid var(--line);
-  border-radius: 22px;
+  border-radius: var(--r-l);
   background: var(--surface);
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: var(--fs-m);
 }
 .opts-row.wide .opt {
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 8px 14px;
   text-align: left;
 }
@@ -993,11 +1004,11 @@ input[inputmode="decimal"] {
 .stepper button {
   width: 48px;
   height: 48px;
-  border-radius: 24px;
+  border-radius: var(--r-l);
   border: 1.5px solid var(--line);
   background: var(--surface);
   color: var(--text);
-  font-size: 1.4rem;
+  font-size: var(--fs-2xl);
 }
 .stepper input {
   width: 80px;
@@ -1009,12 +1020,12 @@ input[inputmode="decimal"] {
   width: 100%;
   max-height: 320px;
   object-fit: contain;
-  border-radius: 12px;
+  border-radius: var(--r-m);
   background: #000;
 }
 .part-card {
   border: 2px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--r-m);
   padding: 12px 14px;
   background: var(--surface);
   display: flex;
@@ -1035,21 +1046,21 @@ input[inputmode="decimal"] {
   color: var(--danger);
 }
 .part-name {
-  font-size: 1.2rem;
+  font-size: var(--fs-xl);
   font-weight: 700;
   margin: 0;
 }
 .part-printed {
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   color: var(--muted);
   background: var(--general-bg);
-  border-radius: 8px;
+  border-radius: var(--r-s);
   padding: 6px 8px;
   margin: 0;
 }
 .part-link {
   border: 1.5px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 10px 12px;
   background: var(--surface);
 }
@@ -1066,7 +1077,7 @@ input[inputmode="decimal"] {
   margin: 0 0 4px;
 }
 .sub-title {
-  font-size: 1.05rem;
+  font-size: var(--fs-l);
   margin: 16px 0 4px;
 }
 .parts-book {
@@ -1077,7 +1088,7 @@ input[inputmode="decimal"] {
 .part-item {
   display: grid;
   gap: 8px;
-  border-radius: 12px;
+  border-radius: var(--r-m);
 }
 .part-item.open {
   padding: 8px;
@@ -1099,7 +1110,7 @@ input[inputmode="decimal"] {
   width: 56px;
   height: 56px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--r-s);
   flex: none;
   display: grid;
   place-items: center;
@@ -1124,7 +1135,7 @@ input[inputmode="decimal"] {
   margin: 20px 0;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-m);
 }
 .transfer summary {
   cursor: pointer;
@@ -1146,7 +1157,7 @@ input[inputmode="decimal"] {
 .trial-note {
   margin: 0;
   padding: 6px 16px;
-  font-size: 13px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   background: var(--note-bg);
   color: var(--note-fg);
@@ -1197,7 +1208,7 @@ input[inputmode="decimal"] {
   background: var(--wisdom-bg, var(--surface));
   border: 2px solid var(--wisdom);
   border-left-width: 6px;
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 10px 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
@@ -1206,21 +1217,21 @@ input[inputmode="decimal"] {
 }
 .birth-title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: var(--fs-l);
   font-weight: 800;
 }
 .birth-row {
-  border-radius: 6px;
+  border-radius: var(--r-s);
   padding: 2px 4px;
 }
 .birth-row span {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--muted);
 }
 .birth-row p {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--fs-m);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1238,7 +1249,7 @@ input[inputmode="decimal"] {
   max-width: 80%;
   background: var(--surface);
   border: 2px solid var(--wisdom);
-  border-radius: 10px;
+  border-radius: var(--r-m);
   padding: 6px 12px;
   font-weight: 800;
   white-space: nowrap;
@@ -1263,7 +1274,7 @@ input[inputmode="decimal"] {
 .bag-count {
   position: relative;
   margin: 4px 0 0;
-  font-size: 1.3rem;
+  font-size: var(--fs-xl);
   font-weight: 800;
 }
 .bag-num {
@@ -1286,7 +1297,7 @@ input[inputmode="decimal"] {
   gap: 8px;
   background: var(--surface);
   border: 1px solid var(--line, #d6dbe6);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 8px 10px;
 }
 .ask-bar-q {
@@ -1367,8 +1378,8 @@ input[inputmode="decimal"] {
 .checked-line {
   margin: 4px 0 0;
   font-weight: 700;
-  font-size: 0.92rem;
-  border-radius: 999px;
+  font-size: var(--fs-m);
+  border-radius: var(--r-pill);
   padding: 4px 12px;
   justify-self: start;
   width: fit-content;
@@ -1427,7 +1438,7 @@ input[inputmode="decimal"] {
 /* ---- 撮る: a scan line over the photo while it is being read ---- */
 .photo-frame {
   position: relative;
-  border-radius: 12px;
+  border-radius: var(--r-m);
   overflow: hidden;
 }
 .photo-frame .photo-preview {
@@ -1465,11 +1476,11 @@ input[inputmode="decimal"] {
 }
 .new-chip {
   display: inline-block;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 800;
   color: #4a3b00;
   background: var(--bag-tie);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 1px 8px;
   width: fit-content;
 }
@@ -1488,7 +1499,7 @@ input[inputmode="decimal"] {
   gap: 6px;
   background: var(--wisdom-bg);
   border: 2px solid var(--wisdom);
-  border-radius: 14px;
+  border-radius: var(--r-m);
   padding: 12px 14px;
 }
 .born-news p {
@@ -1499,17 +1510,17 @@ input[inputmode="decimal"] {
   color: var(--wisdom);
 }
 .born-title {
-  font-size: 1.1rem;
+  font-size: var(--fs-l);
   font-weight: 800;
 }
 .same-chip {
   display: inline-block;
   width: fit-content;
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   font-weight: 800;
   color: var(--law);
   background: var(--law-bg);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 2px 10px;
 }
 .good-btn {
@@ -1542,28 +1553,28 @@ input[inputmode="decimal"] {
 }
 .link.more {
   justify-self: start;
-  font-size: 0.9rem;
+  font-size: var(--fs-m);
 }
 .wait-slow {
   margin-left: 6px;
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   color: var(--muted);
   font-weight: 500;
 }
 
 .toggle.small {
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   color: var(--muted);
   min-height: 36px;
 }
 .entry-trial {
-  border-radius: 8px;
+  border-radius: var(--r-s);
   border: 2px solid var(--bag-tie);
 }
 .photo-sample {
   background: var(--surface);
   border: 1px dashed var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 8px 12px;
 }
 .photo-sample ul {
@@ -1583,7 +1594,7 @@ input[inputmode="decimal"] {
 .law-words {
   display: grid;
   gap: 2px;
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   color: var(--muted);
 }
 
@@ -1591,7 +1602,7 @@ input[inputmode="decimal"] {
 .sample {
   margin-top: 18px;
   border: 1px dashed var(--line);
-  border-radius: 14px;
+  border-radius: var(--r-m);
   padding: 12px;
   display: grid;
   gap: 8px;
@@ -1602,7 +1613,7 @@ input[inputmode="decimal"] {
   margin: 0;
 }
 .sample-head {
-  font-size: 0.9rem;
+  font-size: var(--fs-m);
   color: var(--muted);
 }
 .sample-head strong {
@@ -1615,18 +1626,18 @@ input[inputmode="decimal"] {
   /* width and style only: the colour comes from .src-law / .src-wisdom / .src-general */
   border-left-width: 6px;
   border-left-style: solid;
-  border-radius: 10px;
+  border-radius: var(--r-m);
   padding: 6px 10px;
 }
 .sample-row p {
   margin: 2px 0 0;
-  font-size: 0.95rem;
+  font-size: var(--fs-m);
 }
 .sample-sum {
   margin: 4px 0 0;
   text-align: center;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: var(--fs-m);
 }
 
 /* 話す, answering a question with a photo: small under the question, the whole width when tapped */
@@ -1638,14 +1649,14 @@ input[inputmode="decimal"] {
   background: transparent;
   text-align: left;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
 }
 .topic-photo img {
   display: block;
   width: 120px;
   height: 90px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--r-s);
   background: #000;
 }
 .topic-photo.big img {
@@ -1674,7 +1685,7 @@ input[inputmode="decimal"] {
 .follow-chip {
   display: block;
   margin: 0 0 4px;
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   color: var(--muted);
   border-left: 3px solid var(--wisdom);
   padding-left: 8px;
@@ -1683,7 +1694,7 @@ input[inputmode="decimal"] {
 /* わたしのカード: the 👍 that came in since last time */
 .helped-news {
   border: 2px solid var(--yellow);
-  border-radius: 14px;
+  border-radius: var(--r-m);
   padding: 10px 14px;
   margin-bottom: 12px;
   background: var(--surface);
@@ -1700,16 +1711,16 @@ input[inputmode="decimal"] {
   margin-left: 6px;
   background: var(--yellow);
   color: var(--navy);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0 8px;
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   font-weight: 700;
 }
 /* 直す: what was told, folded above the fields */
 .told {
   margin: 8px 0 12px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-m);
   padding: 8px 12px;
   background: var(--surface);
 }
@@ -1722,7 +1733,7 @@ input[inputmode="decimal"] {
 }
 .told .who {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   color: var(--muted);
 }
 
@@ -1734,7 +1745,7 @@ input[inputmode="decimal"] {
 }
 .box-group-head {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   font-weight: 700;
   color: var(--muted);
 }
@@ -1747,10 +1758,10 @@ input[inputmode="decimal"] {
   min-width: 20px;
   height: 20px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--danger-solid);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 800;
   line-height: 16px;
   text-align: center;
@@ -1769,14 +1780,14 @@ input[inputmode="decimal"] {
 .law-row .law-no {
   display: block;
   margin-top: 2px;
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   color: var(--law);
   font-weight: 700;
 }
 /* 探す: the veterans who helped most, and one veteran's page */
 .vet-rank {
   border: 2px solid var(--yellow);
-  border-radius: 14px;
+  border-radius: var(--r-m);
   padding: 10px 12px;
   margin-bottom: 12px;
   display: grid;
@@ -1799,7 +1810,7 @@ input[inputmode="decimal"] {
   min-width: 0;
   padding: 8px 4px;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--r-m);
   background: var(--bg);
   color: var(--text);
   cursor: pointer;
@@ -1815,7 +1826,7 @@ input[inputmode="decimal"] {
   line-height: 1.1;
 }
 .vet-page {
-  border-radius: 14px;
+  border-radius: var(--r-m);
   padding: 14px;
   margin: 8px 0 12px;
   background: #4a2f1a;
@@ -1823,18 +1834,18 @@ input[inputmode="decimal"] {
 }
 .vet-name {
   margin: 0 0 8px;
-  font-size: 1.25rem;
+  font-size: var(--fs-xl);
   font-weight: 800;
 }
 .vet-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 14px;
-  font-size: 0.9rem;
+  font-size: var(--fs-m);
 }
 .vet-stats strong {
   color: var(--yellow);
-  font-size: 1.1rem;
+  font-size: var(--fs-l);
   margin-right: 2px;
 }
 /* 場面で探す: the labels are longer than 場所/種類, so two to a row and on one line */
@@ -1845,7 +1856,7 @@ input[inputmode="decimal"] {
   min-height: 48px;
   min-width: 0;
   padding: 0 2px;
-  font-size: 0.85rem;
+  font-size: var(--fs-s);
   letter-spacing: -0.02em;
   white-space: nowrap;
 }
@@ -1856,7 +1867,7 @@ input[inputmode="decimal"] {
   gap: 6px;
   margin-top: 8px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-m);
   border: 1px dashed var(--line);
 }
 .photo-bridge p {
@@ -1891,7 +1902,7 @@ input[inputmode="decimal"] {
 }
 .gloss-box {
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-m);
   border: 1px dashed var(--line);
 }
 .gloss-box .gloss-meaning:first-of-type {
@@ -1901,7 +1912,7 @@ input[inputmode="decimal"] {
 .gloss-more summary {
   cursor: pointer;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-m);
   padding: 6px 0;
 }
 /* 聞く: how to check an answer, said where the answer starts */
@@ -1912,9 +1923,9 @@ input[inputmode="decimal"] {
   gap: 4px 12px;
   margin: 0;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-s);
   background: var(--law-bg);
-  font-size: 0.88rem;
+  font-size: var(--fs-s);
   line-height: 1.5;
 }
 .how-to-check .htc-title {
@@ -1933,11 +1944,11 @@ input[inputmode="decimal"] {
   gap: 2px;
   text-align: left;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--r-m);
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text);
-  font-size: 1.05rem;
+  font-size: var(--fs-l);
   cursor: pointer;
 }
 .seed.young-q {
@@ -1979,12 +1990,12 @@ input[inputmode="decimal"] {
   gap: 4px;
   min-height: 92px;
   padding: 10px 6px;
-  border-radius: 12px;
+  border-radius: var(--r-m);
   border: 2px solid var(--line);
   background: var(--surface);
   color: var(--text);
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: var(--fs-m);
   text-align: center;
   cursor: pointer;
 }
@@ -2015,7 +2026,7 @@ input[inputmode="decimal"] {
   justify-items: center;
   gap: 2px;
   padding: 10px 6px;
-  border-radius: 14px;
+  border-radius: var(--r-m);
   border: 2px solid var(--line);
   background: var(--surface);
   color: var(--text);
@@ -2031,7 +2042,7 @@ input[inputmode="decimal"] {
   line-height: 1.1;
 }
 .pick small {
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
   opacity: 0.85;
 }
 .browse-lead .flow-steps {
@@ -2051,7 +2062,7 @@ input[inputmode="decimal"] {
   padding: 6px 2px;
 }
 .tile-icon {
-  font-size: 1.4rem;
+  font-size: var(--fs-2xl);
   line-height: 1.1;
 }
 
@@ -2070,7 +2081,7 @@ input[inputmode="decimal"] {
 }
 .qopen-mark {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   padding-top: 4px;
 }
 .q-detail,
@@ -2090,7 +2101,7 @@ input[inputmode="decimal"] {
   width: 160px;
   height: 160px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: var(--r-m);
 }
 
 /* 入口: the role used last time */
@@ -2102,10 +2113,10 @@ input[inputmode="decimal"] {
   top: 8px;
   right: 10px;
   padding: 1px 8px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--yellow);
   color: var(--navy);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 800;
 }
 
@@ -2151,7 +2162,7 @@ input[inputmode="decimal"] {
   flex: none;
   width: 80px;
   height: 80px;
-  border-radius: 10px;
+  border-radius: var(--r-m);
   overflow: hidden;
   background: var(--general-bg);
   display: grid;
@@ -2178,7 +2189,7 @@ input[inputmode="decimal"] {
   position: relative;
   border: none;
   background: none;
-  font-size: 1.5rem;
+  font-size: var(--fs-2xl);
   line-height: 1;
   padding: 2px 4px;
   color: var(--muted);
@@ -2195,11 +2206,11 @@ input[inputmode="decimal"] {
 
 /* four steps or more: smaller words, so each stays on its line */
 .flow-steps.many {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   gap: 2px;
 }
 .flow-steps.many .flow-icon {
-  font-size: 1.5rem;
+  font-size: var(--fs-2xl);
 }
 
 /* drawn icons (web/public/icons): the size where each one stands */
@@ -2278,7 +2289,7 @@ button:not(:disabled):active {
   flex: none;
   min-height: 32px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1.5px solid currentColor;
   background: transparent;
   color: inherit;
@@ -2286,7 +2297,7 @@ button:not(:disabled):active {
 }
 /* 聞く: each quote that matched, quietly (the stamp on the group says it once) */
 .match-mark {
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
   font-weight: 700;
   color: var(--wisdom);
   white-space: nowrap;
@@ -2294,11 +2305,11 @@ button:not(:disabled):active {
 .how-to-check .htc-who {
   flex-basis: 100%;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-s);
 }
 .src-head .stamp {
   margin-top: 0;
-  font-size: 0.8rem;
+  font-size: var(--fs-s);
 }
 /* a list on its way */
 .skeleton-list {
@@ -2308,7 +2319,7 @@ button:not(:disabled):active {
 }
 .skeleton {
   display: block;
-  border-radius: 12px;
+  border-radius: var(--r-m);
   background: linear-gradient(90deg, var(--line) 0%, var(--surface) 50%, var(--line) 100%);
   background-size: 200% 100%;
   animation: shimmer 1.2s linear infinite;
@@ -2358,6 +2369,81 @@ button:not(:disabled):active {
 }
 .entry-ai {
   margin: 4px 0 0;
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
   color: #c9d1e3;
+}
+/* the veteran's tab mark: yellow on white is too faint in the light theme */
+:root:not([data-theme="dark"]) .app[data-role="veteran"] {
+  --role-mark: #b38f00;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .app[data-role="veteran"] {
+    --role-mark: var(--yellow);
+  }
+}
+/* the veteran's words a size up: the tabs and the small notes */
+.app[data-role="veteran"] .tab-label {
+  font-size: var(--fs-s);
+}
+/* PC: the entry's navy reaches the edges; the app is a phone-sized column with a note beside it */
+.entry {
+  box-shadow: 0 0 0 100vmax var(--navy);
+  clip-path: inset(0 -100vmax);
+}
+.pc-note {
+  display: none;
+}
+@media (min-width: 1000px) {
+  .app {
+    box-shadow: 0 0 0 1px var(--line), 0 10px 40px rgba(0, 0, 0, 0.12);
+    background: var(--bg);
+  }
+  body {
+    background: var(--general-bg);
+  }
+  .pc-note {
+    display: block;
+    position: fixed;
+    top: 50%;
+    left: calc(50% + 300px);
+    transform: translateY(-50%);
+    width: 240px;
+    padding: 16px;
+    border-radius: var(--r-m);
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    font-size: var(--fs-s);
+    line-height: 1.6;
+    z-index: 4;
+  }
+  .pc-note strong {
+    display: block;
+    font-size: var(--fs-m);
+    margin-bottom: 4px;
+  }
+}
+/* 聞く: the conclusion first, then where it comes from */
+.conclusion {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--r-m);
+  border: 2px solid var(--text);
+  background: var(--surface);
+}
+.conclusion p {
+  margin: 0;
+  font-size: var(--fs-l);
+  font-weight: 800;
+  line-height: 1.5;
+}
+.conclusion-tag {
+  justify-self: start;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  color: var(--surface);
+  font-size: var(--fs-xs);
+  font-weight: 800;
 }

@@ -20,14 +20,30 @@ function makeRecognition(): Recognition | null {
 
 export const speechSupported = () => makeRecognition() !== null;
 
-/** Appends what was heard to the text via onText(final, interim). */
-export function useSpeech(onFinal: (text: string) => void) {
+// The listener's question, read out (a veteran on site may not look at the screen). Nothing is sent anywhere.
+export const canSay = () => typeof window !== "undefined" && "speechSynthesis" in window;
+export function say(text: string) {
+  if (!canSay() || !text) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "ja-JP";
+  u.rate = 0.95;
+  speechSynthesis.speak(u);
+}
+export function hush() {
+  if (canSay()) speechSynthesis.cancel();
+}
+
+/** Appends what was heard to the text via onText(final, interim); onEnd when listening has stopped (all heard). */
+export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
   const [error, setError] = useState("");
   const rec = useRef<Recognition | null>(null);
   const finalRef = useRef(onFinal);
   finalRef.current = onFinal;
+  const endRef = useRef(onEnd);
+  endRef.current = onEnd;
 
   const stop = useCallback(() => {
     rec.current?.stop();
@@ -40,6 +56,7 @@ export function useSpeech(onFinal: (text: string) => void) {
       return;
     }
     setError("");
+    hush(); // the mic would hear the question being read out
     r.lang = "ja-JP";
     r.continuous = true;
     r.interimResults = true;
@@ -59,6 +76,7 @@ export function useSpeech(onFinal: (text: string) => void) {
     r.onend = () => {
       setListening(false);
       setInterim("");
+      endRef.current?.();
     };
     rec.current = r;
     r.start();
