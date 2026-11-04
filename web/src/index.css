@@ -1743,28 +1743,32 @@ input[inputmode="decimal"] {
   margin: 0;
   font-weight: 800;
 }
-.vet-rank-row {
+.vet-podium {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.vet-medal-card {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 4px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--bg);
   color: var(--text);
-  text-align: left;
-  padding: 4px 10px;
+  cursor: pointer;
 }
-.vet-rank-no {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--yellow);
-  color: var(--navy);
-  font-weight: 800;
-  display: grid;
-  place-items: center;
+.vet-medal-card strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vet-medal {
+  font-size: 1.8rem;
+  line-height: 1.1;
 }
 .vet-page {
   border-radius: 14px;
@@ -1953,4 +1957,56 @@ input[inputmode="decimal"] {
 .calc-tile span:last-child {
   white-space: pre-line; /* the labels say where they break (
 ) */
+}
+
+/* 探す: the two things to look in, as pictures */
+.browse-pick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 16px 0;
+}
+.pick {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  border-radius: 14px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.pick.on {
+  border-color: var(--navy);
+  background: var(--navy);
+  color: #fff;
+}
+.pick-icon {
+  font-size: 2rem;
+  line-height: 1.1;
+}
+.pick small {
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+.browse-lead .flow-steps {
+  margin: 0;
+}
+.browse-lead .more-info {
+  display: block;
+  text-align: center;
+}
+/* a tile with its picture above the name (places, kinds and scenes on 探す) */
+.tile.icon-tile {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 2px;
+  min-height: 64px;
+  padding: 6px 2px;
+}
+.tile-icon {
+  font-size: 1.4rem;
+  line-height: 1.1;
 }

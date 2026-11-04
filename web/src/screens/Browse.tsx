@@ -4,19 +4,46 @@ import { call, db, spaces } from "../firebase";
 import { CATEGORY_LABEL, LOCATION_LABEL, authorOf, fmtDate, type Card } from "../components";
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
 import { Meanings, useGlossary } from "../Glossary";
+import { FlowSteps } from "../FlowSteps";
+
+// pictures first: the same icons wherever a place or a kind is shown
+const LOCATION_ICON: Record<string, string> = { ceiling: "🏠", floor: "🕳️", outdoor: "🌳", panel: "🗄️", other: "…" };
+const CATEGORY_ICON: Record<string, string> = { piping: "🔧", wiring: "〰️", grounding: "🌏", license: "🪪", calc: "🧮", safety: "⛑️", other: "…" };
+const MEDALS = ["🥇", "🥈", "🥉"];
 
 export function Browse() {
   const [view, setView] = useState<"cards" | "laws">("cards");
   return (
     <>
-      <p className="hint browse-lead">探す＝AI を通さず、自分で知恵カードと条文を見る所です。答えが欲しい時は「聞く」へ。</p>
-      <div className="segmented">
-        <button className={view === "cards" ? "on" : ""} onClick={() => setView("cards")}>
-          🧰 親方の知恵
+      <div className="browse-pick">
+        <button className={`pick ${view === "cards" ? "on" : ""}`} onClick={() => setView("cards")}>
+          <span className="pick-icon" aria-hidden>
+            🧰
+          </span>
+          <strong>親方の知恵</strong>
+          <small>現場の知恵カード</small>
         </button>
-        <button className={view === "laws" ? "on" : ""} onClick={() => setView("laws")}>
-          ⚖️ 法令・基準
+        <button className={`pick ${view === "laws" ? "on" : ""}`} onClick={() => setView("laws")}>
+          <span className="pick-icon" aria-hidden>
+            ⚖️
+          </span>
+          <strong>法令・基準</strong>
+          <small>国の決まり・原文つき</small>
         </button>
+      </div>
+      <div className="browse-lead">
+        <FlowSteps
+          label="探し方"
+          steps={[
+            { icon: "🔎", label: "探す" },
+            { icon: "📖", label: "読む" },
+            { icon: "🎤", label: "聞く" },
+          ]}
+        />
+        <details className="more-info hint">
+          <summary>？ 探すとは</summary>
+          AI を通さず、自分で知恵カードと条文を見る所です。答えが欲しい時は「聞く」へ。
+        </details>
       </div>
       {view === "cards" ? <CardList /> : <LawList />}
     </>
@@ -76,7 +103,7 @@ function LawList() {
       <p className="hint">場面で探す</p>
       <div className="tiles scene-tiles">
         {LAW_SCENES.map((x) => (
-          <Tile key={x.label} label={`${x.icon} ${x.label}`} on={scene === x.label} onClick={() => setScene(scene === x.label ? null : x.label)} />
+          <Tile key={x.label} icon={x.icon} label={x.label} on={scene === x.label} onClick={() => setScene(scene === x.label ? null : x.label)} />
         ))}
       </div>
       {meant.map((t) => (
@@ -184,7 +211,9 @@ function CardList() {
         <p className="hint">この人の知恵カード</p>
         {who.cards.map((c) => (
           <button key={c.id} className="card-row" onClick={() => setOpen(c)}>
-            <strong>{c.title}</strong>
+            <strong>
+              <span aria-hidden>{CATEGORY_ICON[c.category] ?? "🗂️"}</span> {c.title}
+            </strong>
             <span className="src-meta">
               👍 {c.helpedCount}
               {c.triggerAskerName ? `・${c.triggerAskerName}さんの質問に答えた` : ""}・{fmtDate(c.publishedAt?.toMillis())}
@@ -201,35 +230,40 @@ function CardList() {
       {people.length > 0 && (
         <div className="vet-rank">
           <p className="vet-rank-head">🏅 よく助けてくれた親方</p>
-          {people.slice(0, 3).map((p, i) => (
-            <button key={p.name} className="vet-rank-row" onClick={() => setPerson(p.name)}>
-              <span className="vet-rank-no">{i + 1}</span>
-              <strong>{p.name}</strong>
-              <span className="src-meta">
-                👍 {p.helped}・カード{p.cards.length}枚 ›
-              </span>
-            </button>
-          ))}
+          <div className="vet-podium">
+            {people.slice(0, 3).map((p, i) => (
+              <button key={p.name} className="vet-medal-card" onClick={() => setPerson(p.name)}>
+                <span className="vet-medal" aria-label={`${i + 1}位`}>
+                  {MEDALS[i]}
+                </span>
+                <strong>{p.name}</strong>
+                <span className="src-meta">👍 {p.helped}</span>
+                <span className="src-meta">カード{p.cards.length}枚</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="言葉で探す（例: PF 曲げ / 脚立）" />
       <p className="hint">場所</p>
       <div className="tiles">
         {Object.entries(LOCATION_LABEL).map(([k, v]) => (
-          <Tile key={k} label={v} on={filter?.kind === "location" && filter.value === k} onClick={() => setFilter(filter?.value === k ? null : { kind: "location", value: k })} />
+          <Tile key={k} icon={LOCATION_ICON[k]} label={v} on={filter?.kind === "location" && filter.value === k} onClick={() => setFilter(filter?.value === k ? null : { kind: "location", value: k })} />
         ))}
       </div>
       <p className="hint">種類</p>
       <div className="tiles">
         {Object.entries(CATEGORY_LABEL).map(([k, v]) => (
-          <Tile key={k} label={v} on={filter?.kind === "category" && filter.value === k} onClick={() => setFilter(filter?.value === k ? null : { kind: "category", value: k })} />
+          <Tile key={k} icon={CATEGORY_ICON[k]} label={v} on={filter?.kind === "category" && filter.value === k} onClick={() => setFilter(filter?.value === k ? null : { kind: "category", value: k })} />
         ))}
       </div>
       {cards === null && <p className="hint">読み込み中…</p>}
       {cards && shown.length === 0 && <p className="empty">{cards.length ? "合う知恵カードがありません。言葉や絞り込みを変えてみてください。" : "まだカードがありません。"}</p>}
       {shown.map((c) => (
         <button key={c.id} className="card-row" onClick={() => setOpen(c)}>
-          <strong>{c.title}</strong>
+          <strong>
+              <span aria-hidden>{CATEGORY_ICON[c.category] ?? "🗂️"}</span> {c.title}
+            </strong>
           <span className="src-meta">
             {authorOf(c)}・👍 {c.helpedCount}
           </span>
@@ -268,10 +302,15 @@ function Part({ label, text }: { label: string; text: string }) {
   );
 }
 
-function Tile({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+function Tile({ icon, label, on, onClick }: { icon?: string; label: string; on: boolean; onClick: () => void }) {
   return (
-    <button className={`tile ${on ? "on" : ""}`} onClick={onClick}>
-      {label}
+    <button className={`tile ${icon ? "icon-tile" : ""} ${on ? "on" : ""}`} onClick={onClick}>
+      {icon && (
+        <span className="tile-icon" aria-hidden>
+          {icon}
+        </span>
+      )}
+      <span>{label}</span>
     </button>
   );
 }
