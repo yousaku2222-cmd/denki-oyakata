@@ -1781,3 +1781,42 @@ input[inputmode="decimal"] {
 .photo-ask {
   scroll-margin-top: 72px;
 }
+
+/* ---- 言葉の意味: a word in an answer, and its meaning with where it came from ---- */
+.gloss {
+  all: unset;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--muted);
+}
+.gloss:focus-visible {
+  outline: 2px solid var(--law);
+}
+.gloss-meaning {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.gloss-meaning p {
+  margin: 0;
+}
+.gloss-meaning .link {
+  justify-self: start;
+}
+.gloss-box {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+}
+.gloss-box .gloss-meaning:first-of-type {
+  border-top: 0;
+  padding-top: 4px;
+}
+.gloss-more summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 6px 0;
+}

@@ -1,0 +1,134 @@
+import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { call } from "./firebase";
+import { LawSheet } from "./LawSheet";
+
+export interface Meaning {
+  plain: string;
+  kind: "law";
+  lawId: string;
+  label: string; // 電技解釈 第29条
+}
+export interface Term {
+  term: string;
+  meanings: Meaning[];
+}
+
+// one fetch per page load: the list only changes with a deploy
+let loading: Promise<Term[]> | null = null;
+const fetchTerms = () =>
+  (loading ??= call<{ terms: Term[] }>("listGlossary", {})
+    .then((r) => r.terms)
+    .catch(() => {
+      loading = null;
+      return [];
+    }));
+
+/** What is matched in a sentence (as written, so the answer is shown unchanged): 「1線地絡電流（Ig）」 without its note. */
+const keyOf = (term: string) => term.replace(/[（(][^）)]*[）)]/g, "").trim();
+
+export function useGlossary() {
+  const [terms, setTerms] = useState<Term[]>([]);
+  useEffect(() => {
+    let live = true;
+    fetchTerms().then((t) => live && setTerms(t));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return terms;
+}
+
+/** The terms found in `text`, longest first so 漏電遮断器 wins over 遮断器. */
+const termsIn = (text: string, terms: Term[]) => terms.filter((x) => keyOf(x.term).length >= 2 && text.includes(keyOf(x.term))).sort((a, b) => keyOf(b.term).length - keyOf(a.term).length);
+
+/** For each text in reading order, the terms to underline there: each term only where it is first read, so a long answer is not covered in lines. */
+export function firstMentions(texts: string[], terms: Term[]): Term[][] {
+  const seen = new Set<string>();
+  return texts.map((text) =>
+    termsIn(text, terms).filter((x) => {
+      if (seen.has(x.term)) return false;
+      seen.add(x.term);
+      return true;
+    }),
+  );
+}
+
+/** `text` with the first place of each of `marks` underlined; a tap opens the meaning. */
+export function Glossed({ text, marks, onOpen }: { text: string; marks: Term[]; onOpen: (t: Term) => void }) {
+  if (!marks.length) return <>{text}</>;
+  // longer terms are placed first, and a shorter one never inside them
+  const spans: { at: number; end: number; term: Term }[] = [];
+  for (const m of marks) {
+    const k = keyOf(m.term);
+    let at = text.indexOf(k);
+    while (at >= 0 && spans.some((s) => at < s.end && at + k.length > s.at)) at = text.indexOf(k, at + 1);
+    if (at >= 0) spans.push({ at, end: at + k.length, term: m });
+  }
+  spans.sort((a, b) => a.at - b.at);
+  const out: ReactNode[] = [];
+  let pos = 0;
+  for (const s of spans) {
+    out.push(text.slice(pos, s.at));
+    out.push(
+      <button key={s.at} type="button" className="gloss" onClick={() => onOpen(s.term)}>
+        {text.slice(s.at, s.end)}
+      </button>,
+    );
+    pos = s.end;
+  }
+  out.push(text.slice(pos));
+  return (
+    <>
+      {out.map((x, i) => (
+        <Fragment key={i}>{x}</Fragment>
+      ))}
+    </>
+  );
+}
+
+/** The meaning of one word, with where it came from and the way on to the article. */
+export function GlossSheet({ term, onClose }: { term: Term; onClose: () => void }) {
+  const [law, setLaw] = useState<string | null>(null);
+  if (law) return <LawSheet id={law} onClose={() => setLaw(null)} />;
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <section className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="言葉の意味">
+        <button className="link sheet-close" onClick={onClose}>
+          ✕ 閉じる
+        </button>
+        <h1 className="screen-title">📖 {term.term}</h1>
+        <Meanings term={term} onLaw={setLaw} />
+      </section>
+    </div>
+  );
+}
+
+/** The first meaning; the same word explained under other articles waits behind a tap. */
+export function Meanings({ term, onLaw }: { term: Term; onLaw: (lawId: string) => void }) {
+  const [first, ...more] = term.meanings;
+  return (
+    <>
+      <MeaningRow m={first} onLaw={onLaw} />
+      {more.length > 0 && (
+        <details className="gloss-more">
+          <summary>ほかの条文での説明（{more.length}件）</summary>
+          {more.map((m) => (
+            <MeaningRow key={m.lawId + m.plain} m={m} onLaw={onLaw} />
+          ))}
+        </details>
+      )}
+    </>
+  );
+}
+
+function MeaningRow({ m, onLaw }: { m: Meaning; onLaw: (lawId: string) => void }) {
+  return (
+    <div className="gloss-meaning">
+      <p>{m.plain}</p>
+      <p className="src-meta">💡 AIのかんたん説明（{m.label}より）</p>
+      <button className="link" onClick={() => onLaw(m.lawId)}>
+        ⚖️ 条文の全文を見る ›
+      </button>
+    </div>
+  );
+}

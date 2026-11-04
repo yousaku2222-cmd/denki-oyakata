@@ -136,6 +136,24 @@ export async function listLaws() {
   };
 }
 
+/**
+ * The words a beginner may not know, with where each meaning comes from. Only the law summaries' words for now;
+ * a word can have meanings from more than one source (`kind` leaves room for the veterans' own words).
+ */
+export async function listGlossary() {
+  const byTerm = new Map<string, { term: string; meanings: { plain: string; kind: "law"; lawId: string; label: string }[] }>();
+  for (const l of LAWS) {
+    for (const w of l.plain?.words ?? []) {
+      const term = w.term.trim();
+      if (!term || !w.plain.trim()) continue;
+      const entry = byTerm.get(term) ?? { term, meanings: [] };
+      if (!entry.meanings.some((m) => m.plain === w.plain)) entry.meanings.push({ plain: w.plain, kind: "law", lawId: l.id, label: `${l.short} ${l.article}` });
+      byTerm.set(term, entry);
+    }
+  }
+  return { terms: [...byTerm.values()] };
+}
+
 // Tables and formulas came out of the PDF as loose text; the numbers of 146-1表・146-2表 did not come out at all.
 const TABLE_NOTES: Record<string, string> = {
   "kaishaku-146": "146-1表・146-2表の許容電流の数値は、元の PDF から文字として取り出せなかったため載っていません。数値は出典の原文で確かめてください。",

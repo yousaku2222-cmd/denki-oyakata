@@ -3,6 +3,7 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { call, db, spaces } from "../firebase";
 import { CATEGORY_LABEL, LOCATION_LABEL, authorOf, fmtDate, type Card } from "../components";
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
+import { Meanings, useGlossary } from "../Glossary";
 
 export function Browse() {
   const [view, setView] = useState<"cards" | "laws">("cards");
@@ -42,6 +43,7 @@ function LawList() {
   const [q, setQ] = useState("");
   const [scene, setScene] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const terms = useGlossary();
   useEffect(() => {
     call<{ laws: LawItem[] }>("listLaws", {})
       .then((r) => setLaws(r.laws))
@@ -49,6 +51,13 @@ function LawList() {
   }, []);
   const words = wordsOf(q);
   const s = LAW_SCENES.find((x) => x.label === scene);
+  // a word typed that is one of the words explained: its meaning first (the exact word before longer ones), then the articles
+  const meant = words.length
+    ? terms
+        .filter((t) => words.some((w) => w.length >= 2 && t.term.normalize("NFKC").includes(w)))
+        .sort((a, b) => Number(words.includes(b.term)) - Number(words.includes(a.term)) || a.term.length - b.term.length)
+        .slice(0, 3)
+    : [];
   const shown = (laws ?? []).filter(
     (l) => (!s || inScene(l, s)) && words.every((w) => [lawTitle(l), l.summary, ...l.keywords, ...(l.points ?? []), ...(l.scenes ?? [])].join(" ").normalize("NFKC").includes(w)),
   );
@@ -63,6 +72,12 @@ function LawList() {
           <Tile key={x.label} label={x.label} on={scene === x.label} onClick={() => setScene(scene === x.label ? null : x.label)} />
         ))}
       </div>
+      {meant.map((t) => (
+        <div key={t.term} className="gloss-box">
+          <p className="part-sub">📖 言葉の意味：{t.term}</p>
+          <Meanings term={t} onLaw={setOpen} />
+        </div>
+      ))}
       {laws === null && <p className="hint">読み込み中…</p>}
       {laws && <p className="hint">{shown.length}件</p>}
       {laws && shown.length === 0 && <p className="empty">合う条文がありません。言葉や場面を変えてみてください。</p>}

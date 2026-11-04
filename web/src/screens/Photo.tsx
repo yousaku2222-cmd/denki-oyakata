@@ -20,14 +20,7 @@ interface PartResult {
   zoomed: number;
   confusables: { name: string; diff: string }[];
   companions: string[];
-  cards: {
-    id: string;
-    title: string;
-    body: string;
-    reason: string;
-    caution: string;
-    author: string;
-  }[];
+  cards: { id: string; title: string; body: string; reason: string; caution: string; author: string }[];
   laws: { id: string; label: string; summary: string }[];
   calc: ({ label: string } & CalcStart) | null;
   safetyNote?: string | null;
@@ -40,11 +33,7 @@ const SAY = {
 };
 
 /** Shrinks a photo on the device before sending: the long side to `size` px, as a JPEG data URL. */
-async function shrink(
-  file: Blob,
-  size: number,
-  quality: number,
-): Promise<string> {
+async function shrink(file: Blob, size: number, quality: number): Promise<string> {
   const bmp = await createImageBitmap(file);
   try {
     const k = Math.min(1, size / Math.max(bmp.width, bmp.height));
@@ -60,12 +49,7 @@ async function shrink(
 
 // ready-made ways to ask about a photo (a tap puts one in the box, to send or rewrite)
 // what a photo cannot settle (the name and use are already in the answer above): the way it is used on this site
-const PHOTO_QUESTIONS = [
-  "このつなぎ方で合ってますか？",
-  "この場所で使って大丈夫ですか？",
-  "この取り付け方で大丈夫ですか？",
-  "ほかに気をつけることは？",
-];
+const PHOTO_QUESTIONS = ["このつなぎ方で合ってますか？", "この場所で使って大丈夫ですか？", "この取り付け方で大丈夫ですか？", "ほかに気をつけることは？"];
 
 /** ⑤ 撮る: photo of a part → name, use, and the way on to cards, rules and a calculation. */
 export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
@@ -81,35 +65,17 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
   const [q, setQ] = useState(""); // what to ask the veteran about this photo (a draft is put in, free to rewrite)
   const { fly, envelope } = useFlyToMe();
 
-  async function identify(
-    body: { image?: string; name?: string },
-    thumbFrom: Blob | null,
-  ) {
+  async function identify(body: { image?: string; name?: string }, thumbFrom: Blob | null) {
     setBusy(true);
     setErr("");
     setRes(null);
     try {
       const r = await call<PartResult>("identifyPart", body);
       setRes(r);
-      setQ(
-        r.name && r.verdict !== "unknown"
-          ? `これは「${r.name}」で合っていますか？使い方も教えてください。`
-          : "これは何という部材ですか？使い方も教えてください。",
-      );
-      if (r.name && r.verdict !== "unknown")
-        addPart({
-          name: r.name,
-          use: r.use,
-          at: Date.now(),
-          thumb: thumbFrom ? await shrink(thumbFrom, 160, 0.7) : "",
-        });
+      setQ(r.name && r.verdict !== "unknown" ? `これは「${r.name}」で合っていますか？使い方も教えてください。` : "これは何という部材ですか？使い方も教えてください。");
+      if (r.name && r.verdict !== "unknown") addPart({ name: r.name, use: r.use, at: Date.now(), thumb: thumbFrom ? await shrink(thumbFrom, 160, 0.7) : "" });
     } catch (e) {
-      setErr(
-        errorText(
-          e,
-          "調べられませんでした。電波の良い所で、もう一度撮ってください",
-        ),
-      );
+      setErr(errorText(e, "調べられませんでした。電波の良い所で、もう一度撮ってください"));
     } finally {
       setBusy(false);
     }
@@ -124,9 +90,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
       small = await shrink(f, 1600, 0.85);
     } catch {
       // e.g. a HEIC file the browser cannot open
-      setErr(
-        "この写真は開けませんでした。カメラで撮り直すか、別の写真を選んでください",
-      );
+      setErr("この写真は開けませんでした。カメラで撮り直すか、別の写真を選んでください");
       return;
     }
     setFile(f);
@@ -142,12 +106,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
       // the box takes up to 300,000 characters: step the size down for busy photos
       let photo = await shrink(file, 1024, 0.7);
       if (photo.length > 290_000) photo = await shrink(file, 800, 0.6);
-      await call("sendToBox", {
-        text: q.trim(),
-        photo,
-        askerName: getName("young"),
-        askerRole: "young",
-      });
+      await call("sendToBox", { text: q.trim(), photo, askerName: getName("young"), askerRole: "young" });
       setSent(true);
       fly(from);
     } catch (e) {
@@ -160,35 +119,19 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
   return (
     <section className="screen">
       <h1 className="screen-title">撮って調べる</h1>
-      <input
-        ref={input}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        hidden
-        onChange={(e) => {
+      <input ref={input} type="file" accept="image/*" capture="environment" hidden onChange={(e) => {
           picked(e.target.files?.[0]);
           e.target.value = ""; // so choosing the same photo again still fires onChange
-        }}
-      />
-      <button
-        className="mic"
-        disabled={busy}
-        onClick={() => input.current?.click()}
-      >
+        }} />
+      <button className="mic" disabled={busy} onClick={() => input.current?.click()}>
         📷 {preview ? "もう一度撮る" : "部材を撮る"}
       </button>
-      <p className="hint">
-        印字や型番が写るように撮ると、読み取って確かめます。写真の一覧からも選べます。
-      </p>
+      <p className="hint">印字や型番が写るように撮ると、読み取って確かめます。写真の一覧からも選べます。</p>
       {!preview && (
         <div className="photo-sample">
           <p className="part-sub">撮ると、こんなことが分かります</p>
           <ul>
-            <li>
-              部材の名前と、現場での呼び名（例：ねじなしボックスコネクタ
-              ＝「ねじなしコネクタ」）
-            </li>
+            <li>部材の名前と、現場での呼び名（例：ねじなしボックスコネクタ ＝「ねじなしコネクタ」）</li>
             <li>何に使うか、一緒に使う物、間違えやすい部材</li>
             <li>関係する親方の知恵カードと条文、そのまま使える計算</li>
             <li>分からない時は、写真ごと親方に聞けます</li>
@@ -202,17 +145,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
           {/* while it is being read: a scan line runs over the photo (only while identifying, not while sending) */}
           {busy && !res && (
             <>
-              <motion.div
-                className="scan-line"
-                aria-hidden
-                initial={{ top: "0%" }}
-                animate={{ top: ["0%", "100%", "0%"] }}
-                transition={{
-                  duration: 2.4,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-              />
+              <motion.div className="scan-line" aria-hidden initial={{ top: "0%" }} animate={{ top: ["0%", "100%", "0%"] }} transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }} />
               <span className="scan-corner tl" aria-hidden />
               <span className="scan-corner tr" aria-hidden />
               <span className="scan-corner bl" aria-hidden />
@@ -221,41 +154,25 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
           )}
         </div>
       )}
-      {busy && (
-        <p className="hint">
-          調べています…（小さい印字は拡大して読み直します）
-        </p>
-      )}
+      {busy && <p className="hint">調べています…（小さい印字は拡大して読み直します）</p>}
       {err && <p className="hint error">{err}</p>}
 
       {res && (
         <div className="part-card">
-          <span className="src-tag general">
-            📷 写真からのAIの判定（印字・現物で確かめてください）
-          </span>
+          <span className="src-tag general">📷 写真からのAIの判定（印字・現物で確かめてください）</span>
           <p className={`part-verdict ${res.verdict}`}>{SAY[res.verdict]}</p>
           {res.name && <p className="part-name">{res.name}</p>}
-          {res.fieldNames.length > 0 && (
-            <p className="src-meta">
-              現場の呼び名：{res.fieldNames.join("・")}
-            </p>
-          )}
+          {res.fieldNames.length > 0 && <p className="src-meta">現場の呼び名：{res.fieldNames.join("・")}</p>}
           {res.use && <p>{res.use}</p>}
           {res.printed && (
             <p className="part-printed">
-              🔍 読み取った印字{res.zoomed ? "（拡大して読み直し）" : ""}：
-              {res.printed}
+              🔍 読み取った印字{res.zoomed ? "（拡大して読み直し）" : ""}：{res.printed}
             </p>
           )}
           {res.candidates.length > 0 && (
             <div className="opts-row wide">
               {res.candidates.map((c) => (
-                <button
-                  key={c.name}
-                  className="opt"
-                  disabled={busy}
-                  onClick={() => identify({ name: c.name }, file)}
-                >
+                <button key={c.name} className="opt" disabled={busy} onClick={() => identify({ name: c.name }, file)}>
                   <strong>{c.name}</strong>
                   <br />
                   <small>{c.hint}</small>
@@ -270,24 +187,10 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
         // the name alone feels like the answer: say what only a veteran can tell, right where it is read
         <div className="photo-bridge">
           <p>
-            名前は写真で分かります。でも
-            <strong>「この現場で、この使い方で合ってるか」</strong>
-            は親方にしか分かりません。
+            名前は写真で分かります。でも<strong>「この現場で、この使い方で合ってるか」</strong>は親方にしか分かりません。
           </p>
-          {res.cards.length === 0 && (
-            <p className="src-meta">
-              この部材の親方の知恵はまだありません。聞くと答えがカードになり、次の人にも残ります。
-            </p>
-          )}
-          <button
-            className="secondary"
-            onClick={() =>
-              askBox.current?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              })
-            }
-          >
+          {res.cards.length === 0 && <p className="src-meta">この部材の親方の知恵はまだありません。聞くと答えがカードになり、次の人にも残ります。</p>}
+          <button className="secondary" onClick={() => askBox.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>
             📮 この写真を親方に見てもらう ↓
           </button>
         </div>
@@ -307,20 +210,13 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
               </summary>
               <p>{c.body}</p>
               {c.reason && <p className="src-meta">理由：{c.reason}</p>}
-              {c.caution && (
-                <p className="src-meta">新人がやりがち：{c.caution}</p>
-              )}
+              {c.caution && <p className="src-meta">新人がやりがち：{c.caution}</p>}
               <p className="src-meta">{c.author}</p>
             </details>
           ))}
           {res.laws.map((l) => (
-            <button
-              key={l.id}
-              className="law-cite"
-              onClick={() => setOpenLaw(l.id)}
-            >
-              <span className="src-tag law">⚖️ 法令・基準</span>{" "}
-              <strong>{l.label}</strong>
+            <button key={l.id} className="law-cite" onClick={() => setOpenLaw(l.id)}>
+              <span className="src-tag law">⚖️ 法令・基準</span> <strong>{l.label}</strong>
               <span className="clamp2">{l.summary}</span>
               <span className="src-meta">押すと条文の全文 ›</span>
             </button>
@@ -328,8 +224,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
           {res.confusables.length > 0 && (
             <div className="part-link">
               <p className="part-sub">
-                ⚠️ 間違えやすい相手{" "}
-                <span className="src-tag general">💡 一般知識（要確認）</span>
+                ⚠️ 間違えやすい相手 <span className="src-tag general">💡 一般知識（要確認）</span>
               </p>
               {res.confusables.map((c) => (
                 <p key={c.name}>
@@ -341,8 +236,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
           {res.companions.length > 0 && (
             <div className="part-link">
               <p className="part-sub">
-                🔩 一緒に使う物{" "}
-                <span className="src-tag general">💡 一般知識（要確認）</span>
+                🔩 一緒に使う物 <span className="src-tag general">💡 一般知識（要確認）</span>
               </p>
               <p>{res.companions.join("・")}</p>
             </div>
@@ -355,20 +249,10 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
         <div className="photo-ask" ref={askBox}>
           <h2 className="sub">📷 現場で使う前に、親方に見てもらう</h2>
           {sent ? (
-            <p className="hint">
-              📮
-              写真と質問を、親方の質問箱に届けました。親方が答えると「わたし」に届きます。
-            </p>
+            <p className="hint">📮 写真と質問を、親方の質問箱に届けました。親方が答えると「わたし」に届きます。</p>
           ) : (
             <>
-              <MicInput
-                value={q}
-                onChange={setQ}
-                maxLength={500}
-                rows={3}
-                micLabel="話して入力"
-                placeholder="例: このつなぎ方で合ってますか？"
-              />
+              <MicInput value={q} onChange={setQ} maxLength={500} rows={3} micLabel="話して入力" placeholder="例: このつなぎ方で合ってますか？" />
               <div className="examples">
                 {PHOTO_QUESTIONS.map((x) => (
                   <button key={x} className="chip" onClick={() => setQ(x)}>
@@ -376,11 +260,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
                   </button>
                 ))}
               </div>
-              <button
-                className="primary"
-                disabled={busy || !q.trim()}
-                onClick={askVeteran}
-              >
+              <button className="primary" disabled={busy || !q.trim()} onClick={askVeteran}>
                 📮 写真ごと親方に聞く
               </button>
             </>

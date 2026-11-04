@@ -8,6 +8,7 @@ import { CalcCard, type CalcOutput } from "../CalcCard";
 import { AskWaiting, CheckedLine } from "../AskWaiting";
 import { useFlyToMe } from "../FlyToMe";
 import { AnswerSample } from "../AnswerSample";
+import { GlossSheet, Glossed, firstMentions, useGlossary, type Term } from "../Glossary";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
 // The list starts moving when it scrolls into view (a calculation card above can push it below the fold).
@@ -81,6 +82,8 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
   const [sent, setSent] = useState(!!last?.sent);
   const [sentNote, setSentNote] = useState(last?.sentNote ?? "");
   const [openLaw, setOpenLaw] = useState<{ id: string; quote?: string } | null>(null);
+  const terms = useGlossary();
+  const [gloss, setGloss] = useState<Term | null>(null);
   const [finished, setFinished] = useState(false);
   const [plusOne, setPlusOne] = useState(0);
   const { fly, envelope } = useFlyToMe();
@@ -164,6 +167,9 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
     if (folded) top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [folded]);
   const cardOf = (id?: string) => answer?.cards.find((c) => c.id === id);
+  // in the order the groups are shown, so a word is underlined where it is first read
+  const ordered = answer ? SOURCES.flatMap((src) => answer.sentences.filter((s) => s.source === src)) : [];
+  const glossMarks = firstMentions(ordered.map((s) => s.text), terms);
 
   return (
     <section className="screen" ref={top}>
@@ -250,7 +256,9 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
                       const newCard = c && rows[i - 1]?.cardId !== s.cardId;
                       return (
                         <motion.div key={i} className="src-row" variants={SENTENCE} initial={src === "general" ? "hidden" : undefined} animate={src === "general" ? "shown" : undefined}>
-                          <p>{s.text}</p>
+                          <p>
+                            <Glossed text={s.text} marks={glossMarks[ordered.indexOf(s)] ?? []} onOpen={setGloss} />
+                          </p>
                           {newCard && (
                             <p className="src-meta">
                               {c.author}の話{c.publishedAt ? `・${fmtDate(c.publishedAt)}` : ""}
@@ -281,6 +289,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
 
           {answer.safetyNote && <Notice>⚠️ {answer.safetyNote}</Notice>}
           {openLaw && <LawSheet id={openLaw.id} highlight={openLaw.quote} onClose={() => setOpenLaw(null)} />}
+          {gloss && <GlossSheet term={gloss} onClose={() => setGloss(null)} />}
 
           {!answer.grounded && (
             <div className="no-ground">

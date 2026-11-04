@@ -8,7 +8,7 @@ import { ask as askImpl, markHelped as markHelpedImpl } from "./ask";
 import { sendToBox as sendToBoxImpl, markGoodQuestion as markGoodQuestionImpl, openQuestions as openQuestionsImpl, questionPhoto as questionPhotoImpl, myQuestions as myQuestionsImpl } from "./box";
 import { identifyPart as identifyPartImpl } from "./photo";
 import { makeTransferCode as makeTransferCodeImpl, useTransferCode as useTransferCodeImpl } from "./transfer";
-import { listLaws as listLawsImpl, getLaw as getLawImpl } from "./laws";
+import { listLaws as listLawsImpl, getLaw as getLawImpl, listGlossary as listGlossaryImpl } from "./laws";
 import { listCalcs as listCalcsImpl, runCalc } from "./calc";
 import { CalcInputError } from "./calc/types";
 
@@ -75,6 +75,7 @@ export const makeTransferCode = callable(makeTransferCodeImpl);
 export const useTransferCode = callable(useTransferCodeImpl);
 export const listLaws = callable(listLawsImpl);
 export const getLaw = callable(getLawImpl);
+export const listGlossary = callable(listGlossaryImpl);
 export const listCalcs = callable(listCalcsImpl);
 export const calc = callable(async (data) => {
   try {

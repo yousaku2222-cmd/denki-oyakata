@@ -188,5 +188,10 @@ try {
 }
 check("only the one who asked can follow a question up", strangerRefused);
 
+console.log("\n12. 言葉の意味");
+const gl = await call("listGlossary", {}, young);
+const dTerm = gl.terms.find((t) => t.term === "D種接地工事");
+check("words come with a meaning and the article it is from", gl.terms.length >= 50 && !!dTerm?.meanings[0]?.plain && /^電技解釈 第\d+条/.test(dTerm.meanings[0].label), `${gl.terms.length} terms`);
+
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);
