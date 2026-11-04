@@ -4,6 +4,7 @@
 //   node scripts/accuracy.mjs            # all questions
 //   node scripts/accuracy.mjs 3 15       # only these ids
 //   node scripts/accuracy.mjs --holdout  # the 10 check questions, never looked at while tuning the prompts
+//   Run right after deploying functions: a saved answer (same question, same revision) stops the run.
 // Writes docs/accuracy.md and scripts/accuracy/result.json. Costs about ¥300 a run (60 Claude calls).
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -31,6 +32,8 @@ const signUp = await (await fetch(`https://identitytoolkit.googleapis.com/v1/acc
 async function askApp(text) {
   const r = await (await fetch("https://asia-northeast1-denki-oyakata.cloudfunctions.net/ask", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${signUp.idToken}` }, body: JSON.stringify({ data: { text, askerRole: "young" } }) })).json();
   if (r.error) throw new Error(`ask: ${JSON.stringify(r.error)}`);
+  // a saved answer would only grade the last run's answers again: measure right after a deploy (the cache key changes)
+  if (r.result.cached && !process.argv.includes("--allow-cached")) throw new Error(`保存した答えが返りました（${text}）。functions をデプロイした直後に測ってください。採点だけやり直すなら --allow-cached`);
   return r.result;
 }
 /**
