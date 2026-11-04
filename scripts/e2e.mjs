@@ -171,6 +171,10 @@ check("a photo question is never merged", !photoQ.duplicate && !photoQ.merged &&
 const seenPart = (await call("openQuestions", {}, vet)).questions.find((q) => q.id === photoQ.questionId)?.photoPart;
 const openedPart = (await call("questionPhoto", { questionId: photoQ.questionId }, vet)).photoPart;
 check("the veteran sees what the AI took the photo for", seenPart === "ジョイントボックス" && openedPart === "ジョイントボックス");
+// a card from a photo question is searched with the part's name, not the bare words (「これは何に使いますか？」)
+const pd = await call("draftCard", { transcript: [{ role: "veteran", text: "（テスト）ジョイントボックスの中はリングスリーブで圧着する。" }], authorName: "山田（親方）", triggerQuestionId: photoQ.questionId }, vet);
+const pcard = await (await fetch(`${FS}/cards/${pd.cardId}`, { headers: { Authorization: "Bearer owner" } })).json();
+check("a photo question's card is searched with the part's name", pcard.fields?.triggerSearchText?.stringValue === "ジョイントボックス");
 const jd3 = await call("draftCard", { transcript: [{ role: "veteran", text: "（テスト用）ジョイントボックスの結線は差込形コネクタで留める。" }], authorName: "山田（親方）", triggerQuestionId: s1.questionId }, vet2);
 await call("publishCard", { cardId: jd3.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...jd3.draft, tags: ["ジョイントボックス"] } }, vet2);
 const done2 = (await call("myQuestions", {}, asker2)).questions.find((q) => q.id === s1.questionId);

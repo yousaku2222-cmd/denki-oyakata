@@ -63,6 +63,7 @@ export interface CardDoc {
   triggerQuestionId: string | null;
   triggerAskerName: string | null;
   triggerQuestionText: string | null;
+  triggerSearchText?: string | null; // see search.ts
   transcript: Turn[];
   createdAt: Timestamp;
   updatedAt: Timestamp;

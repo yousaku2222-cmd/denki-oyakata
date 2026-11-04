@@ -11,6 +11,7 @@ export interface SearchableCard {
   caution: string;
   tags: string[];
   triggerQuestionText?: string | null; // the question this card was written to answer
+  triggerSearchText?: string | null; // the question as searched: for a photo question, only the part the AI saw ("" = none)
 }
 
 const STOP = new Set(["です", "ます", "した", "ので", "って", "ても", "には", "ですか", "すか", "んで", "てる"]);
@@ -36,7 +37,8 @@ export function scoreCard(query: string, card: SearchableCard): number {
   return scoreFields(query, [
     [card.title, 3],
     [card.tags.join(" "), 3],
-    [card.triggerQuestionText ?? "", 3],
+    // 「これは何に使いますか？」 means nothing without its photo, and would match every 「何に使う」 question
+    [card.triggerSearchText ?? card.triggerQuestionText ?? "", 3],
     [card.scene, 1.5],
     [card.body, 1],
     [card.reason, 1],

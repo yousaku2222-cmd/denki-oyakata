@@ -136,11 +136,16 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
 
   let triggerAskerName: string | null = null;
   let triggerQuestionText: string | null = null;
+  let triggerSearchText: string | null = null;
   if (triggerQuestionId) {
     const q = await db.collection("questions").doc(triggerQuestionId).get();
     if (!q.exists) throw new HttpsError("not-found", "question not found");
     triggerAskerName = (q.get("askerName") as string) || "若手";
     triggerQuestionText = (q.get("text") as string) || null;
+    // a photo question's words lean on the photo (「これは何に使いますか？」 would match every 「何に使う」 question):
+    // it is searched by the part the AI took the photo for, or not at all
+    const part = q.get("hasPhoto") ? ((q.get("photoPart") as string | null | undefined) ?? "") : null;
+    triggerSearchText = part === null ? triggerQuestionText : part;
   }
 
   const now = Timestamp.now();
@@ -160,6 +165,7 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
     triggerQuestionId,
     triggerAskerName,
     triggerQuestionText,
+    triggerSearchText,
     // Published cards are readable by every signed-in device, so the raw interview and the real name live in a
     // server-only document (cardPrivate is closed to clients by firestore.rules).
     transcript: [],
