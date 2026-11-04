@@ -51,7 +51,7 @@ function StarBurst() {
 
 // When this device last looked at the box, so questions that came in since then are marked 新着.
 const SEEN_KEY = "oyakata.boxSeen";
-function lastSeen(): number {
+export function lastSeen(): number {
   try {
     return Number(localStorage.getItem(SEEN_KEY)) || 0;
   } catch {

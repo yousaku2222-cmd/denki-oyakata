@@ -3,7 +3,7 @@ import { getRole, getTheme, getTrial, setRole as saveRole, setTheme as saveTheme
 import { Ask } from "./screens/Ask";
 import { SENT_TO_BOX } from "./FlyToMe";
 import { Talk, type Topic } from "./screens/Talk";
-import { Box } from "./screens/Box";
+import { Box, lastSeen as boxLastSeen } from "./screens/Box";
 import { MyCards, newlyHelped } from "./screens/MyCards";
 import { Me, lastSeen as meLastSeen } from "./screens/Me";
 import { Browse } from "./screens/Browse";
@@ -43,6 +43,15 @@ export default function App() {
       .then((r) => r.questions.some((q) => q.answeredAt > meLastSeen()) && setMeDot(true))
       .catch(() => {}); // only a hint: without it, わたし still shows the news when opened
   }, [role]);
+  // 質問箱: how many came in (or were joined) since it was last opened, counted when the app opens and on each
+  // tab change; opening it clears the number
+  const [boxNew, setBoxNew] = useState(0);
+  useEffect(() => {
+    if (role !== "veteran" || tab === "box") return;
+    call<{ questions: { lastAskedAt: number }[] }>("openQuestions", {})
+      .then((r) => setBoxNew(r.questions.filter((q) => q.lastAskedAt > boxLastSeen()).length))
+      .catch(() => {}); // only a hint
+  }, [role, tab]);
   // a veteran's card that helped someone since わたしのカード was last opened: dot on that tab when the app opens
   const [cardsDot, setCardsDot] = useState(false);
   useEffect(() => {
@@ -159,6 +168,7 @@ export default function App() {
               if (t.id === "calc") setCalcStart(null);
               if (t.id === "me") setMeDot(false);
               if (t.id === "mycards") setCardsDot(false);
+              if (t.id === "box") setBoxNew(0);
               setAskSeed(null); // a tab press opens 聞く empty, not with the last question
               setTab(t.id); // 話す keeps what was being told; 「続けて話す」 starts a new one
             }}
@@ -166,6 +176,11 @@ export default function App() {
             <span className="tab-icon">
               {t.icon}
               {((t.id === "me" && meDot) || (t.id === "mycards" && cardsDot)) && <span className="tab-dot" aria-label="新しい知らせ" />}
+              {t.id === "box" && boxNew > 0 && (
+                <span className="tab-count" aria-label={`新着${boxNew}件`}>
+                  {boxNew > 9 ? "9+" : boxNew}
+                </span>
+              )}
             </span>
             <span className="tab-label">{t.label}</span>
           </button>

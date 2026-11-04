@@ -1662,3 +1662,21 @@ input[inputmode="decimal"] {
   font-weight: 700;
   color: var(--muted);
 }
+
+/* 質問箱 tab: the number of 新着 */
+.tab-count {
+  position: absolute;
+  top: -6px;
+  right: -14px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  border: 2px solid var(--surface);
+}
