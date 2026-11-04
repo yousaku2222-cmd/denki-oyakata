@@ -8,7 +8,7 @@ import { CalcCard, type CalcOutput } from "../CalcCard";
 import { AskWaiting, CheckedLine } from "../AskWaiting";
 import { useFlyToMe } from "../FlyToMe";
 import { AnswerSample } from "../AnswerSample";
-import { GlossSheet, Glossed, firstMentions, useGlossary, type Term } from "../Glossary";
+import { GlossSheet, Glossed, firstMentions, meaningsFor, useGlossary, type Term } from "../Glossary";
 import { FlowSteps } from "../FlowSteps";
 import { Icon, ic } from "../Icon";
 
@@ -177,6 +177,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
   // in the order the groups are shown, so a word is underlined where it is first read
   const ordered = answer ? SOURCES.flatMap((src) => answer.sentences.filter((s) => s.source === src)) : [];
   const glossMarks = firstMentions(ordered.map((s) => s.text), terms);
+  const answerLawIds = ordered.flatMap((s) => (s.lawId ? [s.lawId] : []));
 
   return (
     <section className="screen" ref={top}>
@@ -202,6 +203,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
           <button className="primary" disabled={!text.trim()} onClick={() => submit()}>
             聞く
           </button>
+          <p className="hint">親方の知恵が無かった質問は、名前を伏せて親方の話のきっかけになります。</p>
         </>
       )}
 
@@ -291,7 +293,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
                       return (
                         <motion.div key={i} className="src-row" variants={SENTENCE} initial={src === "general" ? "hidden" : undefined} animate={src === "general" ? "shown" : undefined}>
                           <p>
-                            <Glossed text={s.text} marks={glossMarks[ordered.indexOf(s)] ?? []} onOpen={setGloss} />
+                            <Glossed text={s.text} marks={glossMarks[ordered.indexOf(s)] ?? []} onOpen={(t) => setGloss(meaningsFor(t, answerLawIds))} />
                           </p>
                           {newCard && (
                             <p className="src-meta">

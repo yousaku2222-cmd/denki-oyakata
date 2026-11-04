@@ -197,7 +197,8 @@ check("only the one who asked can follow a question up", strangerRefused);
 
 console.log("\n12. 話のきっかけ");
 // an answer no card was used for becomes something to tell; one a card answered does not
-const noCard = "（テスト）分電盤のラベルは何て書けばいい？";
+// (no 「（テスト）」 here: the dummy answers match it to a test card's title)
+const noCard = "分電盤の扉の裏に貼るラベルの書き方は？";
 await call("ask", { text: noCard, askerRole: "young" }, young);
 const seeds = await call("talkSeeds", {}, vet);
 check(
@@ -233,6 +234,19 @@ const stays = (await call("openQuestions", {}, vet)).questions.find((q) => q.id 
 const forOther = (await call("myQuestions", {}, asker2)).questions.some((q) => q.id === twoQ.questionId);
 const forMe = (await call("myQuestions", {}, asker1)).questions.some((q) => q.id === twoQ.questionId);
 check("a question others joined stays for them", !jr.withdrawn && !!stays && stays.askers === 1 && forOther && !forMe);
+let againMsg = "";
+try {
+  await call("withdrawQuestion", { questionId: wq.questionId }, asker1);
+} catch (e) {
+  againMsg = String(e.message ?? e);
+}
+check("taking back a question already taken back says so", againMsg.includes("もう取り下げてあります"), againMsg);
+// passed on to a veteran who joined: it leaves that veteran's own box
+const vetQ = await call("sendToBox", { text: "（テスト）ベテランも聞く質問", askerName: "若手1", askerRole: "young" }, asker1);
+await call("sendToBox", { text: "（テスト）ベテランも聞く質問", askerName: "山田（親方）", askerRole: "veteran" }, vet);
+await call("withdrawQuestion", { questionId: vetQ.questionId }, asker1);
+const inOwnBox = (await call("openQuestions", {}, vet)).questions.some((q) => q.id === vetQ.questionId);
+check("a question passed on to a veteran is not in their own box", !inOwnBox);
 
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);

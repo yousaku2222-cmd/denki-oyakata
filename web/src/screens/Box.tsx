@@ -39,6 +39,8 @@ function QPhoto({ photo, load }: { photo: string | null | undefined; load: () =>
   const [big, setBig] = useState(false);
   useEffect(() => {
     if (photo !== undefined || !ref.current) return;
+    // a browser without it reads the photo at once
+    if (typeof IntersectionObserver === "undefined") return load();
     const io = new IntersectionObserver((seen) => {
       if (seen.some((e) => e.isIntersecting)) {
         io.disconnect();
@@ -49,7 +51,7 @@ function QPhoto({ photo, load }: { photo: string | null | undefined; load: () =>
     return () => io.disconnect();
   }, [photo, load]);
   return (
-    <button ref={ref} type="button" className={`qphoto ${big ? "big" : ""}`} onClick={() => photo && setBig(!big)} aria-label={big ? "写真を小さくする" : "写真を大きくする"}>
+    <button ref={ref} type="button" className={`qphoto ${big ? "big" : ""}`} onClick={() => (photo ? setBig(!big) : photo === "" && load())} aria-label={photo === "" ? "写真を読み直す" : big ? "写真を小さくする" : "写真を大きくする"}>
       {photo ? <img src={photo} alt="若手が撮った写真" /> : <span>{photo === "" ? "📷✕" : "📷"}</span>}
     </button>
   );

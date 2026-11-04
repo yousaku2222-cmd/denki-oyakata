@@ -38,33 +38,59 @@ export function useGlossary() {
   return terms;
 }
 
-/** The terms found in `text`, longest first so 漏電遮断器 wins over 遮断器. */
-const termsIn = (text: string, terms: Term[]) => terms.filter((x) => keyOf(x.term).length >= 2 && text.includes(keyOf(x.term))).sort((a, b) => keyOf(b.term).length - keyOf(a.term).length);
+export interface Mark {
+  at: number;
+  end: number;
+  term: Term;
+}
 
-/** For each text in reading order, the terms to underline there: each term only where it is first read, so a long answer is not covered in lines. */
-export function firstMentions(texts: string[], terms: Term[]): Term[][] {
+/**
+ * Where each term is read in `text`, longest first so 漏電遮断器 wins over 遮断器: a shorter term inside a longer one
+ * (接触防護措置 in 簡易接触防護措置) is part of that word, not a mention of its own, even when the longer one is not
+ * underlined there. The first place of each term outside the longer ones.
+ */
+export function termsIn(text: string, terms: Term[]): Mark[] {
+  const taken: { at: number; end: number }[] = [];
+  const marks: Mark[] = [];
+  const sorted = terms.filter((x) => keyOf(x.term).length >= 2 && text.includes(keyOf(x.term))).sort((a, b) => keyOf(b.term).length - keyOf(a.term).length);
+  for (const term of sorted) {
+    const k = keyOf(term.term);
+    const free: { at: number; end: number }[] = [];
+    for (let at = text.indexOf(k); at >= 0; at = text.indexOf(k, at + 1)) {
+      if (!taken.some((s) => at < s.end && at + k.length > s.at)) free.push({ at, end: at + k.length });
+    }
+    if (!free.length) continue;
+    taken.push(...free);
+    marks.push({ ...free[0], term });
+  }
+  return marks.sort((a, b) => a.at - b.at);
+}
+
+/** For each text in reading order, the places to underline there: each term only where it is first read, so a long answer is not covered in lines. */
+export function firstMentions(texts: string[], terms: Term[]): Mark[][] {
   const seen = new Set<string>();
   return texts.map((text) =>
-    termsIn(text, terms).filter((x) => {
-      if (seen.has(x.term)) return false;
-      seen.add(x.term);
+    termsIn(text, terms).filter((m) => {
+      if (seen.has(m.term.term)) return false;
+      seen.add(m.term.term);
       return true;
     }),
   );
 }
 
-/** `text` with the first place of each of `marks` underlined; a tap opens the meaning. */
-export function Glossed({ text, marks, onOpen }: { text: string; marks: Term[]; onOpen: (t: Term) => void }) {
+/**
+ * The meanings of a term with those from the given articles first: an answer that quotes 第29条 explains its words
+ * the way 第29条 does.
+ */
+export const meaningsFor = (term: Term, lawIds: string[]): Term => ({
+  ...term,
+  meanings: [...term.meanings].sort((a, b) => Number(lawIds.includes(b.lawId)) - Number(lawIds.includes(a.lawId))),
+});
+
+/** `text` with `marks` underlined; a tap opens the meaning. */
+export function Glossed({ text, marks, onOpen }: { text: string; marks: Mark[]; onOpen: (t: Term) => void }) {
   if (!marks.length) return <>{text}</>;
-  // longer terms are placed first, and a shorter one never inside them
-  const spans: { at: number; end: number; term: Term }[] = [];
-  for (const m of marks) {
-    const k = keyOf(m.term);
-    let at = text.indexOf(k);
-    while (at >= 0 && spans.some((s) => at < s.end && at + k.length > s.at)) at = text.indexOf(k, at + 1);
-    if (at >= 0) spans.push({ at, end: at + k.length, term: m });
-  }
-  spans.sort((a, b) => a.at - b.at);
+  const spans = [...marks].sort((a, b) => a.at - b.at);
   const out: ReactNode[] = [];
   let pos = 0;
   for (const s of spans) {

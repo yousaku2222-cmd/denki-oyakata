@@ -44,7 +44,8 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
           return { questionId: q.id, duplicate: true as const }; // already in the box from this device
         }
         // someone new asking it brings it back up as 新着 in the box
-        tx.update(q.ref, { alsoAskerIds: FieldValue.arrayUnion(askerId), lastAskedAt: Timestamp.now() });
+        // (a veteran who joins is remembered, so the question is not put in their own box if it passes to them)
+        tx.update(q.ref, { alsoAskerIds: FieldValue.arrayUnion(askerId), lastAskedAt: Timestamp.now(), ...(askerRole === "veteran" ? { veteranAskerIds: FieldValue.arrayUnion(askerId) } : {}) });
         return { questionId: q.id, merged: true as const, askers: 2 + ((q.get("alsoAskerIds") as string[] | undefined) ?? []).length };
       }
     }
@@ -173,8 +174,22 @@ export async function myQuestions(data: Record<string, unknown>, uid: string) {
  * 話す: what to start from. Questions the young asked lately that no wisdom card answered (the words only, no ids of
  * people), newest first; a question some answer did use a card for is already covered.
  */
+// The box and 話す ask for these each time they open: one read of the answers per space every few minutes is enough.
+const SEEDS_FOR_MS = 3 * 60_000;
+const seedsMemo = new Map<string, { at: number; questions: string[] }>();
+
 export async function talkSeeds(data: Record<string, unknown>, uid: string) {
   const spaces = spacesOf(data, uid);
+  const memoKey = spaces.join("|");
+  const kept = seedsMemo.get(memoKey);
+  if (kept && Date.now() - kept.at < SEEDS_FOR_MS) return { questions: kept.questions };
+  const questions = await readSeeds(spaces);
+  if (seedsMemo.size > 500) seedsMemo.clear(); // judges' spaces are one per device
+  seedsMemo.set(memoKey, { at: Date.now(), questions });
+  return { questions };
+}
+
+async function readSeeds(spaces: string[]) {
   // newest answers across spaces (one field, so no composite index), then this caller's spaces only
   const snap = await db.collection("answers").orderBy("createdAt", "desc").limit(300).select("companyId", "question", "usedCardIds", "askerRole").get();
   const covered = new Set<string>();
@@ -187,7 +202,7 @@ export async function talkSeeds(data: Record<string, unknown>, uid: string) {
     if (((d.get("usedCardIds") as string[] | undefined) ?? []).length) covered.add(key);
     else if (!open.some((o) => o.key === key)) open.push({ key, text });
   }
-  return { questions: open.filter((o) => !covered.has(o.key)).slice(0, 3).map((o) => o.text) };
+  return open.filter((o) => !covered.has(o.key)).slice(0, 3).map((o) => o.text);
 }
 
 /**
@@ -203,15 +218,25 @@ export async function withdrawQuestion(data: Record<string, unknown>, uid: strin
     const also = (q.get("alsoAskerIds") as string[] | undefined) ?? [];
     const mine = q.get("askerId") === uid;
     if (!mine && !also.includes(uid)) throw new HttpsError("permission-denied", "自分が聞いた質問だけ取り下げられます。");
+    if (q.get("status") === "withdrawn") throw new HttpsError("failed-precondition", "この質問は、もう取り下げてあります。");
     if (q.get("status") !== "open") throw new HttpsError("failed-precondition", "答えが届いた質問は取り下げられません。");
     if (!mine) {
-      tx.update(ref, { alsoAskerIds: FieldValue.arrayRemove(uid) });
+      tx.update(ref, { alsoAskerIds: FieldValue.arrayRemove(uid), veteranAskerIds: FieldValue.arrayRemove(uid) });
       return { withdrawn: false };
     }
     if (also.length) {
-      // the next one who joined becomes the one who asked (their name is not known here)
+      // the next one who joined becomes the one who asked (their name is not known here); a veteran's own question
+      // stays out of their own box
       const [next, ...rest] = also;
-      tx.update(ref, { askerId: next, askerName: "若手", askerRole: "young", excludeVeteranId: null, alsoAskerIds: rest });
+      const veteran = ((q.get("veteranAskerIds") as string[] | undefined) ?? []).includes(next);
+      tx.update(ref, {
+        askerId: next,
+        askerName: veteran ? "ベテラン" : "若手",
+        askerRole: veteran ? "veteran" : "young",
+        excludeVeteranId: veteran ? next : null,
+        alsoAskerIds: rest,
+        veteranAskerIds: FieldValue.arrayRemove(next),
+      });
       return { withdrawn: false };
     }
     tx.update(ref, { status: "withdrawn", photo: null, withdrawnAt: Timestamp.now() });
