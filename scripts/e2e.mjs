@@ -195,7 +195,18 @@ try {
 }
 check("only the one who asked can follow a question up", strangerRefused);
 
-console.log("\n12. 言葉の意味");
+console.log("\n12. 話のきっかけ");
+// an answer no card was used for becomes something to tell; one a card answered does not
+const noCard = "（テスト）分電盤のラベルは何て書けばいい？";
+await call("ask", { text: noCard, askerRole: "young" }, young);
+const seeds = await call("talkSeeds", {}, vet);
+check(
+  "a question no card answered is offered to the veteran (words only)",
+  Array.isArray(seeds.questions) && seeds.questions.includes(noCard) && !seeds.questions.includes("PF管って何回まで曲げていいですか？") && !JSON.stringify(seeds).includes("askerId"),
+  JSON.stringify(seeds.questions),
+);
+
+console.log("\n13. 言葉の意味");
 const gl = await call("listGlossary", {}, young);
 const dTerm = gl.terms.find((t) => t.term === "D種接地工事");
 check("words come with a meaning and the article it is from", gl.terms.length >= 50 && !!dTerm?.meanings[0]?.plain && /^電技解釈 第\d+条/.test(dTerm.meanings[0].label), `${gl.terms.length} terms`);

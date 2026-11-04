@@ -21,6 +21,21 @@ export interface Topic {
   followUp?: { text: string; cardTitle: string | null } | null; // the earlier question and card it follows
 }
 
+// 話す with nothing said yet: a blank box stops a veteran, a question to answer does not
+const STARTERS = [
+  "新人の頃に失敗して、覚えたことは何ですか？",
+  "新人によく注意することは何ですか？",
+  "この道具、新人はどう間違えますか？",
+  "お客さんの家でヒヤッとしたことはありますか？",
+  "図面どおりにいかなかった現場で、どうしましたか？",
+  "段取りで、これだけはやっておくことは？",
+  "検査や点検で、必ず見る所はどこですか？",
+  "材料を選ぶ時に、気をつけていることは？",
+  "雨の日や寒い日の現場で、気をつけることは？",
+  "先輩から教わって、今も守っていることは？",
+];
+const STARTERS_SHOWN = 3;
+
 export function Talk({
   topic: topicIn,
   resumeCardId,
@@ -41,6 +56,21 @@ export function Talk({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState("");
   const [aiQuestion, setAiQuestion] = useState("");
+  // what to start from: questions the young asked that no card answered yet, then everyday ones (rotated)
+  const [seeds, setSeeds] = useState<string[]>([]);
+  const [round, setRound] = useState(0);
+  const fresh = !topicIn && !resumeCardId;
+  useEffect(() => {
+    if (!fresh) return;
+    let live = true;
+    call<{ questions: string[] }>("talkSeeds", {})
+      .then((r) => live && setSeeds(r.questions))
+      .catch(() => {}); // the everyday ones still show
+    return () => {
+      live = false;
+    };
+  }, [fresh]);
+  const starters = Array.from({ length: STARTERS_SHOWN }, (_, i) => STARTERS[(round * STARTERS_SHOWN + i) % STARTERS.length]);
   const [busy, setBusy] = useState(!!resumeCardId); // opening a saved card
   const [err, setErr] = useState("");
   const [cardId, setCardId] = useState("");
@@ -306,10 +336,36 @@ export function Talk({
         </ol>
       )}
 
+      {fresh && !turns.length && !aiQuestion && !text.trim() && (
+        <div className="talk-seeds">
+          <p className="part-sub">🎙️ 何から話しますか？ 押すと、聞き手がその質問から始めます</p>
+          {seeds.map((q) => (
+            <button key={q} className="seed young-q" onClick={() => setAiQuestion(`若手から、こんな質問がありました。「${q}」現場では、どうしていますか？`)}>
+              <span className="src-meta">📮 若手が聞きました（親方の知恵はまだありません）</span>
+              {q}
+            </button>
+          ))}
+          {starters.map((q) => (
+            <button key={q} className="seed" onClick={() => setAiQuestion(q)}>
+              {q}
+            </button>
+          ))}
+          <button className="link" onClick={() => setRound((r) => r + 1)}>
+            別のきっかけ ↻
+          </button>
+          <p className="hint">押さずに、思いついたことをそのまま話しても大丈夫です。</p>
+        </div>
+      )}
+
       {aiQuestion && (
         <div className="ai-question">
           <span className="src-tag">{listenerMode ? "📣 親方に読み上げてください" : "🤖 聞き手から"}</span>
           <p>{aiQuestion}</p>
+          {fresh && !turns.length && (
+            <button className="link" onClick={() => setAiQuestion("")}>
+              ← 別のきっかけにする
+            </button>
+          )}
         </div>
       )}
 

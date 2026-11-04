@@ -164,3 +164,24 @@ export async function myQuestions(data: Record<string, unknown>, uid: string) {
       .sort((a, b) => b.createdAt - a.createdAt),
   };
 }
+
+/**
+ * 話す: what to start from. Questions the young asked lately that no wisdom card answered (the words only, no ids of
+ * people), newest first; a question some answer did use a card for is already covered.
+ */
+export async function talkSeeds(data: Record<string, unknown>, uid: string) {
+  const spaces = spacesOf(data, uid);
+  // newest answers across spaces (one field, so no composite index), then this caller's spaces only
+  const snap = await db.collection("answers").orderBy("createdAt", "desc").limit(300).select("companyId", "question", "usedCardIds", "askerRole").get();
+  const covered = new Set<string>();
+  const open: { key: string; text: string }[] = [];
+  for (const d of snap.docs) {
+    if (!spaces.includes(d.get("companyId") as string) || d.get("askerRole") === "veteran") continue;
+    const text = ((d.get("question") as string | undefined) ?? "").trim();
+    if (!text || text.length > 80) continue;
+    const key = normalizeQuestion(text);
+    if (((d.get("usedCardIds") as string[] | undefined) ?? []).length) covered.add(key);
+    else if (!open.some((o) => o.key === key)) open.push({ key, text });
+  }
+  return { questions: open.filter((o) => !covered.has(o.key)).slice(0, 3).map((o) => o.text) };
+}

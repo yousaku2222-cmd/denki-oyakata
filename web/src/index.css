@@ -1829,3 +1829,30 @@ input[inputmode="decimal"] {
   font-size: 0.88rem;
   line-height: 1.6;
 }
+/* 話す: what to start from */
+.talk-seeds {
+  display: grid;
+  gap: 8px;
+}
+.talk-seeds .part-sub {
+  margin: 0;
+}
+.seed {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+.seed.young-q {
+  border: 2px solid var(--wisdom);
+  background: var(--wisdom-bg);
+}
+.talk-seeds .link {
+  justify-self: start;
+}
