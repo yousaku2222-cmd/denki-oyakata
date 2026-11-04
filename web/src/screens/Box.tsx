@@ -14,6 +14,18 @@ interface Q {
   askers: number; // people who sent this same question
   followUp: { text: string; cardTitle: string | null } | null; // asked under an answer a veteran gave
   createdAt: number;
+  lastAskedAt: number; // the first time, or when someone joined it
+}
+
+/** 新着 first, then the ones many people asked, then the rest; newest first inside each. */
+function grouped(items: Q[], seenBefore: number) {
+  const isNew = (q: Q) => q.lastAskedAt > seenBefore;
+  const byAskers = (a: Q, b: Q) => b.askers - a.askers || b.lastAskedAt - a.lastAskedAt;
+  return [
+    { key: "new", head: (n: number) => `🆕 新着 ${n}件`, list: items.filter(isNew).sort(byAskers) },
+    { key: "many", head: () => "👥 何人も聞いている質問", list: items.filter((q) => !isNew(q) && q.askers > 1).sort(byAskers) },
+    { key: "rest", head: () => "そのほか", list: items.filter((q) => !isNew(q) && q.askers <= 1).sort((a, b) => b.lastAskedAt - a.lastAskedAt) },
+  ].filter((g) => g.list.length);
 }
 
 /** A few stars spring out of the button when a veteran says いい質問 (the asker sees it on わたし). */
@@ -69,7 +81,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
         setItems(r.questions);
         setMore(r.more);
         // the marks stay for this visit; next time only newer questions are 新着
-        const newest = Math.max(0, ...r.questions.map((q) => q.createdAt));
+        const newest = Math.max(0, ...r.questions.map((q) => q.lastAskedAt));
         if (newest > lastSeen()) markSeen(newest);
       })
       .catch((e) => setErr(errorText(e, "質問を読み込めませんでした。電波の良い所で、もう一度お試しください。")));
@@ -98,7 +110,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
       {!!items?.length && (
         <p className="box-count">
           📮 {items.length}件の質問が届いています
-          {items.some((q) => q.createdAt > seenBefore) && <span className="new-chip">新着 {items.filter((q) => q.createdAt > seenBefore).length}件</span>}
+          {items.some((q) => q.lastAskedAt > seenBefore) && <span className="new-chip">新着 {items.filter((q) => q.lastAskedAt > seenBefore).length}件</span>}
         </p>
       )}
       <button
@@ -113,51 +125,57 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
       {err && <p className="hint error">{err}</p>}
       {items === null && !err && <p className="hint">読み込み中…</p>}
       {items?.length === 0 && <p className="empty">いまは質問がありません。</p>}
-      {items?.map((q, i) => (
-        <motion.div
-          key={q.id}
-          className={`qcard ${q.createdAt > seenBefore ? "is-new" : ""}`}
-          initial={{ opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: Math.min(i, 6) * 0.12, duration: 0.4, ease: "easeOut" }}
-        >
-          {q.createdAt > seenBefore && <span className="new-chip">新着</span>}
-          {q.hasPhoto &&
-            (q.id in photos ? (
-              photos[q.id] === null ? (
-                <p className="hint">写真を読み込み中…</p>
-              ) : photos[q.id] ? (
-                <img className="photo-preview" src={photos[q.id]!} alt="若手が撮った写真" />
-              ) : (
-                <p className="hint">写真はありません（または読み込めませんでした）。</p>
-              )
-            ) : (
-              <button className="link" onClick={() => openPhoto(q)}>
-                📷 写真を見る
-              </button>
+      {items &&
+        grouped(items, seenBefore).map((g) => (
+          <div key={g.key} className="box-group">
+            <p className="box-group-head">{g.head(g.list.length)}</p>
+            {g.list.map((q, i) => (
+            <motion.div
+              key={q.id}
+              className={`qcard ${q.lastAskedAt > seenBefore ? "is-new" : ""}`}
+              initial={{ opacity: 0, y: -16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(i, 6) * 0.12, duration: 0.4, ease: "easeOut" }}
+            >
+              {q.lastAskedAt > seenBefore && <span className="new-chip">新着</span>}
+              {q.hasPhoto &&
+                (q.id in photos ? (
+                  photos[q.id] === null ? (
+                    <p className="hint">写真を読み込み中…</p>
+                  ) : photos[q.id] ? (
+                    <img className="photo-preview" src={photos[q.id]!} alt="若手が撮った写真" />
+                  ) : (
+                    <p className="hint">写真はありません（または読み込めませんでした）。</p>
+                  )
+                ) : (
+                  <button className="link" onClick={() => openPhoto(q)}>
+                    📷 写真を見る
+                  </button>
+                ))}
+              {q.followUp && (
+                <p className="follow-chip">
+                  🔗 続き：前の質問「{q.followUp.text}」{q.followUp.cardTitle ? `→ カード「${q.followUp.cardTitle}」` : ""}
+                </p>
+              )}
+              <p className="qtext">{q.text}</p>
+              <p className="src-meta">
+                {q.askerName}さん{q.askerRole === "veteran" ? "（ベテラン）" : ""}
+                {q.askers > 1 ? `ほか${q.askers - 1}人` : ""}・{fmtDate(q.createdAt)}
+              </p>
+              {q.askers > 1 && <span className="same-chip">👥 同じ質問：{q.askers}人</span>}
+              <div className="row">
+                <button className="primary" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp })}>
+                  🎤 話して答える
+                </button>
+                <button className={`secondary good-btn ${q.good ? "done" : ""}`} disabled={q.good} onClick={() => good(q)}>
+                  {q.good ? "⭐ いい質問！" : "⭐ いい質問"}
+                  {q.good && <StarBurst key={q.id} />}
+                </button>
+              </div>
+            </motion.div>
             ))}
-          {q.followUp && (
-            <p className="follow-chip">
-              🔗 続き：前の質問「{q.followUp.text}」{q.followUp.cardTitle ? `→ カード「${q.followUp.cardTitle}」` : ""}
-            </p>
-          )}
-          <p className="qtext">{q.text}</p>
-          <p className="src-meta">
-            {q.askerName}さん{q.askerRole === "veteran" ? "（ベテラン）" : ""}
-            {q.askers > 1 ? `ほか${q.askers - 1}人` : ""}・{fmtDate(q.createdAt)}
-          </p>
-          {q.askers > 1 && <span className="same-chip">👥 同じ質問：{q.askers}人</span>}
-          <div className="row">
-            <button className="primary" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp })}>
-              🎤 話して答える
-            </button>
-            <button className={`secondary good-btn ${q.good ? "done" : ""}`} disabled={q.good} onClick={() => good(q)}>
-              {q.good ? "⭐ いい質問！" : "⭐ いい質問"}
-              {q.good && <StarBurst key={q.id} />}
-            </button>
           </div>
-        </motion.div>
-      ))}
+        ))}
       {more > 0 && <p className="hint">ほかに古い質問が {more} 件あります（新しい順に50件まで表示）。</p>}
     </section>
   );

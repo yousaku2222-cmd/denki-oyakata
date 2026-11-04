@@ -41,7 +41,8 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
         if (q.get("askerId") === askerId || ((q.get("alsoAskerIds") as string[] | undefined) ?? []).includes(askerId)) {
           return { questionId: q.id, duplicate: true as const }; // already in the box from this device
         }
-        tx.update(q.ref, { alsoAskerIds: FieldValue.arrayUnion(askerId) });
+        // someone new asking it brings it back up as 新着 in the box
+        tx.update(q.ref, { alsoAskerIds: FieldValue.arrayUnion(askerId), lastAskedAt: Timestamp.now() });
         return { questionId: q.id, merged: true as const, askers: 2 + ((q.get("alsoAskerIds") as string[] | undefined) ?? []).length };
       }
     }
@@ -64,6 +65,7 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
       goodBy: [],
       answeredCardId: null,
       createdAt: Timestamp.now(),
+      lastAskedAt: Timestamp.now(),
       answeredAt: null,
     });
     return { questionId: ref.id };
@@ -93,11 +95,10 @@ export async function openQuestions(data: Record<string, unknown>, uid: string) 
     .collection("questions")
     .where("companyId", "in", spacesOf(data, uid))
     .where("status", "==", "open")
-    .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "alsoAskerIds", "createdAt", "hasPhoto", "followUp")
+    .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "alsoAskerIds", "createdAt", "hasPhoto", "followUp", "lastAskedAt")
     .get();
-  const list = snap.docs
-    .filter((d) => d.get("excludeVeteranId") !== uid)
-    .sort((a, b) => ms(b.get("createdAt")) - ms(a.get("createdAt")));
+  const lastAsked = (d: FirebaseFirestore.QueryDocumentSnapshot) => ms(d.get("lastAskedAt")) || ms(d.get("createdAt"));
+  const list = snap.docs.filter((d) => d.get("excludeVeteranId") !== uid).sort((a, b) => lastAsked(b) - lastAsked(a));
   return {
     more: Math.max(0, list.length - BOX_LIST),
     questions: list.slice(0, BOX_LIST).map((d) => ({
@@ -114,6 +115,7 @@ export async function openQuestions(data: Record<string, unknown>, uid: string) 
         return f ? { text: f.text, cardTitle: f.cardTitle } : null;
       })(),
       createdAt: ms(d.get("createdAt")),
+      lastAskedAt: lastAsked(d), // when someone last sent it (the first time, or joining it)
     })),
   };
 }

@@ -1649,3 +1649,16 @@ input[inputmode="decimal"] {
   font-size: 0.75rem;
   color: var(--muted);
 }
+
+/* 質問箱: 新着, then the ones many asked, then the rest */
+.box-group {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.box-group-head {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+}
