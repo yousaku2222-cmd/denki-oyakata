@@ -10,24 +10,25 @@ import { Browse } from "./screens/Browse";
 import { Calc } from "./screens/Calc";
 import { Photo, type CalcStart } from "./screens/Photo";
 import { FlowSteps } from "./FlowSteps";
-import { Icon, ic } from "./Icon";
+import { Icon } from "./Icon";
 import { call } from "./firebase";
 
 type Tab = "ask" | "browse" | "calc" | "photo" | "me" | "talk" | "box" | "mycards";
 
+// the tabs keep the emoji (the author's choice): the drawn icons are for the screens themselves
 const TABS: Record<Role, { id: Tab; icon: string; label: string }[]> = {
   young: [
-    { id: "ask", icon: ic("mic"), label: "聞く" },
-    { id: "browse", icon: ic("search"), label: "探す" },
-    { id: "calc", icon: ic("calc"), label: "計算" },
-    { id: "photo", icon: ic("camera"), label: "撮る" },
-    { id: "me", icon: ic("young"), label: "わたし" },
+    { id: "ask", icon: "🎤", label: "聞く" },
+    { id: "browse", icon: "🔎", label: "探す" },
+    { id: "calc", icon: "🧮", label: "計算" },
+    { id: "photo", icon: "📷", label: "撮る" },
+    { id: "me", icon: "🙂", label: "わたし" },
   ],
   veteran: [
-    { id: "talk", icon: ic("talk"), label: "話す" },
-    { id: "box", icon: ic("box"), label: "質問箱" },
-    { id: "ask", icon: ic("search"), label: "調べる" },
-    { id: "mycards", icon: ic("cards"), label: "わたしの\nカード" },
+    { id: "talk", icon: "🎙️", label: "話す" },
+    { id: "box", icon: "📮", label: "質問箱" },
+    { id: "ask", icon: "🔎", label: "調べる" },
+    { id: "mycards", icon: "🗂️", label: "わたしの\nカード" },
   ],
 };
 

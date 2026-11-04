@@ -23,7 +23,7 @@ export function Browse() {
           <small>現場の知恵カード</small>
         </button>
         <button className={`pick ${view === "laws" ? "on" : ""}`} onClick={() => setView("laws")}>
-          <Icon of={ic("law")} className="pick-icon" />
+          <Icon of="⚖️" className="pick-icon" />
           <strong>法令・基準</strong>
           <small>国の決まり・原文つき</small>
         </button>

@@ -29,7 +29,7 @@ export interface Card {
 }
 
 export const SOURCE_LABEL: Record<Source, { icon: string; label: string }> = {
-  law: { icon: ic("law"), label: "法令・基準" },
+  law: { icon: "⚖️", label: "法令・基準" },
   wisdom: { icon: ic("wisdom"), label: "親方の知恵" },
   general: { icon: ic("general"), label: "一般知識（要確認）" },
 };
