@@ -1856,3 +1856,7 @@ input[inputmode="decimal"] {
 .talk-seeds .link {
   justify-self: start;
 }
+/* 質問箱: questions only the AI answered (no one sent them) */
+.box-group.ai-only .qcard {
+  border-style: dashed;
+}

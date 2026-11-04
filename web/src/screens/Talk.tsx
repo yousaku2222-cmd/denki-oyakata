@@ -42,6 +42,8 @@ export function Talk({
   active = true,
   onDone,
   onBack,
+  boxOpen = 0,
+  onOpenBox,
   onDirty,
 }: {
   topic: Topic | null;
@@ -49,27 +51,20 @@ export function Talk({
   active?: boolean; // false while another tab is shown (this screen stays mounted)
   onDone: () => void;
   onBack?: () => void; // opened from わたしのカード: going back there is where the veteran came from
+  boxOpen?: number; // young workers' questions waiting in 質問箱: answering them starts there, not here
+  onOpenBox?: () => void;
   onDirty?: (dirty: boolean) => void; // something told or edited that is not published yet
 }) {
   const [topic, setTopic] = useState(topicIn);
   const [listenerMode, setListenerMode] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState("");
-  const [aiQuestion, setAiQuestion] = useState("");
-  // what to start from: questions the young asked that no card answered yet, then everyday ones (rotated)
-  const [seeds, setSeeds] = useState<string[]>([]);
+  // a question the young did not send has no question to point at: the listener asks it, so it is in what was told
+  const [aiQuestion, setAiQuestion] = useState(topicIn && !topicIn.questionId ? `若手から、こんな質問がありました。「${topicIn.text}」現場では、どうしていますか？` : "");
+  // 話す is for the veteran's own stories: everyday questions to start from (rotated); the young workers'
+  // questions are answered from 質問箱
   const [round, setRound] = useState(0);
   const fresh = !topicIn && !resumeCardId;
-  useEffect(() => {
-    if (!fresh) return;
-    let live = true;
-    call<{ questions: string[] }>("talkSeeds", {})
-      .then((r) => live && setSeeds(r.questions))
-      .catch(() => {}); // the everyday ones still show
-    return () => {
-      live = false;
-    };
-  }, [fresh]);
   const starters = Array.from({ length: STARTERS_SHOWN }, (_, i) => STARTERS[(round * STARTERS_SHOWN + i) % STARTERS.length]);
   const [busy, setBusy] = useState(!!resumeCardId); // opening a saved card
   const [err, setErr] = useState("");
@@ -139,7 +134,8 @@ export function Talk({
           🔗 続き：前の質問「{topic.followUp.text}」{topic.followUp.cardTitle ? `→ カード「${topic.followUp.cardTitle}」` : ""}
         </span>
       )}
-      📮 {topic.askerName}さんの質問に答えます：<strong>{topic.text}</strong>
+      {topic.questionId ? `📮 ${topic.askerName}さんの質問に答えます：` : "🤖 AIだけで答えた質問に答えます："}
+      <strong>{topic.text}</strong>
       {photo && (
         <button className={`topic-photo ${photoBig ? "big" : ""}`} onClick={() => setPhotoBig((b) => !b)} aria-label={photoBig ? "写真を小さくする" : "写真を大きくする"}>
           <img src={photo} alt={`${topic.askerName}さんが撮った写真`} />
@@ -175,7 +171,7 @@ export function Talk({
         const d = await call<{ cardId: string; draft: Draft }>("draftCard", {
           transcript: t,
           authorName: name,
-          triggerQuestionId: topic?.questionId,
+          triggerQuestionId: topic?.questionId || undefined,
         });
         setCardId(d.cardId);
         setDraft(d.draft);
@@ -221,7 +217,7 @@ export function Talk({
       <section className="screen center">
         {savedStatus === "published" && status === "draft" && draft ? <IntoTheBag title={draft.title} /> : <div className="big-emoji">🗂️</div>}
         <h1 className="screen-title">{savedStatus === "private" ? "直しました（非公開のまま）" : status === "draft" ? "知恵袋に入りました" : "直しました"}</h1>
-        {savedStatus !== "private" && <p>若手が聞けば、あなたの話が答えに出てきます。{status === "draft" && topic && `${topic.askerName}さんにも届きます。`}</p>}
+        {savedStatus !== "private" && <p>若手が聞けば、あなたの話が答えに出てきます。{status === "draft" && topic?.questionId && `${topic.askerName}さんにも届きます。`}</p>}
         {back ? (
           <>
             <button className="primary" onClick={back}>
@@ -338,13 +334,12 @@ export function Talk({
 
       {fresh && !turns.length && !aiQuestion && !text.trim() && (
         <div className="talk-seeds">
-          <p className="part-sub">🎙️ 何から話しますか？ 押すと、聞き手がその質問から始めます</p>
-          {seeds.map((q) => (
-            <button key={q} className="seed young-q" onClick={() => setAiQuestion(`若手から、こんな質問がありました。「${q}」現場では、どうしていますか？`)}>
-              <span className="src-meta">📮 若手が聞きました（親方の知恵はまだありません）</span>
-              {q}
+          {boxOpen > 0 && onOpenBox && (
+            <button className="seed young-q" onClick={onOpenBox}>
+              📮 質問箱に若手の質問が{boxOpen}件あります →
             </button>
-          ))}
+          )}
+          <p className="part-sub">🎙️ 何から話しますか？ 押すと、聞き手がその質問から始めます</p>
           {starters.map((q) => (
             <button key={q} className="seed" onClick={() => setAiQuestion(q)}>
               {q}

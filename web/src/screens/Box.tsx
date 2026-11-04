@@ -74,6 +74,8 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
   const [err, setErr] = useState("");
   const [photos, setPhotos] = useState<Record<string, string | null>>({});
   const [seenBefore, setSeenBefore] = useState(lastSeen);
+  // what the young asked the AI and no card answered: not sent to anyone, but the next one to ask gets the answer
+  const [aiOnly, setAiOnly] = useState<string[]>([]);
 
   const load = useCallback(() => {
     setErr("");
@@ -88,6 +90,15 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
       .catch((e) => setErr(errorText(e, "質問を読み込めませんでした。電波の良い所で、もう一度お試しください。")));
   }, []);
   useEffect(load, [load]);
+  useEffect(() => {
+    call<{ questions: string[] }>("talkSeeds", {})
+      .then((r) => setAiOnly(r.questions))
+      .catch(() => {}); // only extra
+  }, []);
+
+  // a question also sent to the box is answered there (where the one who asked hears back)
+  const sameWords = (t: string) => t.normalize("NFKC").replace(/[\s？?。、]/g, "");
+  const shownAiOnly = aiOnly.filter((t) => !items?.some((q) => sameWords(q.text) === sameWords(t)));
 
   function good(q: Q) {
     setItems((list) => list?.map((x) => (x.id === q.id ? { ...x, good: true } : x)) ?? null);
@@ -179,6 +190,20 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
           </div>
         ))}
       {more > 0 && <p className="hint">ほかに古い質問が {more} 件あります（新しい順に50件まで表示）。</p>}
+      {shownAiOnly.length > 0 && (
+        <div className="box-group ai-only">
+          <p className="box-group-head">🤖 AIだけで答えた質問（親方の知恵がまだありません）</p>
+          <p className="hint">若手がAIに聞いて、法令や一般知識だけで答えた質問です。親方には送られていないので、答えても聞いた本人には届きませんが、次に同じことを聞いた若手の答えに使われます。</p>
+          {shownAiOnly.map((text) => (
+            <div key={text} className="qcard">
+              <p className="qtext">{text}</p>
+              <button className="secondary" onClick={() => onAnswer({ questionId: "", text, askerName: "若手", hasPhoto: false })}>
+                🎙️ 話して答える
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

@@ -46,10 +46,14 @@ export default function App() {
   // 質問箱: how many came in (or were joined) since it was last opened, counted when the app opens and on each
   // tab change; opening it clears the number
   const [boxNew, setBoxNew] = useState(0);
+  const [boxOpen, setBoxOpen] = useState(0); // all the open ones, for 話す's way to the box
   useEffect(() => {
     if (role !== "veteran" || tab === "box") return;
     call<{ questions: { lastAskedAt: number }[] }>("openQuestions", {})
-      .then((r) => setBoxNew(r.questions.filter((q) => q.lastAskedAt > boxLastSeen()).length))
+      .then((r) => {
+        setBoxNew(r.questions.filter((q) => q.lastAskedAt > boxLastSeen()).length);
+        setBoxOpen(r.questions.length);
+      })
       .catch(() => {}); // only a hint
   }, [role, tab]);
   // a veteran's card that helped someone since わたしのカード was last opened: dot on that tab when the app opens
@@ -150,7 +154,7 @@ export default function App() {
         {/* kept mounted while other tabs are open, so a half-told story is not lost */}
         {role === "veteran" && (
           <div hidden={tab !== "talk"}>
-            <Talk key={talkKey} topic={topic} resumeCardId={resumeId} active={tab === "talk"} onDirty={setTalkDirty} onDone={() => startTalk(null, null, true)}
+            <Talk key={talkKey} topic={topic} resumeCardId={resumeId} active={tab === "talk"} onDirty={setTalkDirty} onDone={() => startTalk(null, null, true)} boxOpen={boxOpen} onOpenBox={() => setTab("box")}
               onBack={() => {
                 startTalk(null, null, true);
                 setTab("mycards");
