@@ -1680,3 +1680,80 @@ input[inputmode="decimal"] {
   text-align: center;
   border: 2px solid var(--surface);
 }
+
+/* 探す */
+.browse-lead {
+  margin: 0 16px;
+  padding-top: 12px;
+}
+.law-row .law-gist {
+  display: block;
+  margin-top: 2px;
+}
+.law-row .law-no {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: var(--law);
+  font-weight: 700;
+}
+/* 探す: the veterans who helped most, and one veteran's page */
+.vet-rank {
+  border: 2px solid var(--yellow);
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  display: grid;
+  gap: 6px;
+  background: var(--surface);
+}
+.vet-rank-head {
+  margin: 0;
+  font-weight: 800;
+}
+.vet-rank-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  padding: 4px 10px;
+}
+.vet-rank-no {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--yellow);
+  color: var(--navy);
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.vet-page {
+  border-radius: 14px;
+  padding: 14px;
+  margin: 8px 0 12px;
+  background: #4a2f1a;
+  color: #fff;
+}
+.vet-name {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.vet-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 0.9rem;
+}
+.vet-stats strong {
+  color: var(--yellow);
+  font-size: 1.1rem;
+  margin-right: 2px;
+}

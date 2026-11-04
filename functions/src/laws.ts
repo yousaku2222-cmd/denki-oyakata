@@ -14,6 +14,7 @@ export interface Law {
   summary: string;
   keywords: string[];
   scenes: string[];
+  plain?: { points: string[]; words: { term: string; plain: string }[] }; // かんたんに言うと (scripts/laws/plain.mjs)
 }
 
 // Built once by scripts/laws (original text + Opus summaries) and deployed with the functions.
@@ -120,7 +121,19 @@ export const lawLabel = (l: Law) => `${l.short} ${l.article}【${l.heading}】`;
 
 // --- callables (no Claude involved) ---
 export async function listLaws() {
-  return { laws: LAWS.map((l) => ({ id: l.id, short: l.short, article: l.article, heading: l.heading, summary: l.summary, keywords: l.keywords })) };
+  // the list on 探す: the gist and a scene say what each article is for, before its number does
+  return {
+    laws: LAWS.map((l) => ({
+      id: l.id,
+      short: l.short,
+      article: l.article,
+      heading: l.heading,
+      summary: l.summary,
+      keywords: l.keywords,
+      points: l.plain?.points ?? [],
+      scenes: l.scenes.slice(0, 3),
+    })),
+  };
 }
 
 // Tables and formulas came out of the PDF as loose text; the numbers of 146-1表・146-2表 did not come out at all.
