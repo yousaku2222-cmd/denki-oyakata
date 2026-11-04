@@ -1047,11 +1047,26 @@ input[inputmode="decimal"] {
   gap: 8px;
 }
 .part-item {
+  display: grid;
+  gap: 8px;
+  border-radius: 12px;
+}
+.part-item.open {
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.part-open {
+  all: unset;
   display: flex;
   gap: 10px;
   align-items: center;
+  cursor: pointer;
 }
-.part-item img,
+.part-open:focus-visible {
+  outline: 2px solid var(--law);
+}
+.part-open img,
 .part-noimg {
   width: 56px;
   height: 56px;
@@ -2009,4 +2024,42 @@ input[inputmode="decimal"] {
 .tile-icon {
   font-size: 1.4rem;
   line-height: 1.1;
+}
+
+/* わたし: a question or a part opened to read it all */
+.qopen {
+  all: unset;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  cursor: pointer;
+}
+.qopen:focus-visible {
+  outline: 2px solid var(--law);
+}
+.qopen-mark {
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding-top: 4px;
+}
+.q-detail,
+.part-detail {
+  display: grid;
+  gap: 6px;
+}
+.q-detail p,
+.part-detail p {
+  margin: 0;
+}
+.link.danger {
+  color: var(--danger);
+  justify-self: start;
+}
+.part-big {
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 12px;
 }

@@ -211,5 +211,28 @@ const gl = await call("listGlossary", {}, young);
 const dTerm = gl.terms.find((t) => t.term === "D種接地工事");
 check("words come with a meaning and the article it is from", gl.terms.length >= 50 && !!dTerm?.meanings[0]?.plain && /^電技解釈 第\d+条/.test(dTerm.meanings[0].label), `${gl.terms.length} terms`);
 
+console.log("\n14. 質問の取り下げ");
+const wq = await call("sendToBox", { text: "（テスト）取り下げる質問", photo: "data:image/jpeg;base64,/9j/4AAQ", askerName: "若手1", askerRole: "young" }, asker1);
+let othersRefused = false;
+try {
+  await call("withdrawQuestion", { questionId: wq.questionId }, stranger);
+} catch {
+  othersRefused = true;
+}
+check("only one who asked can take a question back", othersRefused);
+const wr = await call("withdrawQuestion", { questionId: wq.questionId }, asker1);
+const boxAfter = (await call("openQuestions", {}, vet)).questions.some((q) => q.id === wq.questionId);
+const mineAfter = (await call("myQuestions", {}, asker1)).questions.some((q) => q.id === wq.questionId);
+const photoAfter = (await call("questionPhoto", { questionId: wq.questionId }, vet)).photo;
+check("a question taken back leaves the box, the list and its photo", wr.withdrawn && !boxAfter && !mineAfter && photoAfter === null);
+// joined by another: the one who leaves goes, the question stays for the other
+const twoQ = await call("sendToBox", { text: "（テスト）二人で聞く質問", askerName: "若手1", askerRole: "young" }, asker1);
+await call("sendToBox", { text: "（テスト）二人で聞く質問", askerName: "若手2", askerRole: "young" }, asker2);
+const jr = await call("withdrawQuestion", { questionId: twoQ.questionId }, asker1);
+const stays = (await call("openQuestions", {}, vet)).questions.find((q) => q.id === twoQ.questionId);
+const forOther = (await call("myQuestions", {}, asker2)).questions.some((q) => q.id === twoQ.questionId);
+const forMe = (await call("myQuestions", {}, asker1)).questions.some((q) => q.id === twoQ.questionId);
+check("a question others joined stays for them", !jr.withdrawn && !!stays && stays.askers === 1 && forOther && !forMe);
+
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);

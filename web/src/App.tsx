@@ -150,6 +150,10 @@ export default function App() {
               setAskSeed({ text, questionId, n: Date.now() });
               setTab("ask");
             }}
+            onAsk={(text) => {
+              setAskSeed({ text, questionId: "", n: Date.now() });
+              setTab("ask");
+            }}
           />
         )}
         {/* kept mounted while other tabs are open, so a half-told story is not lost */}

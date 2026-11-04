@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
-import { getName, getParts, setName } from "../local";
+import { getName, getParts, savePart, setName, type PartEntry } from "../local";
 import { fmtDate } from "../components";
 import { Transfer } from "../Transfer";
 
@@ -12,6 +12,7 @@ interface Q {
   answeredCardTitle: string | null;
   answeredBy: string | null; // as the card shows it (「社内のベテラン」 when the name is hidden)
   hasPhoto: boolean;
+  followUp: { text: string; cardTitle: string | null } | null; // asked under an earlier answer
   good: number; // veterans who said いい質問
   askers: number; // people who sent this same question
   createdAt: number;
@@ -36,11 +37,17 @@ function markSeen(at: number) {
 }
 
 /** わたし (young): the answers that came back come first; settings go to the bottom. */
-export function Me({ onAskAgain }: { onAskAgain: (text: string, questionId: string) => void }) {
+export function Me({ onAskAgain, onAsk }: { onAskAgain: (text: string, questionId: string) => void; onAsk: (text: string) => void }) {
   const [items, setItems] = useState<Q[] | null>(null);
   const [err, setErr] = useState("");
   const [name, setNameState] = useState(getName("young"));
-  const [parts] = useState(getParts);
+  const [parts, setParts] = useState(getParts);
+  // a question or a part opened to read it all
+  const [openQ, setOpenQ] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<Record<string, string | null>>({});
+  const [openPart, setOpenPart] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [partErr, setPartErr] = useState(""); // shown inside the open part, where it was asked
   const [seenBefore] = useState(lastSeen);
 
   // read through Functions (questions are not readable from the screen: they carry device ids and photos)
@@ -56,6 +63,52 @@ export function Me({ onAskAgain }: { onAskAgain: (text: string, questionId: stri
       .catch((e) => setErr(errorText(e, "質問を読み込めませんでした。電波の良い所で、ページを開き直してください。")));
   }, []);
   useEffect(load, [load]);
+
+  function toggleQ(q: Q) {
+    const next = openQ === q.id ? null : q.id;
+    setOpenQ(next);
+    if (next && q.hasPhoto && !(q.id in photos)) {
+      setPhotos((p) => ({ ...p, [q.id]: null }));
+      call<{ photo: string | null }>("questionPhoto", { questionId: q.id })
+        .then((r) => setPhotos((p) => ({ ...p, [q.id]: r.photo ?? "" })))
+        .catch(() => setPhotos((p) => ({ ...p, [q.id]: "" })));
+    }
+  }
+
+  async function withdraw(q: Q) {
+    if (!confirm("この質問を取り下げますか？ 親方の質問箱から消えます。")) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await call("withdrawQuestion", { questionId: q.id });
+      setItems((list) => list?.filter((x) => x.id !== q.id) ?? null);
+      setOpenQ(null);
+    } catch (e) {
+      setErr(errorText(e, "取り下げられませんでした。もう一度お試しください。"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // an entry from before the details were kept: ask the AI of 撮る again by the name (no photo)
+  async function lookAgain(p: PartEntry) {
+    setBusy(true);
+    setPartErr("");
+    try {
+      const r = await call<{ verdict: string; use: string; fieldNames: string[]; confusables: { name: string; diff: string }[]; companions: string[] }>("identifyPart", { name: p.name });
+      // a name the AI could not settle leaves the entry as it was
+      if (r.verdict === "unknown") {
+        setPartErr("この名前では、くわしく調べられませんでした。もう一度「撮る」で撮ってみてください。");
+        return;
+      }
+      savePart({ ...p, use: r.use || p.use, fieldNames: r.fieldNames, printed: p.printed ?? "", confusables: r.confusables, companions: r.companions });
+      setParts(getParts());
+    } catch (e) {
+      setPartErr(errorText(e, "調べ直せませんでした。電波の良い所で、もう一度お試しください。"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const answered = items?.filter((q) => q.status === "answered") ?? [];
   const news = answered.filter((q) => q.answeredAt > seenBefore);
@@ -98,10 +151,38 @@ export function Me({ onAskAgain }: { onAskAgain: (text: string, questionId: stri
       {items?.length === 0 && <p className="empty">まだありません。答えが見つからない時は「親方に聞いてみる」を押しましょう。</p>}
       {items?.map((q) => (
         <div key={q.id} className={`qcard ${q.status}`}>
-          <p className="qtext">
-            {q.hasPhoto && <span aria-label="写真つき">📷 </span>}
-            {q.text}
-          </p>
+          <button className="qopen" onClick={() => toggleQ(q)} aria-expanded={openQ === q.id}>
+            <span className="qtext">
+              {q.hasPhoto && <span aria-label="写真つき">📷 </span>}
+              {q.text}
+            </span>
+            <span className="qopen-mark" aria-hidden>
+              {openQ === q.id ? "▲" : "▼"}
+            </span>
+          </button>
+          {openQ === q.id && (
+            <div className="q-detail">
+              <p className="src-meta">送った日：{fmtDate(q.createdAt)}</p>
+              {q.followUp && (
+                <p className="follow-chip">
+                  🔗 続き：前の質問「{q.followUp.text}」{q.followUp.cardTitle ? `→ カード「${q.followUp.cardTitle}」` : ""}
+                </p>
+              )}
+              {q.hasPhoto &&
+                (photos[q.id] === null ? (
+                  <p className="hint">写真を読み込み中…</p>
+                ) : photos[q.id] ? (
+                  <img className="photo-preview" src={photos[q.id]!} alt="送った写真" />
+                ) : (
+                  <p className="hint">写真を読み込めませんでした。</p>
+                ))}
+              {q.status === "open" && (
+                <button className="link danger" disabled={busy} onClick={() => void withdraw(q)}>
+                  この質問を取り下げる
+                </button>
+              )}
+            </div>
+          )}
           {q.good > 0 && <p className="good-note">⭐ 親方が「いい質問」と言ってくれました{q.good > 1 ? `（${q.good}人）` : ""}</p>}
           {q.askers > 1 && <p className="src-meta">👥 {q.askers}人が同じことを聞いています</p>}
           {q.status === "answered" && q.answeredAt > seenBefore ? (
@@ -127,14 +208,48 @@ export function Me({ onAskAgain }: { onAskAgain: (text: string, questionId: stri
       {parts.length === 0 && <p className="empty">「撮る」で調べた部材が、ここにたまります。</p>}
       <div className="parts-book">
         {parts.map((p) => (
-          <div key={p.name} className="part-item">
-            {p.thumb ? <img src={p.thumb} alt="" /> : <span className="part-noimg">📦</span>}
-            <div>
-              <strong>{p.name}</strong>
-              <p className="src-meta">
-                {p.use}・{fmtDate(p.at)}
-              </p>
-            </div>
+          <div key={p.name} className={`part-item ${openPart === p.name ? "open" : ""}`}>
+            <button className="part-open" onClick={() => {
+                setOpenPart(openPart === p.name ? null : p.name);
+                setPartErr("");
+              }} aria-expanded={openPart === p.name}>
+              {p.thumb ? <img src={p.thumb} alt="" /> : <span className="part-noimg">📦</span>}
+              <div>
+                <strong>{p.name}</strong>
+                <p className="src-meta">
+                  {p.use}・{fmtDate(p.at)}
+                </p>
+              </div>
+            </button>
+            {openPart === p.name && (
+              <div className="part-detail">
+                {p.thumb && <img className="part-big" src={p.thumb} alt={`${p.name}の写真`} />}
+                {!!p.fieldNames?.length && <p>現場の呼び名：{p.fieldNames.join("・")}</p>}
+                {p.printed && <p>🔍 読み取った印字：{p.printed}</p>}
+                {!!p.confusables?.length && (
+                  <div>
+                    <p className="part-sub">⚠️ 間違えやすい相手</p>
+                    {p.confusables.map((c) => (
+                      <p key={c.name}>
+                        <strong>{c.name}</strong>：{c.diff}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {!!p.companions?.length && <p>🔩 一緒に使う物：{p.companions.join("・")}</p>}
+                {!p.fieldNames && <p className="hint">この部材は、くわしい結果を残す前に撮ったものです。</p>}
+                <div className="row">
+                  <button className="secondary" onClick={() => onAsk(`${p.name}の使い方と、気をつけることは？`)}>
+                    この部材について聞く →
+                  </button>
+                  <button className="link" disabled={busy} onClick={() => void lookAgain(p)}>
+                    {busy ? "調べています…" : "くわしく調べ直す"}
+                  </button>
+                </div>
+                {partErr && <p className="hint error">{partErr}</p>}
+                <p className="src-meta">💡 AIの判定です。印字・現物で確かめてください。</p>
+              </div>
+            )}
           </div>
         ))}
       </div>

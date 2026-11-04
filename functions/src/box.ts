@@ -139,7 +139,7 @@ export async function myQuestions(data: Record<string, unknown>, uid: string) {
     // one field only (no composite index): the space is checked below
     db.collection("questions").where("alsoAskerIds", "array-contains", uid).get(),
   ]);
-  const docs = [...mine.docs, ...joined.docs.filter((d) => spaces.includes(d.get("companyId")))];
+  const docs = [...mine.docs, ...joined.docs.filter((d) => spaces.includes(d.get("companyId")))].filter((d) => d.get("status") !== "withdrawn");
   const snap = { docs };
   const cardIds = [...new Set(snap.docs.map((d) => d.get("answeredCardId") as string | null).filter((x): x is string => !!x))];
   const cards = cardIds.length ? await db.getAll(...cardIds.map((id) => db.collection("cards").doc(id))) : [];
@@ -156,6 +156,10 @@ export async function myQuestions(data: Record<string, unknown>, uid: string) {
         answeredCardTitle: d.get("answeredCardId") ? (title.get(d.get("answeredCardId")) ?? null) : null,
         answeredBy: d.get("answeredCardId") ? (author.get(d.get("answeredCardId")) ?? null) : null,
         hasPhoto: !!d.get("hasPhoto"),
+        followUp: (() => {
+          const f = d.get("followUp") as { text: string; cardTitle: string | null } | null | undefined;
+          return f ? { text: f.text, cardTitle: f.cardTitle } : null;
+        })(),
         good: ((d.get("goodBy") as string[] | undefined) ?? []).length, // veterans who said いい質問
         askers: 1 + ((d.get("alsoAskerIds") as string[] | undefined) ?? []).length,
         createdAt: ms(d.get("createdAt")),
@@ -184,4 +188,33 @@ export async function talkSeeds(data: Record<string, unknown>, uid: string) {
     else if (!open.some((o) => o.key === key)) open.push({ key, text });
   }
   return { questions: open.filter((o) => !covered.has(o.key)).slice(0, 3).map((o) => o.text) };
+}
+
+/**
+ * わたし: take back a question no veteran has answered yet. Only one who asked it can; when others joined it, the
+ * question stays for them and only the caller leaves it. A withdrawn question leaves the box and its photo is dropped.
+ */
+export async function withdrawQuestion(data: Record<string, unknown>, uid: string) {
+  const ref = db.collection("questions").doc(str(data.questionId, "質問の番号", 64));
+  const spaces = spacesOf(data, uid);
+  return db.runTransaction(async (tx) => {
+    const q = await tx.get(ref);
+    if (!q.exists || !spaces.includes(q.get("companyId") as string)) throw new HttpsError("not-found", "質問が見つかりません。");
+    const also = (q.get("alsoAskerIds") as string[] | undefined) ?? [];
+    const mine = q.get("askerId") === uid;
+    if (!mine && !also.includes(uid)) throw new HttpsError("permission-denied", "自分が聞いた質問だけ取り下げられます。");
+    if (q.get("status") !== "open") throw new HttpsError("failed-precondition", "答えが届いた質問は取り下げられません。");
+    if (!mine) {
+      tx.update(ref, { alsoAskerIds: FieldValue.arrayRemove(uid) });
+      return { withdrawn: false };
+    }
+    if (also.length) {
+      // the next one who joined becomes the one who asked (their name is not known here)
+      const [next, ...rest] = also;
+      tx.update(ref, { askerId: next, askerName: "若手", askerRole: "young", excludeVeteranId: null, alsoAskerIds: rest });
+      return { withdrawn: false };
+    }
+    tx.update(ref, { status: "withdrawn", photo: null, withdrawnAt: Timestamp.now() });
+    return { withdrawn: true };
+  });
 }

@@ -75,7 +75,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
       const r = await call<PartResult>("identifyPart", body);
       setRes(r);
       setQ(r.name && r.verdict !== "unknown" ? `これは「${r.name}」で合っていますか？使い方も教えてください。` : "これは何という部材ですか？使い方も教えてください。");
-      if (r.name && r.verdict !== "unknown") addPart({ name: r.name, use: r.use, at: Date.now(), thumb: thumbFrom ? await shrink(thumbFrom, 160, 0.7) : "" });
+      if (r.name && r.verdict !== "unknown") addPart({ name: r.name, use: r.use, at: Date.now(), thumb: thumbFrom ? await shrink(thumbFrom, 160, 0.7) : "", fieldNames: r.fieldNames, printed: r.printed, confusables: r.confusables, companions: r.companions });
     } catch (e) {
       setErr(errorText(e, "調べられませんでした。電波の良い所で、もう一度撮ってください"));
     } finally {

@@ -30,6 +30,11 @@ export interface PartEntry {
   use: string;
   at: number;
   thumb: string; // data URL, about 160px
+  // what 撮る said about it (entries from before these were kept have only the four above)
+  fieldNames?: string[];
+  printed?: string;
+  confusables?: { name: string; diff: string }[];
+  companions?: string[];
 }
 export function getParts(): PartEntry[] {
   try {
@@ -37,6 +42,9 @@ export function getParts(): PartEntry[] {
   } catch {
     return [];
   }
+}
+export function savePart(p: PartEntry) {
+  set("oyakata.parts", JSON.stringify(getParts().map((x) => (x.name === p.name ? p : x))));
 }
 export function addPart(p: PartEntry) {
   const list = [p, ...getParts().filter((x) => x.name !== p.name)].slice(0, 60);
