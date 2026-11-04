@@ -23,6 +23,7 @@ interface Judged {
   regions: { x: number; y: number; w: number; h: number; what: string }[];
   confusables: { name: string; diff: string }[];
   companions: string[];
+  askIdeas: string[];
   searchTerms: string[];
   spec: { conduitType: string; conduitSize: number; breakerAmps: number };
   cardIds: string[];
@@ -56,6 +57,7 @@ const SCHEMA = {
       items: { type: "object", properties: { name: { type: "string" }, diff: { type: "string" } }, required: ["name", "diff"], additionalProperties: false },
     },
     companions: { type: "array", items: { type: "string" } },
+    askIdeas: { type: "array", items: { type: "string" } },
     searchTerms: { type: "array", items: { type: "string" } },
     cardIds: { type: "array", items: { type: "string" } },
     lawIds: { type: "array", items: { type: "string" } },
@@ -66,7 +68,7 @@ const SCHEMA = {
       additionalProperties: false,
     },
   },
-  required: ["verdict", "name", "fieldNames", "use", "candidates", "printed", "regions", "confusables", "companions", "searchTerms", "spec", "cardIds", "lawIds"],
+  required: ["verdict", "name", "fieldNames", "use", "candidates", "printed", "regions", "confusables", "companions", "askIdeas", "searchTerms", "spec", "cardIds", "lawIds"],
   additionalProperties: false,
 };
 
@@ -80,6 +82,7 @@ const SYSTEM = `電気工事の若手（資格なし〜第二種電気工事士�
 - regions: 印字・銘板・型番があるのに小さくて読み切れない所の位置（写真全体を 0〜1 とした左上x・y・幅w・高さh）。2つまで。読めた・無いなら空
 - confusables: 間違えやすい部材と違い（例 PF管とCD管: CDはオレンジでコンクリート埋設専用）。2つまで、diff は40字以内
 - companions: 一緒に使う物（例 PF管 → コネクタ、カップリング、サドル）。4つまで
+- askIdeas: この部材の写真を撮った若手が、現場で親方に聞きそうなこと。名前や用途（もう上で答えたこと）ではなく、この現場での使い方・選び方・取り付け方の判断を聞く質問を3つ、それぞれ30字以内（例 サドル →「サドルの間隔はどれくらい？」「この管にこのサドルで合ってますか？」）。unknown なら空
 - searchTerms: この部材を探す時の言葉（部材の名前・呼び名・使う場面）。5つまで
 - cardIds: 下の「社内の知恵カード」のうち、この部材を扱う時に本当に役立つものの id（3つまで、無ければ空）。言葉が似ているだけのものは選ばない
 - lawIds: 下の「法令・基準」のうち、この部材の選び方・施工に直接関係するものの id（3つまで）。関係が薄いものは選ばない
@@ -177,6 +180,7 @@ export async function identifyPart(data: Record<string, unknown>, uid: string) {
       regions: [],
       confusables: [],
       companions: [],
+      askIdeas: ["PF管の支持の間隔はどれくらい？", "この場所でPF管を使って大丈夫ですか？", "ボックスとのつなぎ方で合ってますか？"],
       searchTerms: ["PF管"],
       spec: { conduitType: "PF", conduitSize: 22, breakerAmps: 0 },
       cardIds: [],
@@ -222,6 +226,8 @@ export async function identifyPart(data: Record<string, unknown>, uid: string) {
     zoomed,
     confusables: j.confusables.slice(0, 2),
     companions: j.companions.slice(0, 4),
+    // questions for the veteran that fit this part (the general ones on the screen do not: 「つなぎ方」 for a saddle)
+    askIdeas: j.verdict === "unknown" ? [] : (j.askIdeas ?? []).filter((x) => typeof x === "string" && x.trim() && x.length <= 40).slice(0, 3),
     cards,
     laws,
     calc: calcLink(j.spec),

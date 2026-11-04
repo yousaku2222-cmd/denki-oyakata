@@ -12,6 +12,8 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
   // a small JPEG from ⑤撮る ("これ何ですか？"); kept in the question itself, so no storage bucket is needed
   const photo = typeof data.photo === "string" ? data.photo : "";
   if (photo && (photo.length > 300_000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(photo))) throw new HttpsError("invalid-argument", "写真が大きすぎるか、形式が違います");
+  // what ⑤撮る's AI took the part for, so the veteran sees the question the way the young worker saw it
+  const photoPart = photo ? str(data.photoPart, "写真の部材", 80, false) : "";
   // No Claude here, but every veteran's device downloads the open questions (photos included): cap the posts too.
   await takeQuota(askerId, "box", ctx?.ip);
   const companyId = spaceOf(data, uid); // 審査員モードなら本人にだけ見える
@@ -60,6 +62,7 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
       photoUrl: null,
       photo: photo || null,
       hasPhoto: !!photo, // so the list can say so without reading the photo
+      photoPart: photoPart || null,
       followUp,
       status: "open",
       goodBy: [],
@@ -95,7 +98,7 @@ export async function openQuestions(data: Record<string, unknown>, uid: string) 
     .collection("questions")
     .where("companyId", "in", spacesOf(data, uid))
     .where("status", "==", "open")
-    .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "alsoAskerIds", "createdAt", "hasPhoto", "followUp", "lastAskedAt")
+    .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "alsoAskerIds", "createdAt", "hasPhoto", "photoPart", "followUp", "lastAskedAt")
     .get();
   const lastAsked = (d: FirebaseFirestore.QueryDocumentSnapshot) => ms(d.get("lastAskedAt")) || ms(d.get("createdAt"));
   const list = snap.docs.filter((d) => d.get("excludeVeteranId") !== uid).sort((a, b) => lastAsked(b) - lastAsked(a));
@@ -107,6 +110,7 @@ export async function openQuestions(data: Record<string, unknown>, uid: string) 
       askerName: (d.get("askerName") as string) || "若手",
       askerRole: d.get("askerRole") as string,
       hasPhoto: d.get("hasPhoto") !== false, // questions from before the flag: offer to look
+      photoPart: (d.get("photoPart") as string | null | undefined) ?? null,
       good: ((d.get("goodBy") as string[] | undefined) ?? []).includes(uid),
       askers: 1 + ((d.get("alsoAskerIds") as string[] | undefined) ?? []).length,
       // the earlier question and the card that answered it (no ids of people)
@@ -124,7 +128,7 @@ export async function openQuestions(data: Record<string, unknown>, uid: string) 
 export async function questionPhoto(data: Record<string, unknown>, uid: string) {
   const q = await db.collection("questions").doc(str(data.questionId, "質問の番号", 64)).get();
   if (!q.exists || !spacesOf(data, uid).includes(q.get("companyId") as string)) throw new HttpsError("not-found", "質問が見つかりません。");
-  return { photo: (q.get("photo") as string | null) || null };
+  return { photo: (q.get("photo") as string | null) || null, photoPart: (q.get("photoPart") as string | null | undefined) ?? null };
 }
 
 /** The questions this device asked, and the card that answered each. */

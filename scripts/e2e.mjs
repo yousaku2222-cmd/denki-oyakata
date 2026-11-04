@@ -166,8 +166,11 @@ check("the box shows it once, asked by 2", inBox.length === 1 && inBox[0].askers
 await call("markGoodQuestion", { questionId: s1.questionId }, vet2);
 const seen2 = (await call("myQuestions", {}, asker2)).questions.find((q) => q.id === s1.questionId);
 check("the one who joined sees it on わたし, with the いい質問", seen2?.askers === 2 && seen2?.good === 1);
-const photoQ = await call("sendToBox", { text: "ジョイントボックスの中の結線は何で留める？", photo: "data:image/jpeg;base64,/9j/4AAQ", askerName: "若手1", askerRole: "young" }, asker1);
+const photoQ = await call("sendToBox", { text: "ジョイントボックスの中の結線は何で留める？", photo: "data:image/jpeg;base64,/9j/4AAQ", photoPart: "ジョイントボックス", askerName: "若手1", askerRole: "young" }, asker1);
 check("a photo question is never merged", !photoQ.duplicate && !photoQ.merged && photoQ.questionId !== s1.questionId);
+const seenPart = (await call("openQuestions", {}, vet)).questions.find((q) => q.id === photoQ.questionId)?.photoPart;
+const openedPart = (await call("questionPhoto", { questionId: photoQ.questionId }, vet)).photoPart;
+check("the veteran sees what the AI took the photo for", seenPart === "ジョイントボックス" && openedPart === "ジョイントボックス");
 const jd3 = await call("draftCard", { transcript: [{ role: "veteran", text: "（テスト用）ジョイントボックスの結線は差込形コネクタで留める。" }], authorName: "山田（親方）", triggerQuestionId: s1.questionId }, vet2);
 await call("publishCard", { cardId: jd3.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...jd3.draft, tags: ["ジョイントボックス"] } }, vet2);
 const done2 = (await call("myQuestions", {}, asker2)).questions.find((q) => q.id === s1.questionId);

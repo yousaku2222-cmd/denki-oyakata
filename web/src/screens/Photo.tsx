@@ -20,6 +20,7 @@ interface PartResult {
   zoomed: number;
   confusables: { name: string; diff: string }[];
   companions: string[];
+  askIdeas?: string[]; // questions for the veteran that fit this part
   cards: { id: string; title: string; body: string; reason: string; caution: string; author: string }[];
   laws: { id: string; label: string; summary: string }[];
   calc: ({ label: string } & CalcStart) | null;
@@ -106,7 +107,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
       // the box takes up to 300,000 characters: step the size down for busy photos
       let photo = await shrink(file, 1024, 0.7);
       if (photo.length > 290_000) photo = await shrink(file, 800, 0.6);
-      await call("sendToBox", { text: q.trim(), photo, askerName: getName("young"), askerRole: "young" });
+      await call("sendToBox", { text: q.trim(), photo, photoPart: res && res.verdict !== "unknown" ? res.name : "", askerName: getName("young"), askerRole: "young" });
       setSent(true);
       fly(from);
     } catch (e) {
@@ -254,7 +255,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
             <>
               <MicInput value={q} onChange={setQ} maxLength={500} rows={3} micLabel="話して入力" placeholder="例: このつなぎ方で合ってますか？" />
               <div className="examples">
-                {PHOTO_QUESTIONS.map((x) => (
+                {(res.askIdeas?.length ? res.askIdeas : PHOTO_QUESTIONS).map((x) => (
                   <button key={x} className="chip" onClick={() => setQ(x)}>
                     {x}
                   </button>

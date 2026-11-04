@@ -10,6 +10,7 @@ interface Q {
   askerName: string;
   askerRole: string;
   hasPhoto: boolean;
+  photoPart?: string | null; // what ⑤撮る's AI took the photo for
   good: boolean;
   askers: number; // people who sent this same question
   followUp: { text: string; cardTitle: string | null } | null; // asked under an answer a veteran gave
@@ -152,6 +153,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
                     📷 写真を見る
                   </button>
                 ))}
+              {q.hasPhoto && q.photoPart && <p className="src-meta">📷 写真の物（AIの判定）：{q.photoPart}</p>}
               {q.followUp && (
                 <p className="follow-chip">
                   🔗 続き：前の質問「{q.followUp.text}」{q.followUp.cardTitle ? `→ カード「${q.followUp.cardTitle}」` : ""}

@@ -29,11 +29,11 @@ export async function interviewNext(data: Record<string, unknown>) {
     const q = DUMMY_FOLLOW_UPS[asked];
     return { done: !q, question: q ?? "", mode: "dummy" };
   }
-  const topic = str(data.questionText, "質問", 500, false);
+  const topic = str(data.questionText, "質問", 1200, false);
   const r = await jsonCall<{ done: boolean; question: string }>({
     model: MODEL_ANSWER,
     system: INTERVIEW_SYSTEM,
-    user: `${topic ? `若手からの質問（これに答える話です）: ${topic}\n\n` : ""}これまでのやりとり:\n${transcriptText(transcript)}`,
+    user: `${topic ? `若手からの質問（これに答える話です）: ${topic}\n${topic.includes("写真の物は") ? "（写真の物と質問の言葉が合わない時は、若手の聞き方がずれているだけのことが多い。親方が写真の物について役立つ話をしていれば、それで良い）\n" : ""}\n` : ""}これまでのやりとり:\n${transcriptText(transcript)}`,
     schema: {
       type: "object",
       properties: { done: { type: "boolean" }, question: { type: "string" } },

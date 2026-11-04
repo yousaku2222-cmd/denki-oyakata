@@ -85,13 +85,18 @@ export function Talk({
   const toldShown = turns.length ? turns : told;
   // the young worker's photo, to look at again while telling and while checking the draft
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoPart, setPhotoPart] = useState<string | null>(null); // what ⑤撮る's AI took it for: the question may not fit the photo
   const [photoBig, setPhotoBig] = useState(false);
   const photoQuestion = topic?.hasPhoto === false ? "" : (topic?.questionId ?? "");
   useEffect(() => {
     if (!photoQuestion) return;
     let live = true;
-    call<{ photo: string | null }>("questionPhoto", { questionId: photoQuestion })
-      .then((r) => live && setPhoto(r.photo))
+    call<{ photo: string | null; photoPart: string | null }>("questionPhoto", { questionId: photoQuestion })
+      .then((r) => {
+        if (!live) return;
+        setPhoto(r.photo);
+        setPhotoPart(r.photo ? r.photoPart : null);
+      })
       .catch(() => {}); // the question still shows; only the photo is missing
     return () => {
       live = false;
@@ -111,6 +116,7 @@ export function Talk({
           <span>{photoBig ? "押すと小さくなります" : "押すと大きくなります"}</span>
         </button>
       )}
+      {photoPart && <span className="src-meta">📷 写真の物（AIの判定）：{photoPart}</span>}
     </Notice>
   );
 
@@ -128,7 +134,7 @@ export function Talk({
     try {
       const r = finish
         ? { done: true, question: "" }
-        : await call<{ done: boolean; question: string }>("interviewNext", { transcript: t, questionText: topic?.followUp ? `前の質問「${topic.followUp.text}」の続きです。${topic.text}` : topic?.text });
+        : await call<{ done: boolean; question: string }>("interviewNext", { transcript: t, questionText: topic && `${topic.followUp ? `前の質問「${topic.followUp.text}」の続きです。` : ""}${topic.text}${photoPart ? `（写真の物は、AIの判定では「${photoPart}」）` : ""}` });
       // only now: if the call failed, what was said stays in the box and can be sent again
       setTurns(t);
       setText("");
