@@ -59,10 +59,12 @@ export function Talk({
   const dirty = !published && (draft ? snapshot !== saved : turns.length > 0 || !!text.trim());
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
 
+  // the interview behind an opened card (a new draft uses the turns of this session)
+  const [told, setTold] = useState<Turn[]>([]);
   // opened from わたしのカード: go on with a draft (or fix a published card)
   useEffect(() => {
     if (!resumeCardId) return;
-    call<{ cardId: string; status: "draft" | "published" | "private"; draft: Draft; authorName: string; showAuthorName: boolean; topic: { questionId: string; text: string; askerName: string } | null }>("myCard", { cardId: resumeCardId })
+    call<{ cardId: string; status: "draft" | "published" | "private"; draft: Draft; authorName: string; showAuthorName: boolean; topic: { questionId: string; text: string; askerName: string } | null; transcript: Turn[] }>("myCard", { cardId: resumeCardId })
       .then((r) => {
         setCardId(r.cardId);
         setStatus(r.status);
@@ -72,11 +74,13 @@ export function Talk({
         if (r.authorName) setNameState(r.authorName);
         setSaved(JSON.stringify([r.draft, r.draft.tags.join("、"), r.showAuthorName, r.authorName || name]));
         if (r.topic) setTopic(r.topic);
+        setTold(r.transcript ?? []);
       })
       .catch((e) => setErr(errorText(e, "カードを開けませんでした。もう一度お試しください。")))
       .finally(() => setBusy(false));
   }, [resumeCardId]);
 
+  const toldShown = turns.length ? turns : told;
   // the young worker's photo, to look at again while telling and while checking the draft
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoBig, setPhotoBig] = useState(false);
@@ -200,6 +204,19 @@ export function Talk({
       <section className="screen">
         <h1 className="screen-title">{status === "draft" ? "知恵カードの下書き" : "知恵カードを直す"}</h1>
         {topicNote}
+        {toldShown.length > 0 && (
+          <details className="told">
+            <summary>🎙️ 聞き取りのやりとり（直す前に、話した内容を確かめる）</summary>
+            <ol className="transcript">
+              {toldShown.map((x, i) => (
+                <li key={i} className={x.role}>
+                  <span className="who">{x.role === "ai" ? "AI" : "あなた"}</span>
+                  {x.text}
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
         <p className="hint">
           {status === "draft"
             ? "中身を確かめてください。直してから公開できます。公開するまで、誰にも見えません。"

@@ -287,6 +287,8 @@ export async function myCard(data: Record<string, unknown>, uid: string) {
     authorName: (priv.get("authorName") as string | undefined) ?? card.authorName,
     showAuthorName: card.showAuthorName,
     topic: card.triggerQuestionText ? { questionId: card.triggerQuestionId ?? "", text: card.triggerQuestionText, askerName: card.triggerAskerName ?? "若手" } : null,
+    // what was told (and asked back), to the writer only: so a later fix keeps to what was really said
+    transcript: ((priv.get("transcript") as Turn[] | undefined) ?? card.transcript ?? []).slice(0, 60),
   };
 }
 

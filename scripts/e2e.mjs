@@ -97,6 +97,7 @@ await call("setCardStatus", { cardId: d.cardId, status: "published" }, vet);
 const left = await call("draftCard", { transcript: [{ role: "veteran", text: "（テスト用）下書きのまま置いておく話。" }], authorName: "山田（親方）" }, vet);
 const opened = await call("myCard", { cardId: left.cardId }, vet);
 check("a draft can be opened again", opened.status === "draft" && opened.authorName === "山田（親方）");
+check("the writer gets back what was told, to fix it by", opened.transcript?.[0]?.text === "（テスト用）下書きのまま置いておく話。");
 try { await call("myCard", { cardId: left.cardId }, young); check("someone else cannot open my draft", false); }
 catch (e) { check("someone else cannot open my draft", /permission-denied|PERMISSION_DENIED/.test(String(e))); }
 await call("deleteDraft", { cardId: left.cardId }, vet);

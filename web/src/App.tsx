@@ -4,7 +4,7 @@ import { Ask } from "./screens/Ask";
 import { SENT_TO_BOX } from "./FlyToMe";
 import { Talk, type Topic } from "./screens/Talk";
 import { Box } from "./screens/Box";
-import { MyCards } from "./screens/MyCards";
+import { MyCards, newlyHelped } from "./screens/MyCards";
 import { Me, lastSeen as meLastSeen } from "./screens/Me";
 import { Browse } from "./screens/Browse";
 import { Calc } from "./screens/Calc";
@@ -42,6 +42,14 @@ export default function App() {
     call<{ questions: { answeredAt: number }[] }>("myQuestions", {})
       .then((r) => r.questions.some((q) => q.answeredAt > meLastSeen()) && setMeDot(true))
       .catch(() => {}); // only a hint: without it, わたし still shows the news when opened
+  }, [role]);
+  // a veteran's card that helped someone since わたしのカード was last opened: dot on that tab when the app opens
+  const [cardsDot, setCardsDot] = useState(false);
+  useEffect(() => {
+    if (role !== "veteran") return;
+    call<{ cards: { id: string; helpedCount: number; status: string }[] }>("myCards", {})
+      .then((r) => newlyHelped(r.cards).length > 0 && setCardsDot(true))
+      .catch(() => {}); // only a hint
   }, [role]);
   useEffect(() => {
     const on = () => setMeDot(true);
@@ -150,13 +158,14 @@ export default function App() {
             onClick={() => {
               if (t.id === "calc") setCalcStart(null);
               if (t.id === "me") setMeDot(false);
+              if (t.id === "mycards") setCardsDot(false);
               setAskSeed(null); // a tab press opens 聞く empty, not with the last question
               setTab(t.id); // 話す keeps what was being told; 「続けて話す」 starts a new one
             }}
           >
             <span className="tab-icon">
               {t.icon}
-              {t.id === "me" && meDot && <span className="tab-dot" aria-label="新しい知らせ" />}
+              {((t.id === "me" && meDot) || (t.id === "mycards" && cardsDot)) && <span className="tab-dot" aria-label="新しい知らせ" />}
             </span>
             <span className="tab-label">{t.label}</span>
           </button>

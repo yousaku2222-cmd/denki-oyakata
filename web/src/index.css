@@ -1603,3 +1603,49 @@ input[inputmode="decimal"] {
   border-left: 3px solid var(--wisdom);
   padding-left: 8px;
 }
+
+/* わたしのカード: the 👍 that came in since last time */
+.helped-news {
+  border: 2px solid var(--yellow);
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--surface);
+}
+.helped-news-head {
+  margin: 0;
+  font-weight: 800;
+}
+.helped-news ul {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+}
+.fresh-chip {
+  margin-left: 6px;
+  background: var(--yellow);
+  color: var(--navy);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+/* 直す: what was told, folded above the fields */
+.told {
+  margin: 8px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: var(--surface);
+}
+.told summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+.told .transcript {
+  margin-top: 8px;
+}
+.told .who {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
