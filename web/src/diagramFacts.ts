@@ -35,14 +35,14 @@ export const BEND_FACTS: BendFact[] = [
   { lawId: "shiyo-2.4.3", pipe: "硬質ビニル管（VE管）", when: BEND_WHEN, sources: BEND_SOURCES, bends: 4, total: 270, each: 90 },
 ];
 
-// Each article has its own value: 金属管 2m, PF・CD管の隠ぺい 1.5m, 露出 1m, 硬質ビニル管 1.5m, 可とう管 1m.
+// Each article has its own value: 金属管 2m, PF・CD管の隠ぺい 1.5m, PF管の露出 1m (CD管は露出に使えない: 電技解釈 第158条), 硬質ビニル管 1.5m, 可とう管 1m.
 // 2.3.3 (6) 「1ｍ以下の間隔で鉄筋に結束」 is about rebar, not saddles: 「取付け間隔」 keeps it out.
 const SADDLE = ["取付け間隔", "サドル"];
 export const SUPPORT_FACTS: SupportFact[] = [
   { lawId: "kaishaku-158", pipe: "合成樹脂管", when: ["支持点間"], sources: ["管の支持点間の距離は1.5m以下とし"], meters: 1.5 },
   { lawId: "shiyo-2.2.3", pipe: "金属管", when: SADDLE, sources: ["管の支持は、サドル、ハンガ等を使用し、その取付け間隔は 2ｍ以下とする"], meters: 2 },
   { lawId: "shiyo-2.3.3", pipe: "PF管・CD管（隠ぺい）", when: SADDLE, sources: ["その取付け間隔は 1.5ｍ以下とする"], meters: 1.5 },
-  { lawId: "shiyo-2.3.4", pipe: "PF管・CD管（露出）", when: SADDLE, sources: ["管の支持は、サドル、クリップ、ハンガ等を使用し、その取付け間隔は 1ｍ以下とする"], meters: 1 },
+  { lawId: "shiyo-2.3.4", pipe: "PF管（露出）", when: SADDLE, sources: ["管の支持は、サドル、クリップ、ハンガ等を使用し、その取付け間隔は 1ｍ以下とする"], meters: 1 },
   { lawId: "shiyo-2.4.3", pipe: "硬質ビニル管（VE管）", when: SADDLE, sources: ["管の支持は、サドル、ハンガ等を使用し、その取付け間隔は、1.5ｍ以下とする"], meters: 1.5 },
   // the ただし (縦に通して人が触れない所は 2m) is left to the original: the figure shows the usual case
   { lawId: "shiyo-2.5.3", pipe: "金属製可とう電線管", when: SADDLE, sources: ["管の支持は、サドル、ハンガ等を使用し、その取付け間隔は、1ｍ以下とする"], meters: 1 },

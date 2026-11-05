@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { confirmOf, sendToBox, type ClarityInput, type Judge } from "./box";
 import { db } from "./common";
-import { today } from "./limits";
+import { CAPS, today } from "./limits";
 
 test("only a clear 'does not get across' holds a question", () => {
   assert.equal(confirmOf({ clear: true, reason: "", suggestion: "" }, "PF管の支持は？"), null);
@@ -61,4 +61,29 @@ test("a question that gets across goes straight in; a photo question is judged a
   assert.ok("questionId" in r && r.questionId);
   assert.deepEqual(seen, [{ text: "これは何？", photo: true, photoPart: "ジョイントボックス", before: null }]);
   assert.equal((await mine(uid)).length, 1);
+});
+
+const checkCount = async (uid: string) => ((await db.collection("usage").doc(`${today()}_bc_${uid}`).get()).get("count") as number | undefined) ?? 0;
+
+test("over the day's count of checks, the question is sent without a check", emu, async () => {
+  const uid = `check-${randomUUID()}`;
+  await db.collection("usage").doc(`${today()}_bc_${uid}`).set({ count: CAPS.boxCheck.user, day: today() });
+  let asked = 0;
+  const judge: Judge = async () => (asked++, { clear: false, reason: "x", suggestion: "" });
+  const r = await sendToBox({ text: `ブレーカー あの 上がらん ${uid}` }, uid, undefined, judge);
+  assert.equal(asked, 0);
+  assert.ok("questionId" in r && r.questionId);
+  assert.equal((await mine(uid)).length, 1);
+  assert.equal(await checkCount(uid), CAPS.boxCheck.user); // nothing added to a full count
+});
+
+test("a check that fails gives its count back, and the question is sent", emu, async () => {
+  const uid = `check-${randomUUID()}`;
+  const judge: Judge = async () => {
+    throw new Error("broken reply");
+  };
+  const r = await sendToBox({ text: `PF管の支持の間隔は？ ${uid}` }, uid, undefined, judge);
+  assert.ok("questionId" in r && r.questionId);
+  assert.equal(await checkCount(uid), 0);
+  assert.equal(await boxCount(uid), 1); // the question itself is counted once, as sent
 });

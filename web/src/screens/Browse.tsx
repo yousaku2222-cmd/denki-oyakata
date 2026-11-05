@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { call, db, spaces } from "../firebase";
+import { onSnapshot } from "firebase/firestore";
+import { call, youngCards } from "../firebase";
 import { CATEGORY_LABEL, LOCATION_LABEL, LoadFailed, Skeleton, authorOf, fmtDate, type Card } from "../components";
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
 import { Meanings, PlainNote, useCardWords, useGlossary } from "../Glossary";
@@ -148,7 +148,7 @@ function CardList() {
   useEffect(() => {
     setFailed(false);
     return onSnapshot(
-      query(collection(db, "cards"), where("companyId", "in", spaces()), where("status", "==", "published")),
+      youngCards(), // only cards let out by the check (firestore.rules refuses the others)
       (snap) =>
         setCards(
           snap.docs

@@ -1,0 +1,9 @@
+でんきの親方 - 画像について / About the images
+
+このフォルダの画像（bag.png、flow/、icons/、favicon.svg など）は、このアプリのために作ったものです。
+アプリのソースコードのライセンス（AGPL-3.0）の対象外で、ほかでの再利用はできません。
+
+The images in this folder (bag.png, flow/, icons/, favicon.svg, etc.) were made for this app.
+They are not covered by the source code's license (AGPL-3.0) and may not be reused elsewhere.
+
+Copyright (C) 2026 Yusaku Mizogami

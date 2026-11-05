@@ -60,6 +60,44 @@ check("answer grounded in the card", a.grounded && a.sentences.some((s) => s.sou
 if (a.mode === "claude") for (const s of a.sentences) console.log(`     [${s.source}] ${s.text}`);
 await call("markHelped", { answerId: a.answerId }, young);
 
+// 3b. The mark of a card let out by the check (lawCheckVer): a published card without it (from before the check, or
+// written some other way) reaches young workers nowhere. Written here as the admin would, without going through publishCard.
+const card = (doc) => doc.fields;
+const asAdmin = { "Content-Type": "application/json", Authorization: "Bearer owner" };
+const sv = (v) => ({ stringValue: v });
+const UNMARKED = "（テスト）足場板の結束は、番線を必ず3回まわして締める。";
+const unmarkedId = "e2e-unmarked-card";
+await fetch(`${FS}/cards?documentId=${unmarkedId}`, {
+  method: "POST",
+  headers: asAdmin,
+  body: JSON.stringify({ fields: { companyId: sv("demo"), status: sv("published"), title: sv("（テスト）足場板の結束"), scene: sv(""), body: sv(UNMARKED), reason: sv(""), caution: sv(""), tags: { arrayValue: { values: [sv("足場板"), sv("番線"), sv("結束")] } }, authorName: sv(""), showAuthorName: { booleanValue: false }, helpedCount: { integerValue: "0" }, viewCount: { integerValue: "0" }, publishedAt: { timestampValue: new Date().toISOString() } } }),
+});
+check("a published card without the mark is not readable by young workers", (await fetch(`${FS}/cards/${unmarkedId}`, { headers: { Authorization: `Bearer ${young}` } })).status === 403);
+check("the marked card is readable", card(await (await fetch(`${FS}/cards/${d.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).json())?.lawCheckVer?.integerValue === "1");
+// 探す reads the cards with a query: it must ask for the mark (firestore.rules refuses a query that could return others)
+const listQuery = (withMark) => fetch(`${FS}:runQuery`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", Authorization: `Bearer ${young}` },
+  body: JSON.stringify({ structuredQuery: { from: [{ collectionId: "cards" }], where: { compositeFilter: { op: "AND", filters: [
+    { fieldFilter: { field: { fieldPath: "companyId" }, op: "IN", value: { arrayValue: { values: [sv("demo")] } } } },
+    { fieldFilter: { field: { fieldPath: "status" }, op: "EQUAL", value: sv("published") } },
+    ...(withMark ? [{ fieldFilter: { field: { fieldPath: "lawCheckVer" }, op: "EQUAL", value: { integerValue: "1" } } }] : []),
+  ] } } } }),
+});
+const listed = await listQuery(true);
+const listedIds = listed.ok ? (await listed.json()).filter((x) => x.document).map((x) => x.document.name.split("/").pop()) : [];
+check("探す's query lists marked cards only", listed.ok && listedIds.includes(d.cardId) && !listedIds.includes(unmarkedId), `${listed.status} ${listedIds.length} card(s)`);
+check("a query that does not ask for the mark is refused", (await listQuery(false)).status === 403);
+const ua = await call("ask", { text: "足場板の結束は番線を何回まわす？", askerRole: "young" }, young);
+check("a card without the mark is used by no answer", !ua.cards.some((c) => c.id === unmarkedId) && !ua.sentences.some((x) => x.cardId === unmarkedId), `[${ua.mode}] cards: ${ua.cards.map((c) => c.id).join(",") || "none"}`);
+
+// 3c. The standard-Japanese wording is checked too: rewritten after the check, publishing is refused
+let plainChanged = "";
+try { await call("publishCard", { cardId: d.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...kept, plain: "（テスト）PF管は何回曲げてもかまいません。" } }, vet); } catch (e) { plainChanged = String(e); }
+check("only the standard-Japanese wording rewritten after the check: refused", /FAILED_PRECONDITION/.test(plainChanged) && plainChanged.includes("照らし合わせ"), plainChanged.slice(0, 120));
+const dNow = card(await (await fetch(`${FS}/cards/${d.cardId}`, { headers: asAdmin })).json());
+check("the refused wording is not on the card", !JSON.stringify(dNow).includes("何回曲げてもかまいません"));
+
 // 4. Unknown question goes to the box; veteran answers it; young sees it answered.
 const u = await call("ask", { text: "新しい現場の朝礼は何時からですか？", askerRole: "young" }, young);
 check("ungrounded question detected", !u.grounded);
@@ -300,8 +338,10 @@ try { await call("publishCard", pubData, vet3); } catch (e) { beforeCheck = Stri
 check("a card is not published before it is checked", /FAILED_PRECONDITION/.test(beforeCheck) && beforeCheck.includes("条文との照らし合わせをしてから公開してください"), beforeCheck.slice(0, 120));
 const lc = await call("checkCard", { cardId: ld.cardId, edits }, vet3);
 const FIELDS = ["title", "scene", "body", "reason", "caution"];
+const termLine = (t) => `${t.word.trim()}：${t.meaning.trim().replace(/\s+/g, " ")}`;
+const onEdits = (e, x) => (x.field === "terms" ? (e.terms ?? []).some((t) => termLine(t) === x.text) : (e[x.field] ?? "").includes(x.text));
 const shaped = Array.isArray(lc.items) && lc.items.every((x) =>
-  FIELDS.includes(x.field) && edits[x.field].includes(x.text) && ["same", "stricter", "differs", "unsure"].includes(x.verdict) &&
+  [...FIELDS, "plain", "terms"].includes(x.field) && onEdits(edits, x) && ["same", "stricter", "differs", "unsure"].includes(x.verdict) &&
   (x.verdict === "unsure" ? !x.quote : !!x.lawId && !!x.quote) && (x.verdict === "differs" || x.verdict === "unsure" ? !!x.note : !x.note));
 check("each mark is on a sentence of the card, with a quote from the article (or 要確認)", shaped, `[${lc.mode}] ${lc.items.length} marks, ${lc.lawCount} articles`);
 for (const x of lc.items) console.log(`     [${x.verdict}] ${x.text}  ${x.note}  ${x.label}「${x.quote}」`);
@@ -332,7 +372,7 @@ if (lc.mode === "claude") {
   check("the card carries its ✅ / 🟦 sentences with the article and the checked quote", refs.length === agreed.length && refs.every((r) => agreed.some((x) => x.text === r.text && x.verdict === r.verdict && x.lawId === r.lawId && x.quote === r.quote && x.field === r.field) && (doc.fields?.[r.field]?.stringValue ?? "").includes(r.text) && !!r.label), `${refs.length} link(s): ${refs.map((r) => `[${r.verdict}] ${r.label}`).join(" / ")}`);
   check("a held-back sentence is never linked to an article", held.every((t) => !refs.some((r) => r.text === t)) && refs.every((r) => r.verdict === "same" || r.verdict === "stricter"));
   const mineFull = await call("myCard", { cardId: ld.cardId }, vet3);
-  check("わたしのカード keeps the veteran's whole card", held.every((t) => FIELDS.some((f) => mineFull.draft[f].includes(t))) && mineFull.draft.body === edits.body.trim() && (await call("myCards", {}, vet3)).cards[0]?.title === edits.title);
+  check("わたしのカード keeps the veteran's whole card", lc.items.filter((x) => held.includes(x.text)).every((x) => onEdits(mineFull.draft, x)) && mineFull.draft.body === edits.body.trim() && (await call("myCards", {}, vet3)).cards[0]?.title === edits.title);
   const la = await call("ask", { text: "資格がなくてもコンセントの取り替えはしていいですか？", askerRole: "young" }, young);
   const said = la.sentences.map((x) => x.text).join(" ");
   for (const x of la.sentences) console.log(`     [${x.source}] ${x.text}`);

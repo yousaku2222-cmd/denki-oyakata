@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { collection, getCountFromServer, query, where } from "firebase/firestore";
-import { db, spaces } from "./firebase";
+import { getCountFromServer } from "firebase/firestore";
+import { youngCards } from "./firebase";
 
 interface DraftLike {
   title: string;
@@ -123,7 +123,7 @@ export function CardBirth({ said, draft, onDone }: { said: string[]; draft: Draf
 export function IntoTheBag({ title }: { title: string }) {
   const [count, setCount] = useState<number | null>(null);
   useEffect(() => {
-    getCountFromServer(query(collection(db, "cards"), where("companyId", "in", spaces()), where("status", "==", "published")))
+    getCountFromServer(youngCards())
       .then((s) => setCount(s.data().count))
       .catch(() => setCount(null)); // the bag still shows, just without the number
   }, []);

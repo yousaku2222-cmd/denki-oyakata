@@ -8,14 +8,18 @@ import { CalcInputError } from "./calc/types";
 import { MODEL_ANSWER, MODEL_ROUTER, MODEL_SUMMARY } from "./models";
 import { scoreCard, searchCards } from "./search";
 import { LAWS_VERSION, Law, getLawById, numbersMissing, quoteIsInOriginal, quoteSentence, searchLaws } from "./laws";
-import { COMPANY, CardDoc, Sentence, db, displayAuthor, safetyNote, spaceOf, spacesOf, str } from "./common";
+import { COMPANY, CardDoc, Sentence, db, displayAuthor, reachesYoung, safetyNote, spaceOf, spacesOf, str } from "./common";
 
 export type Card = CardDoc & { id: string };
 
-/** The shared cards, plus the caller's own trial cards when they came in as a judge (see spaceOf). */
+/**
+ * The shared cards, plus the caller's own trial cards when they came in as a judge (see spaceOf). Only cards let out
+ * by the check against the articles (common.ts reachesYoung: published with the mark): a card without it is used by
+ * no answer and no photo, whatever its status says.
+ */
 export async function publishedCards(spaces = [COMPANY]): Promise<Card[]> {
   const snap = await db.collection("cards").where("companyId", "in", spaces).where("status", "==", "published").get();
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as CardDoc) }));
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as CardDoc) })).filter(reachesYoung);
 }
 
 interface Routed {
@@ -216,6 +220,7 @@ const cardStamp = (c: Card) =>
     c.id, c.title, c.scene, c.body, c.reason, c.caution, c.tags, c.triggerSearchText ?? null, c.triggerQuestionText ?? null, c.triggerAskerName ?? null, c.showAuthorName, c.authorName, c.publishedAt?.toMillis?.() ?? 0,
     ...(c.terms?.length || c.plain ? [c.terms ?? [], c.plain ?? ""] : []),
     ...(c.lawCheck ? [{ lawCheck: c.lawCheck }] : []),
+    c.lawCheckVer ?? 0, // the mark that it was let out by the check (only marked cards are here)
     ...(c.specDiffers?.length ? [{ specDiffers: c.specDiffers }] : []), // the 仕様書 notes shown with it // the ⚖️ badge (cards checked before publishing; held-back sentences are already out of the words above)
     ...(c.lawRefs?.length ? [{ lawRefs: c.lawRefs }] : []), // the ✅ / 🟦 sentences and their articles, shown under the answer's 親方の知恵
   ]);

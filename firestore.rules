@@ -5,8 +5,12 @@ service cloud.firestore {
     // Signed-in devices only (anonymous sign-in happens before the app renders).
     // The writer's device id, real name and raw interview are kept in cardPrivate, which no client can read.
     // A judge's trial cards (companyId "trial_<uid>") are for that device only, like the server treats them.
+    // Only cards let out by the check against the articles: lawCheckVer is the mark publishCard / setCardStatus put
+    // on them (functions/src/common.ts LAW_CHECK_VER, web/src/firebase.ts; the three change together). Queries ask
+    // for it too (where lawCheckVer == 1), or they are refused.
     match /cards/{id} {
       allow read: if request.auth != null && resource.data.status == 'published'
+        && resource.data.get('lawCheckVer', 0) == 1
         && (resource.data.companyId == 'demo' || resource.data.companyId == 'trial_' + request.auth.uid);
     }
     // Questions carry the asker's device id and photos: they are read through Functions only

@@ -3,10 +3,10 @@ import { logger } from "firebase-functions";
 import { DocumentSnapshot, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER, MODEL_FAITHFUL } from "./models";
-import { CATEGORIES, COMPANY, CardDoc, FieldTerm, LOCATIONS, Turn, db, spaceOf, spacesOf, str, strList, turns } from "./common";
+import { CATEGORIES, COMPANY, CardDoc, FieldTerm, LAW_CHECK_VER, LOCATIONS, Turn, db, spaceOf, spacesOf, str, strList, turns } from "./common";
 import { takeQuota } from "./limits";
 import { lawLabel, numbersMissing, searchLaws } from "./laws";
-import { CheckFields, MAX_SENTENCES, SavedCheck, Shown, cardSentences, runLawCheck, savedCheckShown, shownCard } from "./lawcheck";
+import { CheckFields, MAX_SENTENCES, SavedCheck, Shown, cardSentences, runLawCheck, savedCheckShown, shownCard, termLine, termsText } from "./lawcheck";
 
 const MAX_FOLLOW_UPS = 3;
 const ENOUGH_CHARS = 12000; // a talk this long has the material: go to the card (common.ts bounds it at 16000)
@@ -146,7 +146,8 @@ const FAITHFUL_SYSTEM = `電気工事のベテランの話（聞き取りのや�
  * note to the veteran, who decides; a failed check shows nothing rather than stopping the draft.
  */
 export async function unsaidSentences(d: Pick<Draft, "title" | "scene" | "body" | "reason" | "caution">, transcript: Turn[]): Promise<string[]> {
-  const sentences = cardSentences(d);
+  // the veteran's fields only (a whole draft also carries terms as a list and plain, which are the AI's own wording)
+  const sentences = cardSentences({ title: d.title, scene: d.scene, body: d.body, reason: d.reason, caution: d.caution });
   if (!getClient() || !sentences.length) return [];
   try {
     const r = await jsonCall<{ unsaid: number[] }>({
@@ -310,17 +311,30 @@ async function ownCard(cardId: string, authorId: string) {
   return { ref, card: snap.data() as CardDoc };
 }
 
-/** The card's words sent from the edit screen, checked the same way for publishing and for checkCard. */
+/**
+ * The card's words sent from the edit screen, checked the same way for publishing and for checkCard: the
+ * veteran's fields, the standard-Japanese wording and the words' meanings (both shown to young workers, so both are
+ * checked against the articles), and the search words (not shown, but a change since the check asks for a new one).
+ */
 function cardFields(e: Record<string, unknown>) {
-  return {
+  const own = {
     title: str(e.title, "題名", CARD_LIMITS.title),
     scene: str(e.scene, "場面", CARD_LIMITS.scene, false),
     body: str(e.body, "やり方・コツ", CARD_LIMITS.body),
     reason: str(e.reason, "理由・失敗", CARD_LIMITS.reason, false),
     caution: str(e.caution, "新人が間違えること", CARD_LIMITS.caution, false),
+  };
+  return {
+    ...own,
+    plain: str(e.plain, "標準語の言い換え", CARD_LIMITS.plain, false),
+    // a word the veteran has since rewritten is no longer on the card: its meaning is dropped, not refused
+    terms: fitTerms(termList(e.terms), own),
     tags: strList(e.tags, "探す時の言葉", CARD_LIMITS.tags, CARD_LIMITS.tag), // a short list: long ones would match every question
   };
 }
+
+/** The words as the check reads them (lawcheck.ts CheckFields: the meanings one 「言葉：意味」 a line). */
+const checkFieldsOf = (c: FullCard): CheckFields => ({ title: c.title, scene: c.scene, body: c.body, reason: c.reason, caution: c.caution, plain: c.plain, terms: termsText(c.terms) });
 
 /**
  * The card's sentences against the articles they are about (lawcheck.ts), before the veteran publishes it.
@@ -331,38 +345,55 @@ export async function checkCard(data: Record<string, unknown>, uid: string, ctx?
   const cardId = str(data.cardId, "カードの番号", 64);
   const f = cardFields((data.edits ?? {}) as Record<string, unknown>);
   await ownCard(cardId, uid);
-  if (cardSentences(f).length > MAX_SENTENCES) throw new HttpsError("invalid-argument", `文が多すぎて照らせません（${MAX_SENTENCES}文まで）。短くまとめてください。`);
+  const cf = checkFieldsOf(f);
+  if (cardSentences(cf).length > MAX_SENTENCES) throw new HttpsError("invalid-argument", `文が多すぎて照らせません（${MAX_SENTENCES}文まで）。短くまとめてください。`);
   if (!getClient()) {
     // local runs without Claude: nothing is checked, but the card can still be published (with no badge)
     const at = Timestamp.now();
-    const saved: SavedCheck = { at, sentences: cardSentences(f), items: [], dummy: true };
+    const saved: SavedCheck = { at, sentences: cardSentences(cf), items: [], dummy: true, tags: f.tags };
     await db.collection("cardPrivate").doc(cardId).set({ lawCheck: saved }, { merge: true });
-    return { mode: "dummy", checkedAt: at.toMillis(), sentences: saved.sentences, items: [], lawCount: 0 };
+    return { mode: "dummy", checkedAt: at.toMillis(), sentences: saved.sentences, items: [], tags: f.tags, lawCount: 0 };
   }
   await ctx?.charge?.();
-  const r = await runLawCheck(f, f.tags);
+  const r = await runLawCheck(cf, f.tags);
   const at = Timestamp.now();
-  const saved: SavedCheck = { at, sentences: r.sentences, items: r.items };
+  const saved: SavedCheck = { at, sentences: r.sentences, items: r.items, tags: f.tags };
   await db.collection("cardPrivate").doc(cardId).set({ lawCheck: saved }, { merge: true });
-  return { mode: "claude", checkedAt: at.toMillis(), sentences: r.sentences, items: r.items, lawCount: r.laws.length };
+  return { mode: "claude", checkedAt: at.toMillis(), sentences: r.sentences, items: r.items, tags: f.tags, lawCount: r.laws.length };
 }
 
 const UNCHECKED_MSG = "条文との照らし合わせをしてから公開してください。";
 const ALL_HIDDEN_MSG = "題名・やり方が、若手に出せない文だけになります。言い回しを変えて、もう一度照らしてください。";
 
 /** The veteran's words, as they are kept for the edit screen (cardPrivate.full): the public card may hold less. */
-type FullCard = CheckFields & { terms: FieldTerm[]; plain: string };
+type FullCard = { title: string; scene: string; body: string; reason: string; caution: string; terms: FieldTerm[]; plain: string };
 
 /**
  * What young workers may read of the card (lawcheck.ts shownCard), or refused: a card goes out only as it was
- * checked, and never with the ⚠️ / 🔍 sentences. Words and the standard-Japanese wording that only a held-back
- * sentence carried go too (the plain wording is a rewording of the whole body: dropped when anything is held back).
+ * checked (its search words too), and never with the ⚠️ / 🔍 sentences. A meaning marked ⚠️ / 🔍 goes, and so do
+ * meanings of words only a held-back sentence carried; the standard-Japanese wording goes when anything is held back
+ * (it rewords the whole body). lawCheckVer: the mark that the card was let out by the check (common.ts LAW_CHECK_VER),
+ * on every card that goes out, one with no article about it too; only marked cards reach young workers.
  */
-function forYoung(saved: SavedCheck | undefined, full: FullCard, unchecked = UNCHECKED_MSG) {
-  const r: Shown = shownCard(saved, full);
+function forYoung(saved: SavedCheck | undefined, full: FullCard, tags: string[], unchecked = UNCHECKED_MSG) {
+  const r: Shown = shownCard(saved, checkFieldsOf(full), tags);
   if (!r.ok) throw new HttpsError("failed-precondition", r.why === "empty" ? ALL_HIDDEN_MSG : unchecked);
+  const { title, scene, body, reason, caution } = r.fields;
+  const shownTerms = new Set(r.fields.terms.split("\n").map((x) => x.trim()));
   // specDiffers: sentences that differ from 標準仕様書 (not law): shown, with a note where young workers read them
-  const update = { ...r.fields, terms: fitTerms(full.terms, r.fields), plain: r.hidden ? "" : full.plain, specDiffers: r.specDiffers, lawRefs: r.lawRefs, lawCheck: r.summary ?? FieldValue.delete() };
+  const update = {
+    title,
+    scene,
+    body,
+    reason,
+    caution,
+    terms: fitTerms(full.terms.filter((t) => shownTerms.has(termLine(t))), r.fields),
+    plain: r.fields.plain,
+    specDiffers: r.specDiffers,
+    lawRefs: r.lawRefs,
+    lawCheck: r.summary ?? FieldValue.delete(),
+    lawCheckVer: LAW_CHECK_VER,
+  };
   return { update, hidden: r.hidden, summary: r.summary };
 }
 
@@ -375,19 +406,17 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
   const e = (data.edits ?? {}) as Record<string, unknown>;
   const { ref, card } = await ownCard(cardId, authorId);
   // check every field first: a refused edit must not use up a publication
-  const fields = { ...cardFields(e), plain: str(e.plain, "標準語の言い換え", CARD_LIMITS.plain, false) };
-  // a word the veteran has since rewritten is no longer on the card: its meaning is dropped, not refused
-  const terms = fitTerms(termList(e.terms), fields);
+  const fields = cardFields(e);
   const nameIn = str(data.authorName, "名前", 30, false);
   const privRef = db.collection("cardPrivate").doc(cardId);
   const priv = await privRef.get();
   // only the words checked against the articles go out, without the sentences the check held back
-  const full: FullCard = { title: fields.title, scene: fields.scene, body: fields.body, reason: fields.reason, caution: fields.caution, terms, plain: fields.plain };
-  const { update: young, hidden, summary } = forYoung(priv.get("lawCheck") as SavedCheck | undefined, full);
+  const full: FullCard = { title: fields.title, scene: fields.scene, body: fields.body, reason: fields.reason, caution: fields.caution, terms: fields.terms, plain: fields.plain };
+  const { update: young, hidden, summary } = forYoung(priv.get("lawCheck") as SavedCheck | undefined, full, fields.tags);
   // 「若手にはこう見えます」: the card as young workers would get it, before the veteran says yes (nothing is saved)
   if (data.preview === true) {
-    const { title, scene, body, reason, caution, specDiffers, lawRefs } = young;
-    return { preview: { title, scene, body, reason, caution, specDiffers, lawRefs }, hidden };
+    const { title, scene, body, reason, caution, terms, plain, specDiffers, lawRefs } = young;
+    return { preview: { title, scene, body, reason, caution, terms, plain, specDiffers, lawRefs }, hidden };
   }
   // Anyone can act as a veteran (no login by design), so first publications per device are capped; so are later
   // fixes, since each one makes the saved answers of the cards' questions stale (ask.ts cacheKey).
@@ -444,7 +473,7 @@ export async function setCardStatus(data: Record<string, unknown>, uid: string, 
   if (status === "published") {
     const priv = await db.collection("cardPrivate").doc(cardId).get();
     // from わたしのカード: the check is made on the edit screen (［直す］), which then saves it
-    young = forYoung(priv.get("lawCheck") as SavedCheck | undefined, fullOf(priv, card), "条文との照らし合わせをしてから公開してください。［直す］で開くと照らせます。").update;
+    young = forYoung(priv.get("lawCheck") as SavedCheck | undefined, fullOf(priv, card), card.tags ?? [], "条文との照らし合わせをしてから公開してください。［直す］で開くと照らせます。").update;
   }
   await takeQuota(authorId, "edit", ctx?.ip);
   await ref.update({ ...young, status, updatedAt: Timestamp.now() });

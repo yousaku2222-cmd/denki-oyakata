@@ -5,10 +5,54 @@ import { LawSheet } from "./LawSheet";
 // 親方のカードを、公開する前に条文と照らし合わせる（functions/src/lawcheck.ts の checkCard）。
 // AI が照らし、引用はプログラムが原文と確かめてある。⚠️ と 🔍 の文は、公開しても若手には出さない（親方のカードには残る）。
 // 照らしていないカード（照らした後に文を直したカード）は公開できない（サーバーも拒む）。
+// 「標準語では」（plain）と言葉の意味（terms、「言葉：意味」を1文）も照らす。探す時の言葉（tags）は照らさないが、
+// 照らした後に変えたら照らし直す。
 
-export const CHECK_FIELDS = ["title", "scene", "body", "reason", "caution"] as const;
+export const CHECK_FIELDS = ["title", "scene", "body", "reason", "caution", "plain", "terms"] as const;
 export type CheckField = (typeof CHECK_FIELDS)[number];
+/** The card's words as checked: terms is one 「言葉：意味」 a line (functions/src/lawcheck.ts termsText). */
 export type CheckFields = Record<CheckField, string>;
+// what the AI wrote for young workers, named on the list so the veteran knows where the sentence is
+const FIELD_NAME: Partial<Record<CheckField, string>> = { plain: "標準語では", terms: "言葉の意味" };
+
+type Term = { word: string; meaning: string };
+/** The card's words on the edit screen (the draft as the server keeps it). */
+export type CardWords = { title: string; scene: string; body: string; reason: string; caution: string; plain?: string; terms?: Term[] };
+/** A word and its meaning as one sentence of the check (the same as functions/src/lawcheck.ts termLine). */
+export const termLine = (t: Term) => `${t.word.trim()}：${t.meaning.trim().replace(/\s+/g, " ")}`;
+/**
+ * The card's words as the server checks them: the meanings it keeps (functions/src/interview.ts fitTerms: only words
+ * written on the card, once each), one a line.
+ */
+export function checkFieldsOf(d: CardWords): CheckFields {
+  const text = [d.title, d.scene, d.body, d.reason, d.caution].join("\n");
+  const seen = new Set<string>();
+  const terms = (d.terms ?? [])
+    .map((t) => ({ word: t.word.trim(), meaning: t.meaning.trim() }))
+    .filter((t) => {
+      if (!t.word || !t.meaning || t.word === t.meaning || t.word.length > 20 || !text.includes(t.word) || seen.has(t.word)) return false;
+      seen.add(t.word);
+      return true;
+    })
+    .slice(0, 8);
+  return { title: d.title, scene: d.scene, body: d.body, reason: d.reason, caution: d.caution, plain: (d.plain ?? "").trim(), terms: terms.map(termLine).join("\n") };
+}
+/** The meanings back from the terms field after a sentence was taken out or put back (the rest kept as they were). */
+export function termsFrom(text: string, before: Term[]): Term[] {
+  return text
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const was = before.find((t) => termLine(t) === line);
+      if (was) return was;
+      const at = line.indexOf("：");
+      return { word: line.slice(0, at), meaning: line.slice(at + 1) };
+    })
+    .filter((t) => t.word && t.meaning);
+}
+/** The search words as compared with the checked ones (the same as functions/src/lawcheck.ts tagsKey). */
+const tagsKey = (tags: string[]) => JSON.stringify([...new Set(tags.map((x) => x.trim()).filter(Boolean))].sort());
 
 type Verdict = "same" | "stricter" | "differs" | "unsure";
 interface CheckItem {
@@ -26,6 +70,7 @@ export interface LawCheckResult {
   checkedAt: number | null;
   sentences: { field: CheckField; text: string }[];
   items: CheckItem[];
+  tags?: string[] | null; // the search words it was checked with (a check from before they were kept: none)
   lawCount?: number;
   mode?: "claude" | "dummy";
 }
@@ -67,9 +112,9 @@ export interface LawCheckState {
 // the same as the server (laws.ts normalizeForQuote): spaces and line breaks do not count
 const norm = (s: string) => s.normalize("NFKC").replace(/[\s｜|]/g, "");
 
-/** Whether the card is the checked one with some sentences taken out (else the check is out of date). */
-function isChecked(r: LawCheckResult, f: CheckFields): boolean {
-  if (!r.checkedAt || !r.sentences.length) return false;
+/** Whether the card is the checked one with some sentences taken out, and the same search words (else the check is out of date). */
+function isChecked(r: LawCheckResult, f: CheckFields, tags: string[]): boolean {
+  if (!r.checkedAt || !r.sentences.length || !r.tags || tagsKey(r.tags) !== tagsKey(tags)) return false;
   return CHECK_FIELDS.every((field) => {
     const now = norm(f[field]);
     let at = 0;
@@ -87,11 +132,11 @@ const onCard = (it: CheckItem, f: CheckFields) => norm(f[it.field]).includes(nor
 /**
  * The check's box on the edit screen. onLeft tells the screen which ⚠️ / 🔍 sentences are still on the card (young
  * workers will not see them: asked once more before publishing), onState whether the card can be published, and
- * runRef lets the publish button start a check.
+ * runRef lets the publish button start a check. onEdit gets the card's words with a sentence taken out or put back.
  */
 export function LawCheckPanel({
   cardId,
-  fields,
+  card,
   tags,
   initial,
   onEdit,
@@ -100,10 +145,10 @@ export function LawCheckPanel({
   runRef,
 }: {
   cardId: string;
-  fields: CheckFields;
+  card: CardWords;
   tags: string[];
   initial?: LawCheckResult | null; // the last check (myCard), shown again without asking Claude
-  onEdit: (field: CheckField, value: string) => void;
+  onEdit: (patch: Partial<CardWords>) => void;
   onLeft: (texts: string[]) => void;
   onState?: (s: LawCheckState) => void;
   runRef?: MutableRefObject<(() => void) | null>;
@@ -113,14 +158,15 @@ export function LawCheckPanel({
   const [err, setErr] = useState("");
   // what ［この文を取り消す］ took out, to put back where it was
   const [taken, setTaken] = useState<Record<number, { field: CheckField; at: number }>>({});
-  const latest = useRef({ fields, tags });
-  latest.current = { fields, tags };
+  const fields = useMemo(() => checkFieldsOf(card), [card]);
+  const latest = useRef({ card, fields, tags });
+  latest.current = { card, fields, tags };
 
   const run = useCallback(async () => {
     setBusy(true);
     setErr("");
     try {
-      const r = await call<LawCheckResult>("checkCard", { cardId, edits: { ...latest.current.fields, tags: latest.current.tags } });
+      const r = await call<LawCheckResult>("checkCard", { cardId, edits: { ...latest.current.card, tags: latest.current.tags } });
       setResult(r);
       setTaken({});
     } catch (e) {
@@ -138,7 +184,7 @@ export function LawCheckPanel({
   useEffect(() => {
     if (started.current || !cardId) return;
     started.current = true;
-    if (initial?.checkedAt && isChecked(initial, latest.current.fields)) setResult(initial);
+    if (initial?.checkedAt && isChecked(initial, latest.current.fields, latest.current.tags)) setResult(initial);
     else void run();
   }, [cardId, initial, run]);
 
@@ -150,16 +196,20 @@ export function LawCheckPanel({
   const leftKey = JSON.stringify(left);
   useEffect(() => onLeft(JSON.parse(leftKey) as string[]), [leftKey, onLeft]);
 
-  const stale = !!result && result.sentences.length > 0 && !isChecked(result, fields);
-  const checked = !!result && isChecked(result, fields);
+  const stale = !!result && result.sentences.length > 0 && !isChecked(result, fields, tags);
+  const checked = !!result && isChecked(result, fields, tags);
   const failed = !!err;
   useEffect(() => onState?.({ checked, busy, failed }), [checked, busy, failed, onState]);
 
+  const takenTerms = useRef<Term[]>([]); // meanings taken out, so one put back is the same word and meaning
+  // a meaning goes back into the list of words, the other fields are text
+  const edit = (field: CheckField, value: string) => onEdit(field === "terms" ? { terms: termsFrom(value, [...(card.terms ?? []), ...takenTerms.current]) } : { [field]: value });
   function takeOut(it: CheckItem) {
     const now = fields[it.field];
     const at = now.indexOf(it.text);
     if (at < 0) return;
-    onEdit(it.field, now.slice(0, at) + now.slice(at + it.text.length));
+    if (it.field === "terms") takenTerms.current.push(...(card.terms ?? []).filter((t) => termLine(t) === it.text));
+    edit(it.field, now.slice(0, at) + now.slice(at + it.text.length));
     setTaken({ ...taken, [it.n]: { field: it.field, at } });
   }
   function putBack(it: CheckItem) {
@@ -167,7 +217,8 @@ export function LawCheckPanel({
     if (!t) return;
     const now = fields[t.field];
     const at = Math.min(t.at, now.length);
-    onEdit(t.field, now.slice(0, at) + it.text + now.slice(at));
+    // a taken-out meaning is its own line again
+    edit(t.field, t.field === "terms" ? [now.slice(0, at), it.text, now.slice(at)].map((x) => x.trim()).filter(Boolean).join("\n") : now.slice(0, at) + it.text + now.slice(at));
     const rest = { ...taken };
     delete rest[it.n];
     setTaken(rest);
@@ -202,7 +253,9 @@ export function LawCheckPanel({
                 <p className="law-check-mark">
                   {MARK[it.verdict].icon} {spec(it) ? (it.verdict === "differs" ? "公共工事の仕様書と違うかもしれない" : "要確認（仕様書の引用が確かめられませんでした）") : MARK[it.verdict].label}
                 </p>
-                <p className="law-check-text">「{it.text}」</p>
+                <p className="law-check-text">
+                  {FIELD_NAME[it.field] && <span className="src-meta">（{FIELD_NAME[it.field]}）</span>}「{it.text}」
+                </p>
                 {it.note && <p className="law-check-note">{it.note}</p>}
                 {(spec(it) ? SPEC_ADVICE : ADVICE)[it.verdict] && <p className="law-check-note">{(spec(it) ? SPEC_ADVICE : ADVICE)[it.verdict]}</p>}
                 {it.quote && (
@@ -238,7 +291,7 @@ export function LawCheckPanel({
 
       {!busy && result && result.mode !== "dummy" && (
         <>
-          {stale && <p className="hint">照らした後に文が直っています。公開する前に、もう一度照らしてください。</p>}
+          {stale && <p className="hint">照らした後に、文・言葉の意味・標準語の言い換え・探す時の言葉のどれかが直っています。公開する前に、もう一度照らしてください。</p>}
           <button type="button" className="link law-check-again" onClick={run}>
             もう一度照らす
           </button>

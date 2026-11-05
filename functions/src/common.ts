@@ -22,6 +22,17 @@ export function spacesOf(data: Record<string, unknown>, uid: string): string[] {
   return own === COMPANY ? [COMPANY] : [COMPANY, own];
 }
 
+/**
+ * The mark publishCard / setCardStatus put on every card they let out (cards/{id}.lawCheckVer): the card went out
+ * as it was checked against the articles (lawcheck.ts), even one no article is about (it has no ⚖️ badge). A card
+ * without it (published before the check, or written some other way) reaches young workers nowhere: answers, 撮る,
+ * the box, and 探す (firestore.rules lets clients read marked cards only). Raised together with firestore.rules and
+ * web/src/firebase.ts, it sends every card back to be checked again.
+ */
+export const LAW_CHECK_VER = 1;
+/** Whether young workers may get this card: published, and let out by the check (the mark above). */
+export const reachesYoung = (c: { status?: unknown; lawCheckVer?: unknown } | undefined) => c?.status === "published" && c.lawCheckVer === LAW_CHECK_VER;
+
 export type Source = "law" | "wisdom" | "general";
 export interface Sentence {
   text: string;
@@ -60,6 +71,8 @@ export interface CardDoc {
   plain?: string;
   // the card's sentences checked against the articles before it was published (lawcheck.ts); older cards: none
   lawCheck?: LawCheckSummary;
+  // LAW_CHECK_VER once the card was let out as checked (publishCard / setCardStatus); drafts and older cards: none
+  lawCheckVer?: number;
   // its sentences that differ from 公共建築工事標準仕様書 (not law): shown with a note (sentences that differ from a law are not on the card)
   specDiffers?: CardSentence[];
   // its sentences the check found the same as an article or stricter (✅ / 🟦), each with the article and the quote:

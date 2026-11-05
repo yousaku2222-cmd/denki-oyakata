@@ -5,9 +5,19 @@ import { getName, getTrial, setName } from "../local";
 import { MicInput, Notice } from "../components";
 import { canSay, hush, say, unlockSay } from "../speech";
 import { LawCheckPanel, SpecNote, type LawCheckResult, type LawCheckState } from "../LawCheck";
+import { PlainNote } from "../Glossary";
 
 /** The card as young workers would get it (publishCard with preview): the ⚠️ / 🔍 sentences against a law taken out. */
-type YoungView = { title: string; scene: string; body: string; reason: string; caution: string; specDiffers: { field: string; text: string }[] };
+type YoungView = {
+  title: string;
+  scene: string;
+  body: string;
+  reason: string;
+  caution: string;
+  terms?: { word: string; meaning: string }[];
+  plain?: string;
+  specDiffers: { field: string; text: string }[];
+};
 
 type Turn = { role: "veteran" | "ai"; text: string };
 interface Draft {
@@ -404,7 +414,7 @@ export function Talk({
   }
 
   if (draft && preview) {
-    const parts: [Exclude<keyof YoungView, "specDiffers">, string][] = [
+    const parts: [Exclude<keyof YoungView, "specDiffers" | "terms" | "plain">, string][] = [
       ["title", "一言でいうと"],
       ["scene", "どんな現場・場面で"],
       ["body", "やり方・コツ"],
@@ -425,6 +435,20 @@ export function Talk({
               </div>
             ) : null,
           )}
+          {/* the meanings and the standard-Japanese wording young workers get (those marked ⚠️ / 🔍 are not here) */}
+          {!!preview.terms?.length && (
+            <div className="wc-part">
+              <span>言葉の意味</span>
+              <ul className="field-words-list">
+                {preview.terms.map((t) => (
+                  <li key={t.word}>
+                    <b>{t.word}</b>：{t.meaning}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <PlainNote plain={preview.plain} />
           <SpecNote sentences={preview.specDiffers} />
         </article>
         <details className="told">
@@ -499,10 +523,10 @@ export function Talk({
             <LawCheckPanel
               key={cardId}
               cardId={cardId}
-              fields={draft}
+              card={draft}
               tags={tagsText.split(/[、,\n]+/).map((x) => x.trim()).filter(Boolean)}
               initial={lawInit}
-              onEdit={(key, value) => setDraft((d) => d && { ...d, [key]: value })}
+              onEdit={(patch) => setDraft((d) => d && { ...d, ...patch })}
               onLeft={setLawLeft}
               onState={setLawState}
               runRef={runCheck}

@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { connectAuthEmulator, getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
-import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { collection, connectFirestoreEmulator, getFirestore, query, where } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { getTrial } from "./local";
 
@@ -59,3 +59,12 @@ export const COMPANY = "demo";
 
 /** The spaces this device reads: the shared one, plus its own trial space when it came in as a judge. */
 export const spaces = () => (getTrial() && myId() ? [COMPANY, "trial_" + myId()] : [COMPANY]);
+
+/**
+ * The mark of a card let out by the check against the articles (functions/src/common.ts LAW_CHECK_VER; firestore.rules
+ * has the same number). Only marked cards are readable, so the query must ask for it.
+ */
+export const LAW_CHECK_VER = 1;
+/** The published cards young workers may read (this device's spaces, let out by the check). */
+export const youngCards = () =>
+  query(collection(db, "cards"), where("companyId", "in", spaces()), where("status", "==", "published"), where("lawCheckVer", "==", LAW_CHECK_VER));

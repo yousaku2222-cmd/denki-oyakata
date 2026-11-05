@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Timestamp } from "firebase-admin/firestore";
 import { LAWS, getLawById } from "./laws";
-import { CheckFields, CheckItem, LEGAL_SOURCES, SPEC_SOURCES, SavedCheck, cardSentences, checkItems, isLegal, keptSentences, lawCandidates, shownCard, splitSentences } from "./lawcheck";
+import { CheckFields, CheckItem, LEGAL_SOURCES, SPEC_SOURCES, SavedCheck, cardSentences, checkItems, isLegal, keptSentences, lawCandidates, shownCard as shownWithTags, splitSentences, termsText } from "./lawcheck";
 
 const card: CheckFields = {
   title: "コンセントの取り替えは資格なしでよか",
@@ -10,7 +10,11 @@ const card: CheckFields = {
   body: "資格がなくてもコンセントの取り替えくらいはしてよか。電源を切ってから付け替える。\n「プルボ」は使わん。",
   reason: "簡単な作業やけん。",
   caution: "",
+  plain: "",
+  terms: "",
 };
+// the cards here were checked with no search words (a change of them is in its own test below)
+const shownCard = (saved: SavedCheck | undefined, f: CheckFields) => shownWithTags(saved, f, []);
 const PF = "shiyo-2.3.3";
 const LICENSE = "335AC0000000139-3";
 const pfQuote = "曲げ角度の合計が 270 度を超えてはならない";
@@ -26,7 +30,7 @@ test("a field is cut into its sentences as written", () => {
 
 test("a card about licences is checked against 電気工事士法 第3条", () => {
   assert.ok(lawCandidates(card, []).some((l) => l.id === LICENSE));
-  assert.ok(lawCandidates({ title: "PF管の曲げ", scene: "", body: "PF管は曲がり3つでプルボックスを入れる。", reason: "", caution: "" }, ["PF"]).some((l) => l.id === PF));
+  assert.ok(lawCandidates({ title: "PF管の曲げ", scene: "", body: "PF管は曲がり3つでプルボックスを入れる。", reason: "", caution: "", plain: "", terms: "" }, ["PF"]).some((l) => l.id === PF));
 });
 
 test("only sentences of the card, articles given and quotes in the original keep their mark", () => {
@@ -72,7 +76,7 @@ test("laws and the public works standard are told apart by the source, for every
 test("young workers get the checked card without its ⚠️ and 🔍 sentences", () => {
   const sentences = cardSentences(card);
   const item = (n: number, verdict: CheckItem["verdict"], legal = true): CheckItem => ({ n, field: sentences[n - 1].field, text: sentences[n - 1].text, verdict, lawId: legal ? LICENSE : PF, label: "", quote: verdict === "unsure" ? "" : legal ? licQuote : pfQuote, note: "x", legal });
-  const saved: SavedCheck = { at: Timestamp.fromMillis(1_000), sentences, items: [item(2, "differs"), item(3, "same"), item(4, "unsure")] };
+  const saved: SavedCheck = { at: Timestamp.fromMillis(1_000), sentences, items: [item(2, "differs"), item(3, "same"), item(4, "unsure")], tags: [] };
 
   const r = shownCard(saved, card);
   assert.ok(r.ok);
@@ -123,7 +127,7 @@ test("young workers get the checked card without its ⚠️ and 🔍 sentences",
 });
 
 test("the card's ✅ / 🟦 sentences go out with their article, never a held-back or taken-out one", () => {
-  const f: CheckFields = { title: "PF管の曲げ", scene: "", body: "PF管の曲げは合計270度までにしとる。うちは180度までにしとる。資格がなくてもコンセントの取り替えはしてよか。", reason: "", caution: "" };
+  const f: CheckFields = { title: "PF管の曲げ", scene: "", body: "PF管の曲げは合計270度までにしとる。うちは180度までにしとる。資格がなくてもコンセントの取り替えはしてよか。", reason: "", caution: "", plain: "", terms: "" };
   const sentences = cardSentences(f);
   const pf = getLawById(PF)!;
   const it = (n: number, verdict: CheckItem["verdict"], lawId: string, quote: string, legal = true): CheckItem => ({ n, field: sentences[n - 1].field, text: sentences[n - 1].text, verdict, lawId, label: "古い名前", quote, note: verdict === "differs" ? "x" : "", legal });
@@ -131,6 +135,7 @@ test("the card's ✅ / 🟦 sentences go out with their article, never a held-ba
     at: Timestamp.fromMillis(2_000),
     sentences,
     items: [it(2, "same", PF, pfQuote, false), it(3, "stricter", PF, pfQuote, false), it(4, "differs", LICENSE, licQuote)],
+    tags: [],
   };
   const r = shownCard(saved, f);
   assert.ok(r.ok);
@@ -154,4 +159,54 @@ test("the card's ✅ / 🟦 sentences go out with their article, never a held-ba
   assert.ok(dummy.ok && dummy.lawRefs.length === 0 && dummy.summary === null);
   const none = shownCard({ ...saved, items: [] }, f);
   assert.ok(none.ok && none.lawRefs.length === 0 && none.summary === null);
+});
+
+test("the standard-Japanese wording, the words' meanings and the search words are part of the check", () => {
+  const f: CheckFields = {
+    ...card,
+    title: "プルボの中は束ねる",
+    body: "線が多か時は、プルボで分けて結束する。",
+    reason: "",
+    plain: "線が多い時は、プルボックスで分けて結束します。",
+    terms: termsText([
+      { word: "プルボ", meaning: "プルボックス。電線をまとめて通す箱" },
+      { word: "多か時は", meaning: "多い時は" },
+    ]),
+  };
+  const sentences = cardSentences(f);
+  // a word and its meaning is one sentence, whatever its 。
+  assert.deepEqual(sentences.map((x) => x.field), ["title", "body", "plain", "terms", "terms"]);
+  assert.equal(sentences[3].text, "プルボ：プルボックス。電線をまとめて通す箱");
+  const item = (n: number, verdict: CheckItem["verdict"]): CheckItem => ({ n, field: sentences[n - 1].field, text: sentences[n - 1].text, verdict, lawId: LICENSE, label: "", quote: verdict === "unsure" ? "" : licQuote, note: "x", legal: true });
+  const tags = ["プルボ", "結束"];
+  const saved: SavedCheck = { at: Timestamp.fromMillis(3_000), sentences, items: [], tags };
+
+  const ok = shownWithTags(saved, f, [" 結束", "プルボ"]); // order and spaces at the ends do not count
+  assert.ok(ok.ok);
+  assert.deepEqual(ok.fields, f);
+
+  // rewritten after the check: refused, whichever of them it is
+  assert.deepEqual(shownWithTags(saved, { ...f, plain: "線が多い時は、プルボックスを使わなくてよいです。" }, tags), { ok: false, why: "unchecked" });
+  assert.deepEqual(shownWithTags(saved, { ...f, terms: termsText([{ word: "プルボ", meaning: "プルボックス。高圧の線も通してよい箱" }]) }, tags), { ok: false, why: "unchecked" });
+  assert.deepEqual(shownWithTags(saved, f, [...tags, "高圧"]), { ok: false, why: "unchecked" });
+  assert.deepEqual(shownWithTags({ ...saved, tags: undefined }, f, tags), { ok: false, why: "unchecked" }, "a check from before the search words were kept");
+  // a check from before plain and terms were checked: they were never read against the articles
+  const old = cardSentences({ ...f, plain: "", terms: "" });
+  assert.deepEqual(shownWithTags({ ...saved, sentences: old }, f, tags), { ok: false, why: "unchecked" });
+  // taking them out is not a change of words: still the checked card
+  const out = shownWithTags(saved, { ...f, plain: "", terms: termsText([{ word: "多か時は", meaning: "多い時は" }]) }, tags);
+  assert.ok(out.ok && out.fields.plain === "" && out.fields.terms === "多か時は：多い時は");
+
+  // a meaning marked ⚠️ against a law: that meaning is not shown, nor (as something is held back) the plain wording
+  const heldTerm = shownWithTags({ ...saved, items: [item(4, "differs")] }, f, tags);
+  assert.ok(heldTerm.ok);
+  assert.equal(heldTerm.fields.terms, "多か時は：多い時は");
+  assert.equal(heldTerm.fields.plain, "");
+  assert.equal(heldTerm.hidden, 1);
+  // the plain wording itself marked 🔍: not shown; the veteran's own words are
+  const heldPlain = shownWithTags({ ...saved, items: [item(3, "unsure")] }, f, tags);
+  assert.ok(heldPlain.ok && heldPlain.fields.plain === "" && heldPlain.fields.body === f.body && heldPlain.hidden === 1);
+  // a ✅ plain wording or meaning is not linked as the veteran's words (they are the AI's)
+  const same = shownWithTags({ ...saved, items: [{ ...item(3, "same"), lawId: PF, quote: pfQuote }] }, f, tags);
+  assert.ok(same.ok && same.lawRefs.length === 0 && same.fields.plain === f.plain);
 });

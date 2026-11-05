@@ -1,7 +1,7 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { db, displayAuthor, spaceOf, spacesOf, str, type CardDoc } from "./common";
+import { db, displayAuthor, reachesYoung, spaceOf, spacesOf, str, type CardDoc } from "./common";
 import { giveBackQuota, takeQuota } from "./limits";
 import { normalizeQuestion } from "./ask";
 import { getClient, jsonCall } from "./claude";
@@ -32,14 +32,17 @@ export interface ClarityInput {
 /** Asks Claude whether the question gets across; returns its raw reply (read by confirmOf). */
 export type Judge = (q: ClarityInput) => Promise<unknown>;
 
+// keep the <question> / <before> / <photo> fences intact whatever was asked (the same as ask.ts)
+const fenced = (s: string) => s.replace(/</g, "＜").replace(/>/g, "＞");
+
 export const judgeClarity: Judge = (q) =>
   jsonCall({
     model: MODEL_ROUTER,
     system: CLEAR_SYSTEM,
     user: [
-      q.before ? `<before>${q.before}</before>` : "",
-      q.photo ? `<photo>写真つき${q.photoPart ? `（AIの見立て: ${q.photoPart}）` : ""}</photo>` : "",
-      `<question>${q.text}</question>`,
+      q.before ? `<before>${fenced(q.before)}</before>` : "",
+      q.photo ? `<photo>写真つき${q.photoPart ? `（AIの見立て: ${fenced(q.photoPart)}）` : ""}</photo>` : "",
+      `<question>${fenced(q.text)}</question>`,
     ].filter(Boolean).join("\n"),
     schema: {
       type: "object",
@@ -108,7 +111,7 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
     if (!mine || prev.get("companyId") !== companyId) throw new HttpsError("not-found", "前の質問が見つかりません。");
     const cardId = prev.get("answeredCardId") as string | null;
     const card = cardId ? await db.collection("cards").doc(cardId).get() : null;
-    followUp = { questionId: prev.id, text: prev.get("text") as string, cardTitle: card?.exists && card.get("status") === "published" ? (card.get("title") as string) : null };
+    followUp = { questionId: prev.id, text: prev.get("text") as string, cardTitle: card?.exists && reachesYoung(card.data()) ? (card.get("title") as string) : null };
   }
   // Would the veteran understand it? If not, nothing is written: the asker sees why and a fixed wording, and sends
   // again (with confirmed when they keep their words). A held question does not use up the day's box count.
@@ -231,7 +234,8 @@ export async function myQuestions(data: Record<string, unknown>, uid: string) {
   const snap = { docs };
   const cardIds = [...new Set(snap.docs.map((d) => d.get("answeredCardId") as string | null).filter((x): x is string => !!x))];
   const cards = cardIds.length ? await db.getAll(...cardIds.map((id) => db.collection("cards").doc(id))) : [];
-  const shown = (c: (typeof cards)[number]) => c.exists && c.get("status") === "published";
+  // a card not let out by the check (common.ts reachesYoung) is told as not shown, like a hidden one
+  const shown = (c: (typeof cards)[number]) => c.exists && reachesYoung(c.data());
   const title = new Map(cards.map((c) => [c.id, shown(c) ? (c.get("title") as string) : "（いまは非公開のカード）"]));
   // who answered, as the card shows it (a hidden name stays hidden)
   const author = new Map(cards.map((c) => [c.id, shown(c) ? displayAuthor(c.data() as CardDoc) : null]));
