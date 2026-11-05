@@ -201,6 +201,13 @@ if (a.mode === "claude") {
   check("「このまま送る」 sends it without asking again", !!kept.questionId && !kept.needsConfirm);
   const plain = await call("sendToBox", { text: "分電盤のブレーカーが上がらない時は、まず何を確かめればいいですか？", askerName: "若手", askerRole: "young" }, unsure);
   check("a clear question goes straight in", !!plain.questionId && !plain.needsConfirm, plain.reason ?? "");
+  // a photo question that does not fit what the photo shows (saddles hold a pipe; nothing is joined)
+  const photo = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+  const photoPart = "VE管用サドル（S-54）とPF管用サドル（SF-54）";
+  const odd = await call("sendToBox", { text: "このつなぎ方で合ってますか？", photo, photoPart, askerName: "若手", askerRole: "young" }, unsure);
+  check("a question that does not fit the photo is held", odd.needsConfirm === true && !odd.questionId, `${odd.reason} → ${odd.suggestion}`);
+  const fits = await call("sendToBox", { text: "このサドルの付け方で合ってますか？", photo, photoPart, askerName: "若手", askerRole: "young" }, unsure);
+  check("a question that fits the photo goes straight in", !!fits.questionId && !fits.needsConfirm, fits.reason ?? "");
 }
 
 // 9. 審査員モード: a judge goes round the loop, and nobody else sees it.
@@ -368,7 +375,8 @@ if (lc.mode === "claude") {
   check("a sentence that differs only from 標準仕様書 stays, marked for the note", specOnly.every((t) => docText.includes(t)) && (doc.fields?.specDiffers?.arrayValue?.values ?? []).length === specOnly.length, `${specOnly.length} sentence(s)`);
   // ✅ / 🟦 sentences go out with their article and quote (⚖️ 条文で確かめる), never a held-back one
   const refs = (doc.fields?.lawRefs?.arrayValue?.values ?? []).map((v) => Object.fromEntries(Object.entries(v.mapValue?.fields ?? {}).map(([k, x]) => [k, x.stringValue])));
-  const agreed = lc.items.filter((x) => x.verdict === "same" || x.verdict === "stricter");
+  // only the veteran's own words are linked (the 標準語 wording and the meanings are checked, but not linked)
+  const agreed = lc.items.filter((x) => (x.verdict === "same" || x.verdict === "stricter") && ["title", "scene", "body", "reason", "caution"].includes(x.field));
   check("the card carries its ✅ / 🟦 sentences with the article and the checked quote", refs.length === agreed.length && refs.every((r) => agreed.some((x) => x.text === r.text && x.verdict === r.verdict && x.lawId === r.lawId && x.quote === r.quote && x.field === r.field) && (doc.fields?.[r.field]?.stringValue ?? "").includes(r.text) && !!r.label), `${refs.length} link(s): ${refs.map((r) => `[${r.verdict}] ${r.label}`).join(" / ")}`);
   check("a held-back sentence is never linked to an article", held.every((t) => !refs.some((r) => r.text === t)) && refs.every((r) => r.verdict === "same" || r.verdict === "stricter"));
   const mineFull = await call("myCard", { cardId: ld.cardId }, vet3);
