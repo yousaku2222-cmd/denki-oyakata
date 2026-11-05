@@ -4,7 +4,7 @@ import { Ask } from "./screens/Ask";
 import { SENT_TO_BOX } from "./FlyToMe";
 import { Talk, type Topic } from "./screens/Talk";
 import { Box, lastSeen as boxLastSeen } from "./screens/Box";
-import { MyCards, newlyHelped } from "./screens/MyCards";
+import { MyCards, markHelpedSeen, newlyHelped } from "./screens/MyCards";
 import { Me, lastSeen as meLastSeen } from "./screens/Me";
 import { Browse } from "./screens/Browse";
 import { Calc } from "./screens/Calc";
@@ -64,12 +64,28 @@ export default function App() {
   }, [role, tab]);
   // a veteran's card that helped someone since わたしのカード was last opened: dot on that tab when the app opens
   const [cardsDot, setCardsDot] = useState(false);
+  // ...and the same news on top of 話す, the screen a veteran opens first: whose story helped, and how many more times
+  type MyCard = { id: string; title: string; helpedCount: number; status: string };
+  const [thanks, setThanks] = useState<{ cards: MyCard[]; news: { title: string; total: number; n: number }[] } | null>(null);
   useEffect(() => {
     if (role !== "veteran") return;
-    call<{ cards: { id: string; helpedCount: number; status: string }[] }>("myCards", {})
-      .then((r) => newlyHelped(r.cards).length > 0 && setCardsDot(true))
+    call<{ cards: MyCard[] }>("myCards", {})
+      .then((r) => {
+        const news = newlyHelped(r.cards).map(({ id, n }) => {
+          const c = r.cards.find((x) => x.id === id)!;
+          return { title: c.title, total: c.helpedCount, n };
+        });
+        if (!news.length) return;
+        setCardsDot(true);
+        setThanks({ cards: r.cards, news });
+      })
       .catch(() => {}); // only a hint
   }, [role]);
+  const thanksSeen = () => {
+    if (thanks) markHelpedSeen(thanks.cards);
+    setThanks(null);
+    setCardsDot(false);
+  };
   useEffect(() => {
     const on = () => setMeDot(true);
     window.addEventListener(SENT_TO_BOX, on);
@@ -181,6 +197,33 @@ export default function App() {
         {/* kept mounted while other tabs are open, so a half-told story is not lost */}
         {role === "veteran" && (
           <div hidden={tab !== "talk"}>
+            {thanks && !talkDirty && (
+              <div className="thanks-note" role="status">
+                <strong>🙏 あなたの話が、若手の役に立ちました</strong>
+                <ul>
+                  {thanks.news.slice(0, 3).map((x) => (
+                    <li key={x.title}>
+                      「{x.title}」　助かった {x.total}件<span className="thanks-plus">（前に見てから +{x.n}）</span>
+                    </li>
+                  ))}
+                </ul>
+                {thanks.news.length > 3 && <p className="hint">ほかに {thanks.news.length - 3}枚</p>}
+                <div className="thanks-actions">
+                  <button
+                    className="secondary"
+                    onClick={() => {
+                      setThanks(null); // わたしのカード counts them up and saves them as seen
+                      setTab("mycards");
+                    }}
+                  >
+                    わたしのカードを見る
+                  </button>
+                  <button className="link" onClick={thanksSeen}>
+                    閉じる
+                  </button>
+                </div>
+              </div>
+            )}
             <Talk key={talkKey} topic={topic} resumeCardId={resumeId} active={tab === "talk"} onDirty={setTalkDirty} onDone={() => startTalk(null, null, true)} boxOpen={boxOpen} onOpenBox={() => setTab("box")}
               onTryAsYoung={(q) => {
                 choose("young");
@@ -209,7 +252,10 @@ export default function App() {
             onClick={() => {
               if (t.id === "calc") setCalcStart(null);
               if (t.id === "me") setMeDot(false);
-              if (t.id === "mycards") setCardsDot(false);
+              if (t.id === "mycards") {
+                setCardsDot(false);
+                setThanks(null);
+              }
               if (t.id === "box") setBoxNew(0);
               setAskSeed(null); // a tab press opens 聞く empty, not with the last question
               setTab(t.id); // 話す keeps what was being told; 「続けて話す」 starts a new one

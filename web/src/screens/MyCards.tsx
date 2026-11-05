@@ -24,7 +24,7 @@ export function helpedSeen(): Record<string, number> {
     return {};
   }
 }
-function markHelpedSeen(cards: { id: string; helpedCount: number }[]) {
+export function markHelpedSeen(cards: { id: string; helpedCount: number }[]) {
   try {
     localStorage.setItem(HELPED_KEY, JSON.stringify(Object.fromEntries(cards.map((c) => [c.id, c.helpedCount]))));
   } catch {

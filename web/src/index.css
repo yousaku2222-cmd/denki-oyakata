@@ -2550,3 +2550,10 @@ body {
 /* 下書き・公開後の「確かめてほしい所」（話に無い数値・条文に無い数値） */
 .check-notes { background: var(--note-bg); color: var(--note-fg); border-radius: var(--r-m); padding: 10px 12px; margin: 8px 0; font-size: var(--fs-s); text-align: left; }
 .check-notes ul { margin: 4px 0 0; padding-left: 1.2em; }
+
+/* 話すの上: 自分のカードが若手の役に立った知らせ（前に見てから増えた時だけ） */
+.thanks-note { background: var(--note-bg); color: var(--note-fg); border: 2px solid #f5c400; border-radius: var(--r-m); padding: 12px 14px; margin: 12px 16px 0; font-size: var(--fs-s); }
+.thanks-note ul { margin: 6px 0 8px; padding-left: 1.2em; }
+.thanks-note li { margin: 2px 0; }
+.thanks-plus { font-weight: 700; }
+.thanks-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
