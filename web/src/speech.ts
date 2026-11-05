@@ -54,8 +54,12 @@ export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
   finalRef.current = onFinal;
   const endRef = useRef(onEnd);
   endRef.current = onEnd;
+  // stopped by a press (or by leaving the screen): anything else is the browser stopping by itself
+  const stopped = useRef(false);
+  const failed = useRef(false);
 
   const stop = useCallback(() => {
+    stopped.current = true;
     rec.current?.stop();
   }, []);
 
@@ -66,6 +70,10 @@ export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
       return;
     }
     setError("");
+    stopped.current = false;
+    failed.current = false;
+    // a result already taken is not taken again (Chrome on Android may send the same one twice)
+    const taken = new Set<number>();
     unlockSay(); // this press is the tap that lets the next question be read out
     hush(); // the mic would hear the question being read out
     r.lang = "ja-JP";
@@ -75,16 +83,21 @@ export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
       let live = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
-        if (res.isFinal) finalRef.current(res[0].transcript);
-        else live += res[0].transcript;
+        if (res.isFinal) {
+          if (!taken.has(i)) finalRef.current(res[0].transcript);
+          taken.add(i);
+        } else live += res[0].transcript;
       }
       setInterim(live);
     };
     r.onerror = (e) => {
+      if (e.error !== "no-speech" && e.error !== "aborted") failed.current = true;
       if (e.error === "not-allowed") setError("マイクの使用が許可されていません。設定で許可するか、文字で入力してください。");
       else if (e.error !== "no-speech" && e.error !== "aborted") setError("音声をうまく聞き取れませんでした。");
     };
     r.onend = () => {
+      // Chrome on Android stops after a few silent seconds: say so, or the next words are said to no one
+      if (!stopped.current && !failed.current) setError("聞き取りが止まりました。続けて話す時は、もう一度🎤を押してください。");
       setListening(false);
       setInterim("");
       endRef.current?.();

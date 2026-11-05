@@ -43,13 +43,14 @@ export const myId = () => auth.currentUser?.uid ?? "";
 export function errorText(e: unknown, fallback: string): string {
   const code = (e as { code?: string })?.code ?? "";
   // the SDK may add the HTTP status ("…ください [400]"): the person only needs the words
-  const message = ((e as { message?: string })?.message ?? "").replace(/s*[d{3}]s*$/, "");
+  const message = ((e as { message?: string })?.message ?? "").replace(/\s*\[\d{3}\]\s*$/, "");
   // only our Japanese messages are shown as they are (not "internal" etc.)
-  return (code === "functions/resource-exhausted" || code === "functions/invalid-argument" || code === "functions/not-found" || code === "functions/failed-precondition" || code === "functions/permission-denied") && /[ぁ-んァ-ン一-龥]/.test(message) ? message : fallback;
+  return (code === "functions/resource-exhausted" || code === "functions/invalid-argument" || code === "functions/not-found" || code === "functions/failed-precondition" || code === "functions/permission-denied" || code === "functions/unavailable") && /[ぁ-んァ-ン一-龥]/.test(message) ? message : fallback;
 }
 
 export async function call<T>(name: string, data: unknown): Promise<T> {
-  const fn = httpsCallable(functions, name);
+  // a little longer than the server (120 s): a slow answer that does arrive is not shown as a failure
+  const fn = httpsCallable(functions, name, { timeout: 125_000 });
   const res = await fn(getTrial() ? { ...(data as object), trial: true } : data);
   return res.data as T;
 }

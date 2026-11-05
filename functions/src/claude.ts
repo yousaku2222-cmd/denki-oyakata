@@ -20,10 +20,27 @@ export function getClient(): Anthropic | null {
   return client;
 }
 
+/**
+ * The system prompt as blocks, with a cache breakpoint on the last one: the tools and the system prompt are then read
+ * from the prompt cache on the next call with the same prefix (a prompt below the model's minimum is simply not cached).
+ * Pass the parts that change least first (e.g. the instructions, then the card list).
+ */
+export function systemBlocks(system: string | string[], cache = true): Anthropic.TextBlockParam[] {
+  const parts = (Array.isArray(system) ? system : [system]).filter((t) => t.trim());
+  return parts.map((text, i) => ({ type: "text", text, ...(cache && i === parts.length - 1 ? { cache_control: { type: "ephemeral" as const } } : {}) }));
+}
+
+/** Claude is busy (rate limit or overloaded): worth telling the user to retry, and the call is given back. */
+export function isBusy(e: unknown): boolean {
+  if (e instanceof Anthropic.RateLimitError) return true;
+  const status = (e as { status?: unknown })?.status;
+  return e instanceof Anthropic.APIError && (status === 429 || status === 529 || status === 503);
+}
+
 /** Lets the model pick tools and fill in their inputs. Returns the tool calls; the caller runs them. */
 export async function pickTools(opts: {
   model: string;
-  system: string;
+  system: string | string[];
   user: string;
   tools: Anthropic.Tool[];
   maxCalls?: number;
@@ -33,14 +50,17 @@ export async function pickTools(opts: {
   const res = await c.messages.create({
     model: opts.model,
     max_tokens: 8000, // also covers thinking
-    system: opts.system,
+    system: systemBlocks(opts.system), // also caches the tool definitions (they come before the system prompt)
     messages: [{ role: "user", content: opts.user }],
     tools: opts.tools,
     tool_choice: { type: "auto" },
   });
   await recordUsage(opts.model, res.usage);
-  // cut off before choosing: the answer goes on without a calculation, but leave a trace
-  if (res.stop_reason === "max_tokens") logger.warn(`${opts.model} hit max_tokens choosing tools`, res.usage);
+  // cut off before choosing: a half-written tool call is not used (the caller goes on without a calculation)
+  if (res.stop_reason === "max_tokens") {
+    logger.warn(`${opts.model} hit max_tokens choosing tools`, res.usage);
+    throw new Error(`${opts.model} hit max_tokens choosing tools`);
+  }
   return res.content
     .flatMap((b) => (b.type === "tool_use" ? [{ name: b.name, input: (b.input ?? {}) as Record<string, unknown> }] : []))
     .slice(0, opts.maxCalls ?? 2);
@@ -49,7 +69,7 @@ export async function pickTools(opts: {
 /** One request whose reply must match `schema` (structured output). */
 export async function jsonCall<T>(opts: {
   model: string;
-  system: string;
+  system: string | string[]; // several parts: see systemBlocks
   user: string | Anthropic.ContentBlockParam[]; // blocks for images
   schema: Record<string, unknown>;
   maxTokens?: number;
@@ -61,7 +81,7 @@ export async function jsonCall<T>(opts: {
   const res = await c.messages.create({
     model: opts.model,
     max_tokens: opts.maxTokens ?? 4000,
-    system: opts.system,
+    system: systemBlocks(opts.system),
     messages: [{ role: "user", content: opts.user }],
     output_config: { format: { type: "json_schema", schema: opts.schema }, ...(opts.effort ? { effort: opts.effort } : {}) },
   });

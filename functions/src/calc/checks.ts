@@ -154,7 +154,7 @@ const SUPPORT = {
   metal: { label: "金属管（隠ぺい・露出）", limit: 2, basis: [{ lawId: "shiyo-2.2.3", quote: "管の支持は、サドル、ハンガ等を使用し、その取付け間隔は 2ｍ以下とする。" }] },
   pf_hidden: { label: "PF管・CD管（隠ぺい）", limit: 1.5, basis: [{ lawId: "shiyo-2.3.3", quote: "その取付け間隔は1.5ｍ以下とする。" }, { lawId: "kaishaku-158", quote: "支持点間の距離は1.5m以下とし" }] },
   // CD管 cannot be run exposed (解釈 第158条第3項第七号), so the exposed row is PF only
-  pf_exposed: { label: "PF管（露出）", limit: 1, basis: [{ lawId: "shiyo-2.3.4", quote: "管の支持は、サドル、クリップ、ハンガ等を使用し、その取付け間隔は 1ｍ以下とする。" }, { lawId: "kaishaku-158", quote: "CD管は、次のいずれかにより施設すること。" }] },
+  pf_exposed: { label: "PF管（露出）", limit: 1, basis: [{ lawId: "shiyo-2.3.4", quote: "管の支持は、サドル、クリップ、ハンガ等を使用し、その取付け間隔は 1ｍ以下とする。" }] },
   vinyl: { label: "硬質ビニル管（VE管）", limit: 1.5, basis: [{ lawId: "shiyo-2.4.3", quote: "管の支持は、サドル、ハンガ等を使用し、その取付け間隔は、1.5ｍ以下とする。" }, { lawId: "kaishaku-158", quote: "支持点間の距離は1.5m以下とし" }] },
   flexible: { label: "金属製可とう電線管", limit: 1, basis: [{ lawId: "shiyo-2.5.3", quote: "取付け間隔は、1ｍ以下とする。" }] },
   cable: { label: "ケーブル（造営材の下面・側面）", limit: 2, basis: [{ lawId: "kaishaku-164", quote: "支持点間の距離をケーブルにあっては2m" }] },
@@ -225,9 +225,11 @@ const lic = {
     { value: "general", label: "一般用電気工作物等（住宅・小さな店舗など）" },
     { value: "private", label: "自家用電気工作物（最大電力500kW未満の需要設備：ビル・工場など）" },
   ] },
-  work: { key: "work", label: "工事の内容", type: "select", default: "normal", options: [
-    { value: "normal", label: "ふつうの電気工事（配線・器具の取付けなど）" },
-    { value: "simple", label: "600V以下で使う設備の工事（電線路を除く）" },
+  // ビル・工場の配線や器具の取付けはほぼ600V以下（簡易電気工事）: that is the default and the first choice, so a
+  // 認定電気工事従事者 is not told "できません" for ordinary wiring. Only asked for 自家用 (一般用 does not depend on it).
+  work: { key: "work", label: "工事の内容", type: "select", default: "simple", showIf: { key: "facility", values: ["private"] }, options: [
+    { value: "simple", label: "600V以下の設備の工事（配線・器具の取付けなど、電線路を除く）" },
+    { value: "normal", label: "高圧の設備や電線路の工事" },
     { value: "neon", label: "ネオン工事" },
     { value: "generator", label: "非常用予備発電装置の工事" },
   ] },
@@ -274,7 +276,7 @@ export const license: Calc = {
       title: "この資格でできる工事か",
       ok,
       verdict: ok ? `できます（${lname}）` : `この資格ではできません（必要: ${need}）`,
-      steps: [`設備: ${lic.facility.options!.find((o) => o.value === f)!.label}`, `工事: ${lic.work.options!.find((o) => o.value === w)!.label}`, `必要な資格: ${need}`, `持っている資格: ${lname}`],
+      steps: [`設備: ${lic.facility.options!.find((o) => o.value === f)!.label}`, ...(f === "private" ? [`工事: ${lic.work.options!.find((o) => o.value === w)!.label}`] : []), `必要な資格: ${need}`, `持っている資格: ${lname}`],
       basis,
       notes: ["資格がなくても、軽微な工事（電気工事士法施行令 第1条）と、有資格者の作業を補助する作業などの軽微な作業（施行規則 第2条）はできます。", "最大電力500kW以上の需要設備は電気工事士法の対象外で、別の決まり（電気主任技術者の監督など）になります。"],
     };

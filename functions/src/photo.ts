@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
 import { HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER } from "./models";
 import { displayAuthor, safetyNote, spacesOf, str } from "./common";
@@ -166,7 +167,8 @@ export async function identifyPart(data: Record<string, unknown>, uid: string) {
     .slice(0, MAX_LISTED_CARDS);
   const catalog = ["社内の知恵カード:", ...listed.map((c) => `[${c.id}] ${c.title.slice(0, 40)}`), "法令・基準:", ...LAWS.map((l) => `[${l.id}] ${lawLabel(l)}`)].join("\n");
   const judge = (content: Anthropic.ContentBlockParam[]) =>
-    jsonCall<Judged>({ model: MODEL_ANSWER, system: `${SYSTEM}\n\n${catalog}`, user: content, schema: SCHEMA, maxTokens: 6000 });
+    // two parts with a cache breakpoint (claude.ts systemBlocks): the second look reads the instructions and the list from the cache
+    jsonCall<Judged>({ model: MODEL_ANSWER, system: [SYSTEM, catalog], user: content, schema: SCHEMA, maxTokens: 6000 });
   let j: Judged;
   let zoomed = 0;
   if (!getClient()) {
@@ -193,12 +195,17 @@ export async function identifyPart(data: Record<string, unknown>, uid: string) {
     const crops = (await Promise.all(j.regions.slice(0, 2).map(async (r) => ({ buf: await crop(photo, meta.width ?? 0, meta.height ?? 0, r), what: r.what }))))
       .flatMap((c) => (c.buf ? [{ buf: c.buf, what: c.what }] : []));
     if (crops.length) {
-      zoomed = crops.length;
-      j = await judge([
-        imageBlock(photo),
-        ...crops.flatMap((c, i) => [{ type: "text" as const, text: `拡大した印字${i + 1}（${c.what}）:` }, imageBlock(c.buf)]),
-        { type: "text", text: `${RECHECK}\n前の判定: ${JSON.stringify({ ...j, regions: [] })}` },
-      ]);
+      // the second look only improves the first: if it fails, the first judgement still stands
+      try {
+        j = await judge([
+          imageBlock(photo),
+          ...crops.flatMap((c, i) => [{ type: "text" as const, text: `拡大した印字${i + 1}（${c.what}）:` }, imageBlock(c.buf)]),
+          { type: "text", text: `${RECHECK}\n前の判定: ${JSON.stringify({ ...j, regions: [] })}` },
+        ]);
+        zoomed = crops.length;
+      } catch (e) {
+        logger.warn("photo recheck failed; keeping the first judgement", e);
+      }
     }
   } else {
     j = await judge([{ type: "text", text: `若手が候補から「${name}」を選びました。写真は無いので、この部材について答えてください（verdict は sure、printed と regions は空、spec は分かる範囲で）。` }]);

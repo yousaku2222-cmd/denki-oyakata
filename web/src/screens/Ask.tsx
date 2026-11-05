@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { call, errorText } from "../firebase";
-import { getName, type Role } from "../local";
+import { getName, getTrial, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
 import { LawSheet, type LawRef } from "../LawSheet";
 import { CalcCard, type CalcOutput } from "../CalcCard";
@@ -68,14 +68,20 @@ const GENERAL_PREVIEW = 2; // general sentences shown before 「もっと見る�
 // one per role (切替 shows the other role its own), with whether 助かった / 親方にも聞く was already pressed
 type Last = { asked: string; answer: Answer; helped?: boolean; sent?: boolean; sentNote?: string };
 const lastOf: Partial<Record<Role, Last>> = {};
+// a question still on its way: leaving the tab does not lose it. Coming back shows the waiting again, and an
+// answer that lands while away is kept in lastOf for the next opening
+type Pending = { asked: string; done: Promise<Answer> };
+const pendingOf: Partial<Record<Role, Pending>> = {};
 
 export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string; seedQuestionId?: string }) {
   const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [boxErr, setBoxErr] = useState(""); // a failed 親方に聞く, shown under that button
   const last = seed ? undefined : lastOf[role];
-  const [answer, setAnswerState] = useState<Answer | null>(last?.answer ?? null);
-  const [asked, setAsked] = useState(last?.asked ?? "");
+  const pending = seed ? undefined : pendingOf[role];
+  const [busy, setBusy] = useState(!!pending);
+  const [answer, setAnswerState] = useState<Answer | null>(pending ? null : (last?.answer ?? null));
+  const [asked, setAsked] = useState(pending?.asked ?? last?.asked ?? "");
   const setAnswer = (a: Answer | null, q = asked) => {
     setAnswerState(a);
     if (a) lastOf[role] = { asked: q, answer: a };
@@ -85,7 +91,8 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
     if (l) Object.assign(l, more);
   };
   // asked again from わたし: the veteran already answered it, so no 「親方にも聞く」
-  const fromMe = !!seed;
+  // (a part from 部材帳 also comes with a seed, but no question id: that one can still go to the box)
+  const fromMe = !!seedQuestionId;
   const [helped, setHelped] = useState(!!last?.helped);
   const [sent, setSent] = useState(!!last?.sent);
   const [sentNote, setSentNote] = useState(last?.sentNote ?? "");
@@ -103,25 +110,48 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
     void submit(seed);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening, with the question it came with
   }, [seed]);
+  // came back while the question was still on its way: wait for the same call, not a new one
+  useEffect(() => {
+    if (pending) void wait(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
 
   // after: a follow-up to the question opened from わたし (the AI reads it as the continuation)
   async function submit(q = text, after?: string) {
     if (!q.trim() || busy) return;
     setBusy(true);
     setErr("");
+    setBoxErr("");
     setAnswer(null);
     setOpenGeneral(false);
     setHelped(false);
     setSent(false);
     setSentNote("");
     setAsked(q.trim());
+    delete lastOf[role];
+    const p: Pending = { asked: q.trim(), done: call<Answer>("ask", { text: q.trim(), askerRole: role, ...(after ? { after } : {}) }) };
+    pendingOf[role] = p;
+    p.done.then(
+      (a) => {
+        if (pendingOf[role] !== p) return;
+        delete pendingOf[role];
+        lastOf[role] = { asked: p.asked, answer: a };
+      },
+      () => {
+        if (pendingOf[role] === p) delete pendingOf[role];
+      },
+    );
+    await wait(p);
+  }
+
+  async function wait(p: Pending) {
     try {
-      const a = await call<Answer>("ask", { text: q.trim(), askerRole: role, ...(after ? { after } : {}) });
+      const a = await p.done;
       if (!a.cached) {
         setFinished(true);
         await new Promise((r) => setTimeout(r, TICK_MS));
       }
-      setAnswer(a, q.trim());
+      setAnswer(a, p.asked);
       setText("");
     } catch (e) {
       setErr(errorText(e, "答えを取得できませんでした。電波の良い所で、もう一度お試しください。"));
@@ -145,12 +175,13 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
   async function sendToBox(e: React.MouseEvent<HTMLButtonElement>) {
     const from = e.currentTarget.getBoundingClientRect(); // fly from the button that was pressed (always on screen)
     setSent(true);
+    setBoxErr("");
     let r: { duplicate?: boolean; merged?: boolean; askers?: number };
     try {
       r = await call("sendToBox", { text: asked, askerName: getName(role), askerRole: role });
     } catch (e) {
       setSent(false);
-      setErr(errorText(e, "質問箱に送れませんでした。もう一度お試しください。"));
+      setBoxErr(errorText(e, "質問箱に送れませんでした。もう一度お試しください。"));
       return;
     }
     if (r.duplicate) {
@@ -191,6 +222,8 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
             onClick={() => {
               setText(asked); // to fix the words and ask again
               setAnswerState(null);
+              setErr("");
+              setBoxErr("");
               delete lastOf[role];
             }}
           >
@@ -233,7 +266,8 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
               <Icon of={icon} /> {q}
             </button>
           ))}
-          <details className="sample-fold">
+          {/* a judge opens this screen first: the sample shows what one answer is made of, so it starts open */}
+          <details className="sample-fold" open={getTrial()}>
             <summary>📖 答えの見本を見る</summary>
             <AnswerSample onAsk={(q) => void submit(q)} />
           </details>
@@ -247,13 +281,16 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
           <p className="interpreted">
             こう受け取りました：<strong>{answer.interpretedAs}</strong>
           </p>
-          {answer.conclusion && (
+          {/* no conclusion over an answer with no law, card or calculation behind it (also an answer saved before the server stopped writing one) */}
+          {answer.conclusion && answer.grounded && (
             <div className="conclusion">
               <span className="conclusion-tag">結論</span>
               <p>{answer.conclusion}</p>
               <span className="src-meta">下の答えをまとめたものです。根拠は下の文で確かめてください。</span>
             </div>
           )}
+          {/* right under the conclusion: someone who reads only the top still sees it */}
+          {answer.safetyNote && <Notice>⚠️ {answer.safetyNote}</Notice>}
           {/* a tester went to look it up on the internet: the way to check is already here */}
           {answer.sentences.some((s) => s.source === "law") && (
             <div className="how-to-check">
@@ -264,7 +301,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
                 <b>📜 引用元</b> 押すと国の原文
               </span>
               <span>
-                <b>✔ 一致</b> 原文と一字一句同じ
+                <b>✔ 引用が一致</b> 引用した部分が原文と一字一句同じ（文は AI のまとめ）
               </span>
               <details className="more-info">
                 <summary>？</summary>
@@ -316,7 +353,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
                                 📜 引用元：{law.short} {law.article} ›
                               </button>
                               {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
-                              {s.verified && <span className="match-mark">✔ 一致</span>}
+                              {s.verified && <span className="match-mark">✔ 引用が一致</span>}
                             </div>
                           )}
                         </motion.div>
@@ -332,7 +369,6 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
             })}
           </motion.div>
 
-          {answer.safetyNote && <Notice>⚠️ {answer.safetyNote}</Notice>}
           {openLaw && <LawSheet id={openLaw.id} highlight={openLaw.quote} onClose={() => setOpenLaw(null)} />}
           {gloss && <GlossSheet term={gloss} onClose={() => setGloss(null)} />}
 
@@ -367,6 +403,11 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
             </button>
             )}
           </div>
+          {boxErr && (
+            <p className="hint error" role="alert">
+              {boxErr}
+            </p>
+          )}
           {fromMe && seed && seedQuestionId && <FollowUp role={role} prev={seed} prevId={seedQuestionId} first={asked !== seed ? asked : ""} busy={busy} onAsk={(q) => void submit(q, seed)} />}
           {sent && (
             <motion.p className="hint sent-note" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>

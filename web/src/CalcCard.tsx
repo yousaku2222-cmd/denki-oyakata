@@ -52,6 +52,8 @@ function CalcDetail({ c, onCite, foldSteps }: { c: CalcOutput; onCite: (o: { id:
       ))}
     </ol>
   );
+  // the program checks the quoted words, not the numbers of a table (146-1表 and the like are typed into the app)
+  const fromTable = c.basisShown.length > 0 && c.steps.some((s) => /\d+-\d+表|\d+表の値/.test(s));
   return (
     <>
       {c.figure?.kind === "fill" && <FillFigure f={c.figure} />}
@@ -71,9 +73,10 @@ function CalcDetail({ c, onCite, foldSteps }: { c: CalcOutput; onCite: (o: { id:
           <span className="src-meta">
             {b.label}・{b.edition} ›
           </span>
-          <span className="stamp small">✔ 原文と一致</span>
+          <span className="stamp small">✔ 引用文は原文と一致</span>
         </button>
       ))}
+      {fromTable && <p className="hint">※ 表の数値は、アプリに入れた値です。原文の表で確かめてください。</p>}
       {c.notes.map((n, i) => (
         <p key={i} className="hint">
           ※ {n}

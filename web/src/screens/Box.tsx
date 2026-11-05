@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
-import { fmtDate } from "../components";
+import { fmtDate, LoadFailed, Skeleton } from "../components";
 import type { Topic } from "./Talk";
 
 interface Q {
@@ -167,8 +167,8 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
       >
         ↻ 新しい質問を見る
       </button>
-      {err && <p className="hint error">{err}</p>}
-      {items === null && !err && <p className="hint">読み込み中…</p>}
+      {err && items !== null && <p className="hint error">{err}</p>}
+      {items === null && (err ? <LoadFailed what="質問" onRetry={load} /> : <Skeleton />)}
       {items?.length === 0 && <p className="empty">いまは質問がありません。</p>}
       {items &&
         grouped(items, seenBefore).map((g) => (
@@ -190,6 +190,10 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
                     {q.lastAskedAt > seenBefore ? <span className="new-chip">新着</span> : <span />}
                     <button className={`star-btn ${q.good ? "done" : ""}`} disabled={q.good} onClick={() => good(q)} aria-label={q.good ? "いい質問と伝えました" : "いい質問と伝える"} title="いい質問">
                       {q.good ? "⭐" : "☆"}
+                      {/* the star alone says nothing on a phone (no title there) */}
+                      <span className="star-word" aria-hidden>
+                        {q.good ? "伝えました" : "いい質問"}
+                      </span>
                       {q.good && <StarBurst key={q.id} />}
                     </button>
                   </div>

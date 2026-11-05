@@ -135,28 +135,34 @@ function CalcForm({ def, onBack, preset }: { def: CalcDef; onBack: () => void; p
   const nextSlot = slots[opened];
   const slotName = (def.fields.find((f) => slotOf(f) === slots[0])?.label ?? "").replace(/\d.*$/, "");
 
+  // every change of an input goes through here: the result of the old inputs goes away, so a ✅ never stays
+  // under numbers it was not computed from
+  function put(next: Record<string, string | boolean>) {
+    setValues(next);
+    setResult(null);
+  }
   // changing a field clears the fields whose options depend on it
   function change(key: string, v: string | boolean) {
     const next = { ...values, [key]: v };
     for (const f of def.fields) if (f.optionsBy?.key === key) next[f.key] = "";
-    setValues(next);
+    put(next);
   }
   function openSlot() {
     const next = { ...values };
     for (const f of def.fields) if (slotNo(f.key) === nextSlot && f.type === "number" && next[f.key] === "") next[f.key] = "1";
-    setValues(next);
+    put(next);
     setOpened(opened + 1);
   }
   function closeSlot() {
     const n = slots[opened - 1];
     const next = { ...values };
     for (const f of def.fields) if (slotNo(f.key) === n) next[f.key] = "";
-    setValues(next);
+    put(next);
     setOpened(opened - 1);
   }
   const step = (f: Field, d: number) => {
     const n = (Number(values[f.key]) || 0) + d;
-    setValues({ ...values, [f.key]: String(Math.min(f.max ?? 999, Math.max(f.min ?? 0, n))) });
+    put({ ...values, [f.key]: String(Math.min(f.max ?? 999, Math.max(f.min ?? 0, n))) });
   };
 
   async function run() {
@@ -193,7 +199,7 @@ function CalcForm({ def, onBack, preset }: { def: CalcDef; onBack: () => void; p
       {def.fields.filter(shown).map((f) =>
         f.type === "boolean" ? (
           <label key={f.key} className="toggle">
-            <input type="checkbox" checked={values[f.key] === true} onChange={(e) => setValues({ ...values, [f.key]: e.target.checked })} />
+            <input type="checkbox" checked={values[f.key] === true} onChange={(e) => put({ ...values, [f.key]: e.target.checked })} />
             {f.label}
           </label>
         ) : (
@@ -209,14 +215,14 @@ function CalcForm({ def, onBack, preset }: { def: CalcDef; onBack: () => void; p
                 <button type="button" aria-label="減らす" onClick={() => step(f, -1)}>
                   −
                 </button>
-                <input inputMode="numeric" value={String(values[f.key] ?? "")} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} />
+                <input inputMode="numeric" aria-label={`${f.label}（${f.unit}）`} value={String(values[f.key] ?? "")} onChange={(e) => put({ ...values, [f.key]: e.target.value })} />
                 <span>{f.unit}</span>
                 <button type="button" aria-label="増やす" onClick={() => step(f, 1)}>
                   ＋
                 </button>
               </div>
             ) : (
-              <input inputMode="decimal" value={String(values[f.key] ?? "")} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} />
+              <input inputMode="decimal" aria-label={f.label + (f.unit ? `（${f.unit}）` : "")} value={String(values[f.key] ?? "")} onChange={(e) => put({ ...values, [f.key]: e.target.value })} />
             )}
             {f.help && <small className="hint">{f.help}</small>}
           </div>
@@ -260,23 +266,23 @@ function Chips({ f, value, parent, onPick, noEmpty }: { f: Field; value: string;
   const empty = f.default === undefined && !noEmpty ? [{ value: "", label: f.emptyLabel?.replace(/[（）]/g, "") ?? "なし" }] : [];
   const text = (o: { label: string; short?: string }) => o.short ?? o.label;
   const chip = (o: { value: string; label: string; short?: string }, shown = text(o), extra = "") => (
-    <button type="button" key={o.value || "none"} className={`opt${extra}${o.value === value ? " on" : ""}`} onClick={() => onPick(o.value)}>
+    <button type="button" key={o.value || "none"} className={`opt${extra}${o.value === value ? " on" : ""}`} aria-pressed={o.value === value} onClick={() => onPick(o.value)}>
       {shown}
     </button>
   );
-  if (!twoStep) return <div className={`opts-row${opts.some((o) => text(o).length > 14) ? " wide" : ""}`}>{[...empty, ...opts].map((o) => chip(o))}</div>;
+  if (!twoStep) return <div role="group" aria-label={f.label} className={`opts-row${opts.some((o) => text(o).length > 14) ? " wide" : ""}`}>{[...empty, ...opts].map((o) => chip(o))}</div>;
   const kinds = [...new Set(opts.map((o) => kindOf(o.value)!))];
   return (
     <>
-      <div className="opts-row">
+      <div className="opts-row" role="group" aria-label={`${f.label}の種類`}>
         {empty.map((o) => chip(o))}
         {kinds.map((k) => (
-          <button type="button" key={k} className={`opt kind${k === kind ? (kindOf(value) === k ? " on" : " sel") : ""}`} onClick={() => setKind(k)}>
+          <button type="button" key={k} className={`opt kind${k === kind ? (kindOf(value) === k ? " on" : " sel") : ""}`} aria-pressed={k === kind} onClick={() => setKind(k)}>
             {KINDS[k]}
           </button>
         ))}
       </div>
-      <div className="opts-row sizes">{opts.filter((o) => kindOf(o.value) === kind).map((o) => chip(o, o.value.slice(o.value.indexOf("-") + 1)))}</div>
+      <div className="opts-row sizes" role="group" aria-label={`${f.label}の太さ`}>{opts.filter((o) => kindOf(o.value) === kind).map((o) => chip(o, o.value.slice(o.value.indexOf("-") + 1)))}</div>
     </>
   );
 }

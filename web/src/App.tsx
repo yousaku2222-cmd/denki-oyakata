@@ -118,10 +118,11 @@ export default function App() {
   return (
     <div className="app" data-role={role}>
       <PcNote />
+      {getTrial() && <TrialGuide role={role} />}
       <div className="top-wrap">
       <header className="top">
         <span className="logo">⚡ でんきの親方</span>
-        <span className="role-badge" aria-label={role === "veteran" ? "ベテラン" : "若手"}>
+        <span className="role-badge" role="img" aria-label={role === "veteran" ? "ベテラン" : "若手"}>
           {role === "veteran" ? "🧰" : "🔰"}
           <span className="badge-word">{role === "veteran" ? "ベテラン" : "若手"}</span>
         </span>
@@ -132,12 +133,21 @@ export default function App() {
           切替
         </button>
       </header>
-      <UpdateNote />
+      <UpdateNote dirty={role === "veteran" && talkDirty} />
       {getTrial() && (
-        // one line: the rest of the screen is the demo
+        // one line: the rest of the screen is the demo. The next step is the other role (見本の話 is on the veteran's side)
         <p className="trial-note" title="公開したカードと送った質問は、この端末にだけ見えます">
           <span>🧪 審査員モード（作った物はこの端末だけ）</span>
-          <button className="trial-end" onClick={() => choose(null, false)}>
+          {role === "young" ? (
+            <button className="trial-end trial-next" onClick={() => choose("veteran")}>
+              🧰 ベテランで試す
+            </button>
+          ) : (
+            <button className="trial-end trial-next" onClick={() => (!talkDirty || confirm("「話す」で話している途中の内容は消えます。切り替えますか？")) && choose("young")}>
+              🔰 若手で聞く
+            </button>
+          )}
+          <button className="trial-end" onClick={() => (role !== "veteran" || !talkDirty || confirm("「話す」で話している途中の内容は消えます。審査員モードを終えますか？")) && choose(null, false)}>
             終える
           </button>
         </p>
@@ -172,6 +182,11 @@ export default function App() {
         {role === "veteran" && (
           <div hidden={tab !== "talk"}>
             <Talk key={talkKey} topic={topic} resumeCardId={resumeId} active={tab === "talk"} onDirty={setTalkDirty} onDone={() => startTalk(null, null, true)} boxOpen={boxOpen} onOpenBox={() => setTab("box")}
+              onTryAsYoung={(q) => {
+                choose("young");
+                setAskSeed({ text: q, questionId: "", n: Date.now() });
+                window.scrollTo(0, 0);
+              }}
               onBack={() => {
                 startTalk(null, null, true);
                 setTab("mycards");
@@ -190,6 +205,7 @@ export default function App() {
             key={t.id}
             data-tab={t.id}
             className={tab === t.id ? "on" : ""}
+            aria-current={tab === t.id ? "page" : undefined}
             onClick={() => {
               if (t.id === "calc") setCalcStart(null);
               if (t.id === "me") setMeDot(false);
@@ -201,9 +217,9 @@ export default function App() {
           >
             <span className="tab-icon">
               <Icon of={t.icon} />
-              {((t.id === "me" && meDot) || (t.id === "mycards" && cardsDot)) && <span className="tab-dot" aria-label="新しい知らせ" />}
+              {((t.id === "me" && meDot) || (t.id === "mycards" && cardsDot)) && <span className="tab-dot" role="img" aria-label="新しい知らせ" />}
               {t.id === "box" && boxNew > 0 && (
-                <span className="tab-count" aria-label={`新着${boxNew}件`}>
+                <span className="tab-count" role="img" aria-label={`新着${boxNew}件`}>
                   {boxNew > 9 ? "9+" : boxNew}
                 </span>
               )}
@@ -222,13 +238,13 @@ function VeteranAsk({ role }: { role: Role }) {
   return (
     <>
       <div className="segmented">
-        <button className={view === "ask" ? "on" : ""} onClick={() => setView("ask")}>
+        <button className={view === "ask" ? "on" : ""} aria-pressed={view === "ask"} onClick={() => setView("ask")}>
           聞く
         </button>
-        <button className={view === "browse" ? "on" : ""} onClick={() => setView("browse")}>
+        <button className={view === "browse" ? "on" : ""} aria-pressed={view === "browse"} onClick={() => setView("browse")}>
           探す
         </button>
-        <button className={view === "calc" ? "on" : ""} onClick={() => setView("calc")}>
+        <button className={view === "calc" ? "on" : ""} aria-pressed={view === "calc"} onClick={() => setView("calc")}>
           計算
         </button>
       </div>
@@ -237,6 +253,30 @@ function VeteranAsk({ role }: { role: Role }) {
   );
 }
 
+
+/**
+ * 審査員モード, on a wide screen only: what to try in 3 minutes, on the empty left side. The steps done in the
+ * role now shown are marked.
+ */
+function TrialGuide({ role }: { role: Role | null }) {
+  const steps: { on: Role; text: string }[] = [
+    { on: "young", text: "若手で「よく聞かれる質問」を1つ押す（根拠と「✔ 原文と一致」を見る）" },
+    { on: "veteran", text: "「ベテランで試す」→「🧪 見本の話で試す」で話を送る" },
+    { on: "young", text: "カードにして公開したら「🔰 若手として聞いてみる」で、答えにそのカードが出るのを見る" },
+  ];
+  return (
+    <aside className="trial-guide">
+      <strong>🧪 審査員向け 3分の試し方</strong>
+      <ol>
+        {steps.map((s, i) => (
+          <li key={i} className={role === s.on ? "now" : ""}>
+            {s.text}
+          </li>
+        ))}
+      </ol>
+    </aside>
+  );
+}
 
 /** Beside the app on a wide screen only: the mic and camera are for phones. */
 function PcNote() {
@@ -254,6 +294,7 @@ function Entry({ onChoose, last }: { onChoose: (r: Role, trial?: boolean) => voi
   return (
     <div className="entry">
       <PcNote />
+      <TrialGuide role={null} />
       <UpdateNote />
       <div className="entry-logo">⚡</div>
       <h1>でんきの親方</h1>
@@ -261,6 +302,8 @@ function Entry({ onChoose, last }: { onChoose: (r: Role, trial?: boolean) => voi
         <span>あなたの一言が、</span>
         <span>業界の未来へつながる</span>
       </p>
+      {/* what it solves, under the catch (the catch alone does not say) */}
+      <p className="catch-sub">ベテランは話すだけで現場の知恵を残し、若手は法令と知恵を根拠つきで聞けます</p>
       <FlowSteps
         label="しくみ"
         steps={[
@@ -280,7 +323,7 @@ function Entry({ onChoose, last }: { onChoose: (r: Role, trial?: boolean) => voi
         <small>現場の疑問に、根拠つきで答えます</small>
       </button>
       {getTrial() ? (
-        <p className="trial-note entry-trial">🧪 審査員モード中です。役割を選ぶと、そのまま続きます。</p>
+        <p className="trial-note entry-trial">🧪 審査員モード中です。見本の質問は若手、見本の話はベテランで試せます。</p>
       ) : (
         // as strong as the two roles: the judges are the first ones to open this
         <button className="role-btn judge" onClick={() => onChoose("young", true)}>

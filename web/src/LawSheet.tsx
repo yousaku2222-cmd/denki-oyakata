@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { call } from "./firebase";
 import { Sheet } from "./Sheet";
+import { LoadFailed } from "./components";
 
 export interface LawRef {
   id: string;
@@ -25,16 +26,27 @@ export const lawTitle = (l: Pick<LawRef, "short" | "article" | "heading">) => `$
 export function LawSheet({ id, highlight, onClose }: { id: string; highlight?: string; onClose: () => void }) {
   const [law, setLaw] = useState<LawFull | null>(null);
   const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
+  const text = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
+    setFailed(false);
     call<{ law: LawFull | null }>("getLaw", { id })
       .then((r) => (r.law ? setLaw(r.law) : setFailed(true)))
       .catch(() => setFailed(true));
-  }, [id]);
+  }, [id, tries]);
+
+  // opened from a quote: go straight to the highlighted words, so no one has to hunt for them in a long article
+  useEffect(() => {
+    const mark = text.current?.querySelector("mark");
+    if (!mark) return;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    mark.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
+  }, [law]);
 
   return (
     <Sheet label="条文" onClose={onClose}>
-        {failed && <p className="hint error">条文を読み込めませんでした。</p>}
+        {failed && <LoadFailed what="条文" onRetry={() => setTries((n) => n + 1)} />}
         {!law && !failed && <p className="hint">読み込み中…</p>}
         {law && (
           <>
@@ -77,7 +89,7 @@ export function LawSheet({ id, highlight, onClose }: { id: string; highlight?: s
             </div>
             <span className="field-label">原文</span>
             {law.note && <p className="hint">※ {law.note}</p>}
-            <pre className="law-text">{highlightQuote(law.text, highlight)}</pre>
+            <pre ref={text} className="law-text">{highlightQuote(law.text, highlight)}</pre>
           </>
         )}
     </Sheet>

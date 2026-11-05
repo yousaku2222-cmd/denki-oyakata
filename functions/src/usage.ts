@@ -3,6 +3,8 @@ import { db } from "./common";
 import { MODEL_ANSWER, MODEL_HEAVY, MODEL_ROUTER } from "./models";
 
 // US dollars per million tokens: [input, output, cache read]. Keep in step with models.ts.
+// Writing the prompt cache (5 minutes) costs 1.25 times the input price. MODEL_SUMMARY is the same model as
+// MODEL_ROUTER today (one row); give it its own row if it ever changes.
 const PRICE: Record<string, [number, number, number]> = {
   [MODEL_ROUTER]: [0.1, 0.5, 0.01],
   [MODEL_ANSWER]: [2, 10, 0.2],
@@ -13,11 +15,12 @@ export interface Usage {
   input_tokens: number;
   output_tokens: number;
   cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
 }
 
 export function costUsd(model: string, u: Usage): number {
   const [i, o, r] = PRICE[model] ?? PRICE[MODEL_HEAVY]; // an unknown model is counted at the top price
-  return (u.input_tokens * i + u.output_tokens * o + (u.cache_read_input_tokens ?? 0) * r) / 1e6;
+  return (u.input_tokens * i + u.output_tokens * o + (u.cache_read_input_tokens ?? 0) * r + (u.cache_creation_input_tokens ?? 0) * i * 1.25) / 1e6;
 }
 
 /** The day in Japan time, so a day's total matches the day people used it. */
@@ -34,7 +37,11 @@ export async function recordUsage(model: string, u: Usage): Promise<void> {
     await db
       .doc(`usage/${jstDay()}`)
       .set(
-        { usd: inc(usd), calls: inc(1), models: { [model]: { calls: inc(1), input: inc(u.input_tokens), output: inc(u.output_tokens), usd: inc(usd) } } },
+        {
+          usd: inc(usd),
+          calls: inc(1),
+          models: { [model]: { calls: inc(1), input: inc(u.input_tokens), output: inc(u.output_tokens), cacheRead: inc(u.cache_read_input_tokens ?? 0), cacheWrite: inc(u.cache_creation_input_tokens ?? 0), usd: inc(usd) } },
+        },
         { merge: true },
       );
   } catch (e) {

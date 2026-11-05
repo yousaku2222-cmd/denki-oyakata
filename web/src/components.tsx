@@ -71,8 +71,9 @@ export function MicInput(props: {
   maxLength?: number; // the server's limit for this text
   onDone?: (text: string) => void; // one press ends speaking and sends what was said
   doneLabel?: string;
+  onListening?: (on: boolean) => void; // the screen hides what would cut in while the mic is on
 }) {
-  const { value, onChange, paused } = props;
+  const { value, onChange, paused, onListening } = props;
   // several final results can arrive before the next render: append to the latest text, not to this render's copy
   const latest = useRef(value);
   latest.current = value;
@@ -97,6 +98,7 @@ export function MicInput(props: {
   useEffect(() => {
     if (paused) stop();
   }, [paused, stop]);
+  useEffect(() => onListening?.(listening), [listening, onListening]);
   return (
     <div className="mic-input">
       <button type="button" className={`mic ${listening ? "on" : ""}`} onClick={listening ? (props.onDone ? finish : stop) : start}>

@@ -29,8 +29,8 @@ export function Transfer({ what, onMoved }: { what: string; onMoved?: () => void
       setInput("");
       onMoved?.();
     } catch (e) {
-      const m = (e as { message?: string }).message ?? "";
-      setMsg(/[ぁ-んァ-ン一-龥]/.test(m) ? m : errorText(e, "引き継げませんでした。もう一度お試しください。"));
+      // the server's words (wrong or old code) come through errorText, without the "[404]" the SDK adds
+      setMsg(errorText(e, "引き継げませんでした。もう一度お試しください。"));
     } finally {
       setBusy(false);
     }
@@ -51,7 +51,7 @@ export function Transfer({ what, onMoved }: { what: string; onMoved?: () => void
         </button>
       )}
       <div className="row">
-        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="前の端末のコード" autoCapitalize="characters" maxLength={20} />
+        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="前の端末のコード" aria-label="前の端末のコード" autoCapitalize="characters" maxLength={20} />
         <button className="secondary" disabled={busy || input.trim().length < 8} onClick={use}>
           引き継ぐ
         </button>

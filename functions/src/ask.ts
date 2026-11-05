@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
 import { HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getClient, jsonCall, pickTools } from "./claude";
 import { CalcOutput, calcTools, runCalc } from "./calc";
 import { CalcInputError } from "./calc/types";
-import { MODEL_ANSWER, MODEL_ROUTER } from "./models";
+import { MODEL_ANSWER, MODEL_ROUTER, MODEL_SUMMARY } from "./models";
 import { scoreCard, searchCards } from "./search";
-import { Law, getLawById, numbersMissing, quoteIsInOriginal, searchLaws } from "./laws";
+import { LAWS_VERSION, Law, getLawById, numbersMissing, quoteIsInOriginal, quoteSentence, searchLaws } from "./laws";
 import { COMPANY, CardDoc, Sentence, db, displayAuthor, safetyNote, spaceOf, spacesOf, str } from "./common";
 
 export type Card = CardDoc & { id: string };
@@ -28,37 +29,68 @@ const ROUTER_SYSTEM = `電気工事の現場の若手からの質問を受け取
 - kind: law=法令・基準・資格／calc=計算・判定／part=部材・工具の名前や用途／howto=やり方・コツ／other
 - searchTerms: 社内の知恵カードと法令を探すための言い換え・正式名・別名・関係する作業名・法令の用語を3〜8個`;
 
-const CONCLUSION_SYSTEM = `電気工事の若手への答え（文の並び）を受け取ります。答えのいちばん上に見せる「結論」を書いてください。
-- 日本語で1〜2文、合わせて70字以内
-- 渡された文に書いてあることだけを使う。新しい数字・条件・言い切りを足さない
-- 値や「できる／できない」が文にあれば、それを先に言う
+const CONCLUSION_SYSTEM = `電気工事の若手への答え（番号付きの文の並び）を受け取ります。答えのいちばん上に見せる「結論」を書いてください。
+文の頭の札は出どころです: [法令]=条文の原文で確かめた文／[知恵]=社内の親方の知恵カードの文／[一般]=一般知識（要確認）。「計算結果」はプログラムが出した値です。
+- conclusion: 日本語で1〜2文、合わせて70字以内
+- basedOn: 結論の元にした文の番号（1つ以上）
+- 渡された文に書いてあることだけを使う。新しい数字・条件・言い切りを足さない。「ただし〜」「〜の場合は」などの条件を落とさない
+- [一般] の文だけを元に言い切らない。[法令]・[知恵] の文か計算結果を元にできない時は空文字にする
+- 値や「できる／できない」が文にあれば、それを先に言う。元の文と「できる／できない」の向きを変えない
 - 文に答えが無い時（聞き返しだけ、など）は空文字にする`;
+
+const TAG: Record<Sentence["source"], string> = { law: "[法令]", wisdom: "[知恵]", general: "[一般]" };
+
+// "no" in a conclusion must come from the sentences it stands on; so must a "can" where they only say "cannot"
+const NEG = /ません|ならない|いけない|禁止|不可|できない|しない|使えない|ないこと|ないで/;
+const CAN = /でき(?:ます|る)|してよい|して良い|可能/;
+const CANNOT = /できません|できない|してはなら|してはいけ|禁止|不可/;
+
+/** Whether the conclusion turns "can" into "cannot" (or back) against the sentences it is based on. */
+export function polarityFlipped(conclusion: string, source: string): boolean {
+  if (NEG.test(conclusion) && !NEG.test(source)) return true;
+  return CAN.test(conclusion) && !CANNOT.test(conclusion) && CANNOT.test(source) && !CAN.test(source);
+}
 
 /**
  * The conclusion first, written from the finished sentences only (the answer itself is not changed by it).
- * The program drops it when it has a number the sentences do not have.
+ * The model names the sentences it stands on (basedOn); the program drops the conclusion when
+ * - it names none, or only general-knowledge sentences (and there is no calculation),
+ * - it has a number those sentences (and the calculation) do not have, compared as whole values like the answer,
+ * - it says "cannot" where they do not, or "can" where they only say "cannot".
  */
-export function conclusionChecked(conclusion: string, sentences: Sentence[]): string | null {
+export function conclusionChecked(conclusion: string, basedOn: number[], sentences: Sentence[], calcText = ""): string | null {
   const c = conclusion.trim();
   if (!c || c.length > 90) return null;
-  const said = sentences.map((x) => x.text).join(" ").normalize("NFKC");
-  const nums = c.normalize("NFKC").match(/\d+(?:\.\d+)?/g) ?? [];
-  return nums.every((n) => said.includes(n)) ? c : null;
+  const refs = [...new Set(basedOn)].filter((i) => Number.isInteger(i) && i >= 1 && i <= sentences.length).map((i) => sentences[i - 1]);
+  if (!refs.length) return null;
+  if (!calcText && refs.every((s) => s.source === "general")) return null;
+  const said = `${refs.map((s) => s.text).join(" ")} ${calcText}`;
+  if (numbersMissing(c, said).length) return null;
+  if (polarityFlipped(c, said)) return null;
+  return c;
 }
 
-async function conclude(sentences: Sentence[]): Promise<string | null> {
-  if (sentences.length < 2) return null;
+/** failed: the call broke (the answer is then not saved, so the next asker gets a conclusion). */
+async function conclude(sentences: Sentence[], calcs: CalcOutput[]): Promise<{ conclusion: string | null; failed: boolean }> {
+  if (sentences.length < 2) return { conclusion: null, failed: false };
+  const calcText = calcs.map((c) => `${c.title}: ${c.verdict}`).join("\n");
   try {
-    const r = await jsonCall<{ conclusion: string }>({
-      model: MODEL_ROUTER,
+    const r = await jsonCall<{ conclusion: string; basedOn: number[] }>({
+      model: MODEL_SUMMARY,
       system: CONCLUSION_SYSTEM,
-      user: sentences.map((x, i) => `${i + 1}. ${x.text}`).join("\n"),
-      schema: { type: "object", properties: { conclusion: { type: "string" } }, required: ["conclusion"], additionalProperties: false },
+      user: `${sentences.map((x, i) => `${i + 1}. ${TAG[x.source]} ${x.text}`).join("\n")}${calcText ? `\n\n計算結果（プログラム）:\n${calcText}` : ""}`,
+      schema: {
+        type: "object",
+        properties: { conclusion: { type: "string" }, basedOn: { type: "array", items: { type: "integer" } } },
+        required: ["conclusion", "basedOn"],
+        additionalProperties: false,
+      },
       maxTokens: 1000,
     });
-    return conclusionChecked(r.conclusion, sentences);
-  } catch {
-    return null; // only extra: the answer shows without it
+    return { conclusion: conclusionChecked(r.conclusion, r.basedOn ?? [], sentences, calcText), failed: false };
+  } catch (e) {
+    logger.warn("conclusion failed", e);
+    return { conclusion: null, failed: true }; // only extra: the answer shows without it
   }
 }
 
@@ -80,7 +112,8 @@ const ANSWER_SYSTEM = `あなたは電気工事会社の「でんきの親方」
 - law と wisdom の文に入れる数値は、その条文・カードに書いてあるものだけ（プログラムが照合し、無い数値があれば一般知識に格下げされる）。質問に出てくる数値（例「100V」）も、条文に無ければ law の文に入れない。質問の条件への当てはめは general の文で書く（例: law「対地電圧150V以下は0.1MΩ以上」→ general「100Vの回路はこの区分に入ります」）。
 - 基準の値（何m以下・何MΩ以上など）が条文やカードにあれば、計算に必要な値が足りない時でも、まずその値を law / wisdom で答える。聞き返しはそのあと。
 - 基準・上限・回数を言う law の文には、必ずその数値を入れ、その数値を含む部分を quote にする（「上限があります」のように数値を伏せない。例: 「曲げ角度の合計は270度以下です」＋ quote「270度を超えてはならない」）。
-- general の文で、条文やカードに書いていない比較や結論（「つまり同じ」「〜の方が多い」など）を作らない。条文から違いが読み取れない時は、そう書いて確かめるよう促す。`;
+- general の文で、条文やカードに書いていない比較や結論（「つまり同じ」「〜の方が多い」など）を作らない。条文から違いが読み取れない時は、そう書いて確かめるよう促す。
+- 知恵カードの数値・やり方が条文と食い違う時は、条文を優先する（law を先に書く）。カードの文はそのまま wisdom で示してよいが、続けて general の文で「カードの話は条文と違うので、責任者に確かめてください」と書く。食い違いを黙って並べない。`;
 
 // keep the <question>/<card> fences intact whatever the text says
 const fenced = (s: string) => s.replace(/</g, "＜").replace(/>/g, "＞");
@@ -93,6 +126,12 @@ const CALC_PICK_SYSTEM = `電気工事の若手の質問に、計算・判定の
 - 道具で答えられない質問なら、道具を呼ばずに「なし」とだけ答える。
 - 判定の結論を左右する条件（例: 資格の判定なら、どの設備・どんな工事か）が質問に書かれていない時は、その道具を呼ばない。既定値で判定すると、聞いていない結論（「この資格ではできません」など）が答えの一番上に出てしまう。
 - 「資格が無くてもできる作業は？」のように、できる範囲そのものを聞く質問には、資格の判定の道具を使わない（条文で答える）。`;
+
+// the instructions and models: a change to them gives the saved answers a new version (cacheKey)
+const PROMPTS = createHash("sha256")
+  .update([ROUTER_SYSTEM, CONCLUSION_SYSTEM, ANSWER_SYSTEM, CALC_PICK_SYSTEM, MODEL_ROUTER, MODEL_SUMMARY, MODEL_ANSWER].join("\n---\n"))
+  .digest("hex")
+  .slice(0, 16);
 
 function dummyAnswer(text: string, hits: Card[], laws: Law[]): Sentence[] {
   const s: Sentence[] = laws
@@ -141,7 +180,10 @@ export function enforceSources(
       if (s.source === "law") {
         const law = s.lawId && allowedLawIds.has(s.lawId) ? getLawById(s.lawId) : undefined;
         if (!law || !s.quote || !quoteIsInOriginal(s.quote, law.text, MIN_ANSWER_QUOTE)) return general(s.text);
-        if (numbersMissing(s.text, `${law.text} ${law.article} ${law.short}`).length) return general(s.text);
+        // the numbers must be in the sentence of the original the quote comes from, not anywhere in the article
+        // (A種 10Ω must not pass with a D種 quote); this article's own number (第17条) is a place, not a value
+        const said = s.text.normalize("NFKC").split(law.article.normalize("NFKC")).join(" ");
+        if (numbersMissing(said, quoteSentence(s.quote, law.text)).length) return general(s.text);
         const quote = s.quote.replace(/^[「『]|[」』]$/g, "").replace(/｜/g, " ").trim(); // ｜ = table cell break
         return { text: s.text, source: "law", lawId: law.id, quote, verified: true };
       }
@@ -153,17 +195,29 @@ export function enforceSources(
 export function normalizeQuestion(text: string): string {
   return text.normalize("NFKC").replace(/\s+/g, "").replace(/[?？。.!！]+$/, "");
 }
+/** Raise by hand to drop every saved answer (e.g. after a change to the checks in this file). */
+export const ANSWER_CACHE_VER = 1;
+
+/** What of a card can change an answer: the words searched and shown, and the name and date shown with it. */
+const cardStamp = (c: Card) =>
+  JSON.stringify([c.id, c.title, c.scene, c.body, c.reason, c.caution, c.tags, c.triggerSearchText ?? null, c.triggerQuestionText ?? null, c.triggerAskerName ?? null, c.showAuthorName, c.authorName, c.publishedAt?.toMillis?.() ?? 0]);
+
 export function cacheKey(text: string, cards: Card[]): { id: string; ver: string } {
-  // Any change to the cards (a new one, one made private, an edit) or a new deploy (law data) gives a new version.
+  // A new version when what goes into an answer changes: the cards' contents (a new one, one made private, an edit
+  // that changes words), the law data, the instructions and models, or ANSWER_CACHE_VER. Not on every deploy
+  // (K_REVISION) or every save of a card (updatedAt): those threw away the saved answers for nothing.
   const ver = createHash("sha256")
-    .update(process.env.K_REVISION ?? "local")
-    .update(cards.map((c) => `${c.id}:${c.updatedAt?.toMillis?.() ?? 0}`).sort().join(","))
+    .update(`${ANSWER_CACHE_VER}|${LAWS_VERSION}|${PROMPTS}|`)
+    .update(cards.map(cardStamp).sort().join("\n"))
     .digest("hex")
     .slice(0, 16);
   return { id: createHash("sha256").update(normalizeQuestion(text)).digest("hex").slice(0, 32), ver };
 }
 
-type Composed = Awaited<ReturnType<typeof compose>>;
+/** A judge's own cards matter to a question at this score or above (lower than the answer's search: on the safe side). */
+const TRIAL_MATCH = 0.4;
+
+type Composed = Omit<Awaited<ReturnType<typeof compose>>, "degraded">;
 
 /**
  * ctx.charge() counts one Claude-backed answer against the daily caps. A saved answer counts only against the
@@ -176,10 +230,13 @@ export async function ask(data: Record<string, unknown>, uid: string, ctx?: { ch
   const text = after ? `前の質問「${after}」の続きです。${asked}` : asked;
   const askerId = uid;
   const askerRole = data.askerRole === "veteran" ? "veteran" : "young";
-  const cards = await publishedCards(spacesOf(data, uid));
+  const all = await publishedCards(spacesOf(data, uid));
+  // A judge's own trial cards change the answer for them alone, and only when they are about this question: otherwise
+  // the question is answered (and saved) with the shared cards, so the examples stay saved answers after a judge publishes.
+  const trialHit = searchCards(text, all.filter((c) => c.companyId !== COMPANY), 1, TRIAL_MATCH).length > 0;
+  const cards = trialHit ? all : all.filter((c) => c.companyId === COMPANY);
 
-  // Saved answers only for the shared cards (a judge's own trial card changes the answer for them alone).
-  const cacheable = getClient() !== null && cards.every((c) => c.companyId === COMPANY);
+  const cacheable = getClient() !== null && !trialHit;
   const key = cacheKey(text, cards);
   const cacheRef = db.collection("askCache").doc(key.id);
   let out: Composed | null = null;
@@ -194,9 +251,12 @@ export async function ask(data: Record<string, unknown>, uid: string, ctx?: { ch
   }
   if (!out) {
     await ctx?.charge?.();
-    out = await compose(text, cards);
+    const made = await compose(text, cards);
+    const { degraded, ...result } = made;
+    out = result;
+    // A broken answer (a step failed or was cut off) is shown but not saved: the next asker gets a whole one.
     // (through JSON: Firestore rejects the undefined fields an answer can have)
-    if (cacheable) await cacheRef.set({ ver: key.ver, result: JSON.parse(JSON.stringify(out)), createdAt: Timestamp.now() });
+    if (cacheable && !degraded) await cacheRef.set({ ver: key.ver, result: JSON.parse(JSON.stringify(out)), createdAt: Timestamp.now() });
   }
 
   const ref = await db.collection("answers").add({
@@ -237,27 +297,36 @@ async function compose(text: string, cards: Card[]) {
   const calcErrors: string[] = [];
   let mode: "claude" | "dummy" = "dummy";
   const models: Record<string, string> = {};
+  // a step that failed or was cut off: the answer is still shown, but not saved (ask)
+  let degraded = false;
 
   if (getClient()) {
     mode = "claude";
-    const routed = await jsonCall<Routed>({
-      model: MODEL_ROUTER,
-      system: ROUTER_SYSTEM,
-      user: text,
-      schema: {
-        type: "object",
-        properties: {
-          interpretedAs: { type: "string" },
-          kind: { type: "string", enum: ["law", "calc", "part", "howto", "other"] },
-          searchTerms: { type: "array", items: { type: "string" } },
+    // Routing only adds search words (and the calculation): if it fails, answer the question as it was asked.
+    let routed: Routed = { interpretedAs: text, kind: "other", searchTerms: [] };
+    try {
+      routed = await jsonCall<Routed>({
+        model: MODEL_ROUTER,
+        system: ROUTER_SYSTEM,
+        user: text,
+        schema: {
+          type: "object",
+          properties: {
+            interpretedAs: { type: "string" },
+            kind: { type: "string", enum: ["law", "calc", "part", "howto", "other"] },
+            searchTerms: { type: "array", items: { type: "string" } },
+          },
+          required: ["interpretedAs", "kind", "searchTerms"],
+          additionalProperties: false,
         },
-        required: ["interpretedAs", "kind", "searchTerms"],
-        additionalProperties: false,
-      },
-      maxTokens: 2000,
-      effort: "low",
-    });
-    models.router = MODEL_ROUTER;
+        maxTokens: 2000,
+        effort: "low",
+      });
+      models.router = MODEL_ROUTER;
+    } catch (e) {
+      logger.warn("routing failed; answering without it", e);
+      degraded = true;
+    }
     interpretedAs = routed.interpretedAs || text;
     // The score is the share of query bigrams found, so keep the query short (no rephrased sentence).
     const query = `${text} ${routed.searchTerms.join(" ")}`;
@@ -284,13 +353,19 @@ async function compose(text: string, cards: Card[]) {
 
     // Calculations: the model only chooses the tool and its inputs; the numbers come from code.
     if (routed.kind === "calc" || routed.kind === "law") {
-      const picked = await pickTools({
-        model: MODEL_ANSWER,
-        system: CALC_PICK_SYSTEM,
-        user: `質問: ${text}\n（こう受け取りました: ${interpretedAs}）`,
-        tools: calcTools(),
-      });
-      models.calc = MODEL_ANSWER;
+      let picked: Awaited<ReturnType<typeof pickTools>> = [];
+      try {
+        picked = await pickTools({
+          model: MODEL_ANSWER,
+          system: CALC_PICK_SYSTEM,
+          user: `<question>${fenced(text)}\n（こう受け取りました: ${fenced(interpretedAs)}）</question>`,
+          tools: calcTools(),
+        });
+        models.calc = MODEL_ANSWER;
+      } catch (e) {
+        logger.warn("choosing a calculation failed; answering without one", e); // also a cut-off (max_tokens)
+        degraded = true;
+      }
       for (const t of picked) {
         try {
           calcs.push(runCalc(t.name, t.input));
@@ -309,7 +384,8 @@ async function compose(text: string, cards: Card[]) {
     const r = await jsonCall<{ sentences: Sentence[] }>({
       model: MODEL_ANSWER,
       system: ANSWER_SYSTEM,
-      user: `<question>${fenced(text)}</question>\n（こう受け取りました: ${interpretedAs}）\n\n${calcText ? `計算結果（プログラム）:\n${calcText}\n\n` : ""}法令・基準:\n${lawText}\n\n社内の知恵カード（cardId は card の id）:\n${cardText}`,
+      // the rephrasing is made from the question, so it stays inside the fence like the question itself
+      user: `<question>${fenced(text)}\n（こう受け取りました: ${fenced(interpretedAs)}）</question>\n\n${calcText ? `計算結果（プログラム）:\n${calcText}\n\n` : ""}法令・基準:\n${lawText}\n\n社内の知恵カード（cardId は card の id）:\n${cardText}`,
       schema: {
         type: "object",
         properties: {
@@ -342,8 +418,15 @@ async function compose(text: string, cards: Card[]) {
       const at = sentences.findIndex((s) => s.source === "general");
       sentences.splice(at < 0 ? sentences.length : at, 0, { text: `${strongCard.title}。`, source: "wisdom", cardId: strongCard.id });
     }
-    conclusion = await conclude(sentences);
-    if (conclusion) models.conclusion = MODEL_ROUTER;
+    // No conclusion on top of an answer that has no checked source (law, card or calculation): it would put a
+    // general-knowledge (要確認) claim in the most visible place.
+    if (sentences.some((s) => s.source !== "general") || calcs.length) {
+      const c = await conclude(sentences, calcs);
+      conclusion = c.conclusion;
+      if (c.failed) degraded = true;
+      if (conclusion) models.conclusion = MODEL_SUMMARY;
+    }
+    if (calcErrors.length) degraded = true;
   } else {
     hits = searchCards(text, cards, 5).map((r) => r.card);
     laws = searchLaws(text, 4);
@@ -355,6 +438,7 @@ async function compose(text: string, cards: Card[]) {
   const grounded = usedCardIds.length > 0 || usedLawIds.length > 0 || calcs.length > 0;
   const byId = new Map(hits.map((c) => [c.id, c]));
   return {
+    degraded,
     usedCardIds,
     usedLawIds,
     models,

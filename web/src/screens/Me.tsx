@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { getName, getParts, savePart, setName, type PartEntry } from "../local";
-import { fmtDate } from "../components";
+import { fmtDate, LoadFailed, Skeleton } from "../components";
 import { Transfer } from "../Transfer";
 
 interface Q {
@@ -146,8 +146,8 @@ export function Me({ onAskAgain, onAsk }: { onAskAgain: (text: string, questionI
       </div>
 
       <h2 className="sub">親方に聞いた質問</h2>
-      {err && <p className="hint error">{err}</p>}
-      {items === null && !err && <p className="hint">読み込み中…</p>}
+      {err && items !== null && <p className="hint error">{err}</p>}
+      {items === null && (err ? <LoadFailed what="質問" onRetry={load} /> : <Skeleton />)}
       {items?.length === 0 && <p className="empty">まだありません。答えが見つからない時は「親方に聞く」を押しましょう。</p>}
       {items?.map((q) => (
         <div key={q.id} className={`qcard ${q.status}`}>

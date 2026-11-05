@@ -216,3 +216,29 @@ test("currents exactly at a boundary are not pushed over it by floating-point no
   assert.match(b.verdict, /基準 16\.66Ω/);
   assert.match(grounding.run({ type: "B", cutoff: "none", ig: 7, measured: 21.425 }).verdict, /^合格（測定 21\.425Ω ≦ 基準 21\.428Ω）/);
 });
+
+test("over 60m, the drop is compared on the total when the rest is given, and said to be one section when not", () => {
+  const base = { system: "three3", length: 100, current: 50, wireType: "CV3", size: "38", install: "air" };
+  const one = voltageDrop.run(base);
+  assert.match(one.verdict, /この区間だけの降下です/);
+  // with the trunk's 6V on top, the same section goes over the 4% for 100m
+  const total = voltageDrop.run({ ...base, otherDrop: 6 });
+  assert.doesNotMatch(total.verdict, /この区間だけ/);
+  assert.match(total.verdict, /合計/);
+  assert.equal(total.ok, false);
+  assert.match(total.steps.join("\n"), /この区間以外の降下 6V を足すと/);
+  // up to 60m each section has its own 2%: the rest is shown, not added to the judgement
+  const short = voltageDrop.run({ system: "single2", length: 30, current: 15, wireType: "IV", size: "2.0", inConduit: 3 });
+  assert.equal(voltageDrop.run({ system: "single2", length: 30, current: 15, wireType: "IV", size: "2.0", inConduit: 3, otherDrop: 50 }).ok, short.ok);
+  assert.ok(voltageDrop.fields.some((f) => f.key === "otherDrop" && f.unit === "V" && f.default === undefined));
+});
+
+test("a 認定電気工事従事者 can do ordinary wiring in 自家用 (600V以下 is the default), and 一般用 does not ask the work", () => {
+  assert.equal(license.run({ facility: "private", license: "certified" }).ok, true);
+  assert.equal(license.run({ facility: "private", work: "normal", license: "certified" }).ok, false); // 高圧・電線路
+  assert.ok(!license.run({ facility: "general", license: "second" }).steps.some((x) => x.startsWith("工事:")));
+});
+
+test("the PF exposed support spacing does not cite the CD管 sentence", () => {
+  assert.ok(!support.run({ kind: "pf_exposed" }).basis.some((b) => b.lawId === "kaishaku-158"));
+});

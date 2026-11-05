@@ -574,9 +574,14 @@ input[type="text"] {
   padding: 0;
   margin: 0;
 }
-.field > span {
+.field > span,
+.field > legend {
   font-weight: 700;
   font-size: var(--fs-m);
+}
+.field > legend {
+  padding: 0;
+  margin-bottom: 4px;
 }
 .radio {
   display: flex;
@@ -1731,7 +1736,8 @@ input[inputmode="decimal"] {
 .told .transcript {
   margin-top: 8px;
 }
-.told .who {
+.told .who,
+.transcript .who {
   display: block;
   font-size: var(--fs-xs);
   color: var(--muted);
@@ -2460,3 +2466,87 @@ button:not(:disabled):active {
 .entry .update-note {
   border-radius: var(--r-m);
 }
+
+/* ---- ベテランの画面と全体の枠（審査の直し） ---- */
+/* a long run of letters and numbers (a model number, a URL) breaks instead of pushing the page sideways */
+body {
+  overflow-wrap: anywhere;
+}
+/* 審査員モード中の入口: the sentence wraps on a phone (the bar's one line is for the app's header) */
+.entry-trial {
+  white-space: normal;
+}
+/* under the catch: what the app solves */
+.catch-sub {
+  margin: 0;
+  font-size: var(--fs-s);
+  text-align: center;
+  line-height: 1.6;
+}
+/* 審査員の帯: the next step, filled so it is seen first */
+.trial-next {
+  background: var(--bag-tie);
+  border-color: var(--bag-tie);
+  color: var(--navy);
+}
+/* 質問箱: the star says what it does */
+.star-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 4px 8px;
+}
+.star-word {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+/* PC, 審査員モード: what to try in 3 minutes, on the left of the app (the phone note is on the right) */
+.trial-guide {
+  display: none;
+}
+@media (min-width: 1000px) {
+  .trial-guide {
+    display: block;
+    position: fixed;
+    top: 50%;
+    right: calc(50% + 300px);
+    transform: translateY(-50%);
+    width: 240px;
+    padding: 16px;
+    border-radius: var(--r-m);
+    background: var(--surface);
+    color: var(--text);
+    border: 2px solid var(--bag-tie);
+    font-size: var(--fs-s);
+    line-height: 1.6;
+    z-index: 4;
+  }
+  .trial-guide strong {
+    display: block;
+    font-size: var(--fs-m);
+    margin-bottom: 4px;
+  }
+  .trial-guide ol {
+    margin: 0;
+    padding-left: 1.4em;
+    display: grid;
+    gap: 6px;
+  }
+  .trial-guide li.now {
+    font-weight: 800;
+  }
+  .trial-guide li.now::marker {
+    color: var(--wisdom);
+  }
+}
+
+/* sheets: scrolling to the end of an article does not move the screen behind it */
+.sheet,
+.sheet-backdrop {
+  overscroll-behavior: contain;
+}
+
+/* 下書き・公開後の「確かめてほしい所」（話に無い数値・条文に無い数値） */
+.check-notes { background: var(--note-bg); color: var(--note-fg); border-radius: var(--r-m); padding: 10px 12px; margin: 8px 0; font-size: var(--fs-s); text-align: left; }
+.check-notes ul { margin: 4px 0 0; padding-left: 1.2em; }

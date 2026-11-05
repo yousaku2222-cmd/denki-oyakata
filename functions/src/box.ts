@@ -81,7 +81,8 @@ export async function markGoodQuestion(data: Record<string, unknown>, uid: strin
   const veteranId = uid;
   const ref = db.collection("questions").doc(questionId);
   const q = await ref.get();
-  if (!q.exists) throw new HttpsError("not-found", "question not found");
+  // only a question of a space this caller reads (as questionPhoto and withdrawQuestion check)
+  if (!q.exists || !spacesOf(data, uid).includes(q.get("companyId") as string)) throw new HttpsError("not-found", "質問が見つかりません。");
   if (q.get("askerId") === veteranId) throw new HttpsError("failed-precondition", "自分の質問には押せません。");
   await ref.update({ goodBy: FieldValue.arrayUnion(veteranId) });
   return { ok: true };

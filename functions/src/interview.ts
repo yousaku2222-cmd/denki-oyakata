@@ -2,10 +2,12 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER } from "./models";
-import { CATEGORIES, COMPANY, CardDoc, LOCATIONS, Turn, db, spaceOf, str, strList, turns } from "./common";
+import { CATEGORIES, COMPANY, CardDoc, LOCATIONS, Turn, db, spaceOf, spacesOf, str, strList, turns } from "./common";
 import { takeQuota } from "./limits";
+import { lawLabel, numbersMissing, searchLaws } from "./laws";
 
 const MAX_FOLLOW_UPS = 3;
+const ENOUGH_CHARS = 12000; // a talk this long has the material: go to the card (common.ts bounds it at 16000)
 const DUMMY_FOLLOW_UPS = ["なぜそうするんですか？", "新人がよく間違えるのは、どんなところですか？"];
 
 function transcriptText(t: Turn[]): string {
@@ -23,7 +25,8 @@ const INTERVIEW_SYSTEM = `あなたは電気工事会社で、引退が近いベ
 export async function interviewNext(data: Record<string, unknown>) {
   const transcript = turns(data.transcript);
   const asked = transcript.filter((t) => t.role === "ai").length;
-  if (asked >= MAX_FOLLOW_UPS) return { done: true, question: "", mode: getClient() ? "claude" : "dummy" };
+  const long = transcript.reduce((n, t) => n + t.text.length, 0) > ENOUGH_CHARS;
+  if (asked >= MAX_FOLLOW_UPS || long) return { done: true, question: "", mode: getClient() ? "claude" : "dummy" };
 
   if (!getClient()) {
     const q = DUMMY_FOLLOW_UPS[asked];
@@ -79,6 +82,33 @@ function fitDraft(d: Draft): Draft {
     // the edit screen splits the words at 、 and line breaks only, so a word may keep its spaces
     tags: d.tags.flatMap((x) => x.split(/[、,\n]+/)).map((x) => cut(x.trim(), CARD_LIMITS.tag)).filter(Boolean).slice(0, CARD_LIMITS.tags),
   };
+}
+
+const draftText = (d: Pick<Draft, "title" | "scene" | "body" | "reason" | "caution">) => [d.title, d.scene, d.body, d.reason, d.caution].join(" ");
+
+/**
+ * The numbers of a draft that the veteran never said (the model was told not to add any, this checks it).
+ * The edit screen shows them, so the veteran can fix a figure before it goes out as their knowledge.
+ */
+export function unsaidNumbers(d: Pick<Draft, "title" | "scene" | "body" | "reason" | "caution">, transcript: Turn[]): string[] {
+  return numbersMissing(draftText(d), transcript.map((t) => t.text).join(" ")); // a figure the interviewer asked about counts as said
+}
+
+// a value with a unit of measure: a figure a rule could also set (dates and counts of years are left alone)
+const MEASURE = /(\d+(?:\.\d+)?)\s*(mm²|mm2|mm|cm|km|m(?![A-Za-z])|kV|V|mA|A|MΩ|Ω|kW|度|°|箇所|か所|カ所|ヶ所|ケ所|%|倍)/g;
+
+/**
+ * The card's figures against the rules it is about: a value no related article has may differ from the rule
+ * (or be a stricter house rule). Only a note to the veteran: the card is theirs, and the answer still puts
+ * the article first when they disagree (ANSWER_SYSTEM).
+ */
+export function lawNumberNotes(d: Pick<Draft, "title" | "scene" | "body" | "reason" | "caution"> & { tags: string[] }): string[] {
+  const laws = searchLaws(`${d.title} ${d.tags.join(" ")}`, 3);
+  if (!laws.length) return [];
+  const values = [...new Set([...draftText(d).normalize("NFKC").matchAll(MEASURE)].map((m) => m[0].replace(/\s+/g, "")))];
+  const off = values.filter((v) => laws.every((l) => numbersMissing(v, `${l.text} ${l.summary}`).length));
+  if (!off.length) return [];
+  return [`${off.map((v) => `「${v}」`).join("")}は、関係しそうな条文（${laws.map(lawLabel).join("、")}）に無い数値です。条文と同じ値か、条文より厳しい社内の決まりかを確かめてください。`];
 }
 
 function dummyDraft(t: Turn[]): Draft {
@@ -139,7 +169,9 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
   let triggerSearchText: string | null = null;
   if (triggerQuestionId) {
     const q = await db.collection("questions").doc(triggerQuestionId).get();
-    if (!q.exists) throw new HttpsError("not-found", "question not found");
+    // only a question this device can read: a judge may answer a shared question (it stays open, see publishCard),
+    // but a judge's trial question must never show on a shared card
+    if (!q.exists || !spacesOf(data, uid).includes(q.get("companyId") as string)) throw new HttpsError("not-found", "question not found");
     triggerAskerName = (q.get("askerName") as string) || "若手";
     triggerQuestionText = (q.get("text") as string) || null;
     // a photo question's words lean on the photo (「これは何に使いますか？」 would match every 「何に使う」 question):
@@ -178,7 +210,8 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
   batch.set(ref, card);
   batch.set(db.collection("cardPrivate").doc(ref.id), { authorId, authorName, transcript, createdAt: now });
   await batch.commit();
-  return { cardId: ref.id, draft, mode };
+  // for the edit screen: figures to look at before publishing
+  return { cardId: ref.id, draft, mode, unsaidNumbers: unsaidNumbers(draft, transcript), lawNotes: lawNumberNotes(draft) };
 }
 
 /** The card, if this device wrote it. The owner is kept in cardPrivate (older cards: on the card itself). */
@@ -206,8 +239,9 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
     tags: strList(e.tags, "探す時の言葉", CARD_LIMITS.tags, CARD_LIMITS.tag), // a short list: long ones would match every question
   };
   const nameIn = str(data.authorName, "名前", 30, false);
-  // Anyone can act as a veteran (no login by design), so first publications per device are capped.
-  if (card.status === "draft") await takeQuota(authorId, "publish", ctx?.ip);
+  // Anyone can act as a veteran (no login by design), so first publications per device are capped; so are later
+  // fixes, since each one makes the saved answers of the cards' questions stale (ask.ts cacheKey).
+  await takeQuota(authorId, card.status === "draft" ? "publish" : "edit", ctx?.ip);
   const privRef = db.collection("cardPrivate").doc(cardId);
   const priv = await privRef.get();
   const authorName = nameIn || (priv.get("authorName") as string | undefined) || card.authorName;
@@ -243,16 +277,18 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
       await db.collection("users").doc(askerId).set({ answeredFromMyQuestions: FieldValue.increment(1) }, { merge: true });
     }
   }
-  return { ok: true, status: newStatus };
+  return { ok: true, status: newStatus, lawNotes: lawNumberNotes(fields) };
 }
 
-export async function setCardStatus(data: Record<string, unknown>, uid: string) {
+export async function setCardStatus(data: Record<string, unknown>, uid: string, ctx?: { ip: string }) {
   const cardId = str(data.cardId, "カードの番号", 64);
   const authorId = uid;
   const status = data.status;
   if (status !== "published" && status !== "private") throw new HttpsError("invalid-argument", "status is invalid");
   const { ref, card } = await ownCard(cardId, authorId);
   if (card.status === "draft") throw new HttpsError("failed-precondition", "publish the draft first");
+  if (card.status === status) return { ok: true }; // nothing changes: no count, no new version
+  await takeQuota(authorId, "edit", ctx?.ip);
   await ref.update({ status, updatedAt: Timestamp.now() });
   return { ok: true };
 }

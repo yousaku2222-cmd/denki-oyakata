@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { scoreFields } from "./search";
@@ -18,7 +19,10 @@ export interface Law {
 }
 
 // Built once by scripts/laws (original text + Opus summaries) and deployed with the functions.
-export const LAWS: Law[] = JSON.parse(readFileSync(join(__dirname, "..", "data", "laws.json"), "utf8"));
+const LAWS_JSON = readFileSync(join(__dirname, "..", "data", "laws.json"), "utf8");
+export const LAWS: Law[] = JSON.parse(LAWS_JSON);
+/** Changes when the law data changes (and only then): part of the saved answers' version (ask.ts cacheKey). */
+export const LAWS_VERSION = createHash("sha256").update(LAWS_JSON).digest("hex").slice(0, 16);
 const byId = new Map(LAWS.map((l) => [l.id, l]));
 export const getLawById = (id: string) => byId.get(id);
 
@@ -47,6 +51,21 @@ export function normalizeForQuote(s: string): string {
 export function quoteIsInOriginal(quote: string, lawText: string, minLength = 8): boolean {
   const q = normalizeForQuote(quote).replace(/^[「『]|[」』]$/g, "");
   return q.length >= minLength && normalizeForQuote(lawText).includes(q);
+}
+
+/**
+ * The sentence of the original that holds the quote (from the 。 before it to the 。 after it, in the quote's
+ * normalised form). A law sentence's numbers are checked against this, not the whole article: an article with
+ * several values (A種 10Ω, D種 100Ω) must not let one condition's value pass with another condition's quote.
+ */
+export function quoteSentence(quote: string, lawText: string): string {
+  const q = normalizeForQuote(quote).replace(/^[「『]|[」』]$/g, "");
+  const t = normalizeForQuote(lawText);
+  const at = q ? t.indexOf(q) : -1;
+  if (at < 0) return q;
+  const start = t.lastIndexOf("。", at - 1) + 1;
+  const dot = t.indexOf("。", at + q.length - 1);
+  return t.slice(start, dot < 0 ? t.length : dot + 1);
 }
 
 // --- numbers: a sentence shown as law or wisdom must not carry numbers its source does not have ---

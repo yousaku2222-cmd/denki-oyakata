@@ -16,12 +16,12 @@ export function Browse() {
   return (
     <>
       <div className="browse-pick">
-        <button className={`pick ${view === "cards" ? "on" : ""}`} onClick={() => setView("cards")}>
+        <button className={`pick ${view === "cards" ? "on" : ""}`} aria-pressed={view === "cards"} onClick={() => setView("cards")}>
           <Icon of={ic("wisdom")} className="pick-icon" />
           <strong>親方の知恵</strong>
           <small>現場の知恵カード</small>
         </button>
-        <button className={`pick ${view === "laws" ? "on" : ""}`} onClick={() => setView("laws")}>
+        <button className={`pick ${view === "laws" ? "on" : ""}`} aria-pressed={view === "laws"} onClick={() => setView("laws")}>
           <Icon of="⚖️" className="pick-icon" />
           <strong>法令・基準</strong>
           <small>国の決まり・原文つき</small>
@@ -124,7 +124,8 @@ function LawList() {
       {(s || words.length > 0 || all ? shown : []).map((l) => (
         <button key={l.id} className="card-row law-row" onClick={() => setOpen(l.id)}>
           <strong>{l.heading}</strong>
-          {l.points?.[0] && <span className="law-gist">{l.points[0]}</span>}
+          {/* the line under the heading is the AI's reading, not the article's words */}
+          {l.points?.[0] && <span className="law-gist">AIの要約：{l.points[0]}</span>}
           {l.scenes?.[0] && <span className="src-meta">こんな時：{l.scenes[0]}</span>}
           <span className="law-no">
             {l.short} {l.article} ›
@@ -306,7 +307,7 @@ function Part({ label, text }: { label: string; text: string }) {
 
 function Tile({ icon, label, on, onClick }: { icon?: string; label: string; on: boolean; onClick: () => void }) {
   return (
-    <button className={`tile ${icon ? "icon-tile" : ""} ${on ? "on" : ""}`} onClick={onClick}>
+    <button className={`tile ${icon ? "icon-tile" : ""} ${on ? "on" : ""}`} aria-pressed={on} onClick={onClick}>
       {icon && (
         <Icon of={icon} className="tile-icon" />
       )}

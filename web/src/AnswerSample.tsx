@@ -6,8 +6,9 @@ import { Icon } from "./Icon";
 // (標準仕様書 2.3.3 and a veteran's card on bending PF pipe), with no one's name.
 const SAMPLE_Q = "PF管って何回まで曲げていい？";
 const ROWS = [
-  { src: "law", text: "曲げは4か所以下、合計270度まで。", meta: "標準仕様書 2.3.3 ✔ 原文と一致" },
-  { src: "wisdom", text: "曲がりが多いと電線が通りにくく、被覆が傷つく。多い時はボックスを入れる。", meta: "ベテランが話した知恵カードから" },
+  // the rule is for one run between boxes (1区間); the card says what the rule alone does not (the same story as 話す's 見本の話)
+  { src: "law", text: "ボックスとボックスの間（1区間）の曲げは4か所以下、合計270度まで。", meta: "標準仕様書 2.3.3・引用は原文と一致" },
+  { src: "wisdom", text: "基準の270度の内でも、90度の曲がりが3つあると電線が通りにくく、被覆が傷つく。そん時は途中にボックスを入れる。", meta: "ベテランが話した知恵カードから" },
   { src: "general", text: "現場の仕様書にも、回数の指定がないか確かめる。", meta: "" },
 ] as const;
 

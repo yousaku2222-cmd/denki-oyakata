@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { useFlyToMe } from "../FlyToMe";
 import { call, errorText } from "../firebase";
@@ -52,19 +52,29 @@ async function shrink(file: Blob, size: number, quality: number): Promise<string
 // what a photo cannot settle (the name and use are already in the answer above): the way it is used on this site
 const PHOTO_QUESTIONS = ["このつなぎ方で合ってますか？", "この場所で使って大丈夫ですか？", "この取り付け方で大丈夫ですか？", "ほかに気をつけることは？"];
 
+// the last photo and its result stay while other tabs are open (this screen unmounts, e.g. on 🧮 to 計算 and back),
+// until the app is reloaded
+type Kept = { file: Blob | null; preview: string; res: PartResult | null; q: string; sent: boolean };
+let kept: Kept = { file: null, preview: "", res: null, q: "", sent: false };
+
 /** ⑤ 撮る: photo of a part → name, use, and the way on to cards, rules and a calculation. */
 export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
-  const input = useRef<HTMLInputElement>(null);
+  const camera = useRef<HTMLInputElement>(null);
+  const album = useRef<HTMLInputElement>(null);
   const askBox = useRef<HTMLDivElement>(null);
-  const [file, setFile] = useState<Blob | null>(null);
-  const [preview, setPreview] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [file, setFile] = useState<Blob | null>(kept.file);
+  const [preview, setPreview] = useState(kept.preview);
+  const [busy, setBusy] = useState(false); // reading the photo
+  const [sending, setSending] = useState(false); // sending it to the box (not a second reading)
   const [err, setErr] = useState("");
-  const [res, setRes] = useState<PartResult | null>(null);
+  const [res, setRes] = useState<PartResult | null>(kept.res);
   const [openLaw, setOpenLaw] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
-  const [q, setQ] = useState(""); // what to ask the veteran about this photo (a draft is put in, free to rewrite)
+  const [sent, setSent] = useState(kept.sent);
+  const [q, setQ] = useState(kept.q); // what to ask the veteran about this photo (a draft is put in, free to rewrite)
   const { fly, envelope } = useFlyToMe();
+  useEffect(() => {
+    kept = { file, preview, res, q, sent };
+  }, [file, preview, res, q, sent]);
 
   async function identify(body: { image?: string; name?: string }, thumbFrom: Blob | null) {
     setBusy(true);
@@ -102,7 +112,8 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
   async function askVeteran(e: React.MouseEvent<HTMLButtonElement>) {
     if (!file || !q.trim()) return;
     const from = e.currentTarget.getBoundingClientRect();
-    setBusy(true);
+    setSending(true);
+    setErr("");
     try {
       // the box takes up to 300,000 characters: step the size down for busy photos
       let photo = await shrink(file, 1024, 0.7);
@@ -113,21 +124,27 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
     } catch (e) {
       setErr(errorText(e, "送れませんでした。もう一度お試しください"));
     } finally {
-      setBusy(false);
+      setSending(false);
     }
   }
 
   return (
     <section className="screen">
       <h1 className="screen-title">撮って調べる</h1>
-      <input ref={input} type="file" accept="image/*" capture="environment" hidden onChange={(e) => {
-          picked(e.target.files?.[0]);
-          e.target.value = ""; // so choosing the same photo again still fires onChange
-        }} />
-      <button className="mic" disabled={busy} onClick={() => input.current?.click()}>
+      {/* two inputs: with capture a phone opens only the camera, so the photos already taken need their own */}
+      {[camera, album].map((r) => (
+        <input key={r === camera ? "camera" : "album"} ref={r} type="file" accept="image/*" capture={r === camera ? "environment" : undefined} hidden onChange={(e) => {
+            picked(e.target.files?.[0]);
+            e.target.value = ""; // so choosing the same photo again still fires onChange
+          }} />
+      ))}
+      <button className="mic" disabled={busy || sending} onClick={() => camera.current?.click()}>
         📷 {preview ? "もう一度撮る" : "部材を撮る"}
       </button>
-      <p className="hint">印字や型番が写るように撮ると、読み取って確かめます。写真の一覧からも選べます。</p>
+      <button className="secondary" disabled={busy || sending} onClick={() => album.current?.click()}>
+        🖼️ 写真から選ぶ
+      </button>
+      <p className="hint">印字や型番が写るように撮ると、読み取って確かめます。前に撮った写真は「写真から選ぶ」から。</p>
       {!preview && (
         <div className="photo-sample">
           <details className="more-info">
@@ -197,7 +214,13 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
       {res && res.verdict !== "unknown" && (
         <>
           {res.calc && (
-            <button className="primary" onClick={() => onCalc(res.calc!)}>
+            <button
+              className="primary"
+              onClick={() => {
+                window.scrollTo(0, 0); // the calculation starts at the top of its screen, not where this one was scrolled
+                onCalc(res.calc!);
+              }}
+            >
               🧮 {res.calc.label}
             </button>
           )}
@@ -215,7 +238,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
           {res.laws.map((l) => (
             <button key={l.id} className="law-cite" onClick={() => setOpenLaw(l.id)}>
               <span className="src-tag law">⚖️ 法令・基準</span> <strong>{l.label}</strong>
-              <span className="clamp2">{l.summary}</span>
+              <span className="clamp2">AIの要約：{l.summary}</span>
               <span className="src-meta">押すと条文の全文 ›</span>
             </button>
           ))}
@@ -258,8 +281,8 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
                   </button>
                 ))}
               </div>
-              <button className="primary" disabled={busy || !q.trim()} onClick={askVeteran}>
-                📮 写真ごと親方に聞く
+              <button className="primary" disabled={busy || sending || !q.trim()} onClick={askVeteran}>
+                {sending ? "📮 送っています…" : "📮 写真ごと親方に聞く"}
               </button>
             </>
           )}

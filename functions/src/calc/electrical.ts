@@ -169,7 +169,7 @@ const parallelNote = "並列にする電線は、同じ種類・同じ太さ・�
 const label = (t: WireType, s: string, n: number) => `${wireName(t, s)}${n > 1 ? ` ×${n}並列` : ""}`;
 
 /** The thinnest size of this type that carries the current (and keeps the drop within the limit, if given). */
-export function thinnest(t: WireType, n: number, c: Conditions, current: number, drop?: { k: number; L: number; V: number; limit: number }) {
+export function thinnest(t: WireType, n: number, c: Conditions, current: number, drop?: { k: number; L: number; V: number; limit: number; other?: number }) {
   for (const s of TYPES[t].sizes) {
     let a: number;
     try {
@@ -178,7 +178,7 @@ export function thinnest(t: WireType, n: number, c: Conditions, current: number,
       continue;
     }
     if (a < tidy(current)) continue;
-    if (drop && tidy(((drop.k * drop.L * current) / (1000 * area(t, s) * n) / drop.V) * 100) > drop.limit) continue;
+    if (drop && tidy((((drop.k * drop.L * current) / (1000 * area(t, s) * n) + (drop.other ?? 0)) / drop.V) * 100) > drop.limit) continue;
     return { s, amps: a };
   }
   return null;
@@ -201,13 +201,15 @@ const vd = {
   current: { key: "current", label: "負荷電流", type: "number", unit: "A", min: 0.1, max: 5000 },
   ...wf,
   voltage: { key: "voltage", label: "基準の電圧（%の計算に使う）", type: "number", unit: "V", min: 1, help: "空欄なら単相100V・三相200V" },
+  // optional: with it, a run over 60m is judged on the total (trunk + branch), as the guideline's 4/5/6% are meant
+  otherDrop: { key: "otherDrop", label: "この区間以外の電圧降下", type: "number", unit: "V", min: 0, max: 1000, help: "幹線など、この区間より手前の降下（分かる時だけ）" },
 } satisfies Record<string, Field>;
 
 export const voltageDrop: Calc = {
   name: "voltage_drop",
   label: "電圧降下と電線の太さ",
   description:
-    "銅線の電圧降下を簡略式（e = K×L×I ÷ (1000×A)、K=35.6/17.8/30.8）で計算し、%を出す。あわせて、負荷電流に対して許容電流が足りるか、電圧降下がこう長の目安（60m以下2%・120m以下4%・200m以下5%・超6%）以内かを判定し、だめなら両方を満たす一番細い太さを出す。並列（CVT100をダブル等）は parallel で。",
+    "銅線の電圧降下を簡略式（e = K×L×I ÷ (1000×A)、K=35.6/17.8/30.8）で計算し、%を出す。あわせて、負荷電流に対して許容電流が足りるか、電圧降下がこう長の目安（60m以下2%・120m以下4%・200m以下5%・超6%）以内かを判定し、だめなら両方を満たす一番細い太さを出す。並列（CVT100をダブル等）は parallel で。こう長60m超の目安は幹線と分岐回路の合計なので、この区間以外の降下が分かれば otherDrop（V）に入れる。",
   fields: Object.values(vd),
   run(p) {
     const sys = SYSTEMS[pick<keyof typeof SYSTEMS>(p, vd.system)];
@@ -219,18 +221,29 @@ export const voltageDrop: Calc = {
     const e = (sys.k * L * I) / (1000 * A);
     const pct = tidy((e / V) * 100); // exactly 2% must pass
     const limit = dropLimit(L);
+    // Over 60m the guideline's limit is for trunk + branch together: compare the total when the rest is given,
+    // and say that only this section was compared when it is not. Up to 60m each section has its own 2%.
+    const other = given(p, "otherDrop") ? num(p, vd.otherDrop) : null;
+    const total = other !== null && L > 60;
+    const totalPct = other !== null ? tidy(((e + other) / V) * 100) : pct;
+    const judged = total ? totalPct : pct;
     const amp = ampsOf(t, s, c);
     const allowed = tidy(amp.amps * n);
     const ampOk = I <= allowed;
-    const dropOk = pct <= limit;
+    const dropOk = judged <= limit;
     const ok = ampOk && dropOk;
-    const better = ok ? null : thinnest(t, n, c, I, { k: sys.k, L, V, limit });
+    const better = ok ? null : thinnest(t, n, c, I, { k: sys.k, L, V, limit, other: total ? other! : 0 });
     const steps = [
       `式: e = ${sys.k} × L × I ÷ (1000 × A)`,
       `電線 ${label(t, s, n)} → 断面積 A = ${fmt(area(t, s))}${n > 1 ? ` × ${n}` : ""} = ${fmt(A)}mm²`,
       `e = ${sys.k} × ${fmt(L)} × ${fmt(I)} ÷ (1000 × ${fmt(A)}) = ${fmt(e)}V`,
       `${V}V に対して ${fmtVs(pct, limit, 1)[0]}%（${sys.note}）`,
-      `電圧降下の目安: こう長 ${fmt(L)}m → ${limit}%以内 … ${dropOk ? "○" : "×"}`,
+      ...(other !== null ? [`この区間以外の降下 ${fmt(other)}V を足すと、合計 ${fmt(e + other)}V（${fmtVs(totalPct, limit, 1)[0]}%）`] : []),
+      total
+        ? `電圧降下の目安: こう長 ${fmt(L)}m → 幹線と分岐回路の合計で ${limit}%以内 … ${dropOk ? "○" : "×"}`
+        : L > 60
+          ? `電圧降下の目安: こう長 ${fmt(L)}m → 幹線と分岐回路の合計で ${limit}%以内（ここではこの区間だけと比べています） … ${dropOk ? "○" : "×"}`
+          : `電圧降下の目安: こう長 ${fmt(L)}m → ${limit}%以内 … ${dropOk ? "○" : "×"}`,
       ...amp.steps,
       `許容電流 ${fmtVs(allowed, I, 1)[0]}A${n > 1 ? `（${fmt(amp.amps, 1)}A × ${n}並列）` : ""} ${ampOk ? "≧" : "＜"} 負荷 ${fmtVs(allowed, I, 1)[1]}A … ${ampOk ? "○" : "×"}`,
     ];
@@ -240,11 +253,12 @@ export const voltageDrop: Calc = {
           ? `両方を満たす一番細い ${TYPES[t].label}: ${label(t, better.s, n)}（許容 ${fmt(better.amps, 1)}A）`
           : `${TYPES[t].label}${n > 1 ? `の${n}並列` : ""}では325sqでも足りません。並列の本数を増やしてください`,
       );
-    const why = [!ampOk && "許容電流が足りません", !dropOk && `電圧降下が目安${limit}%を超えます`].filter(Boolean).join("・");
+    const why = [!ampOk && "許容電流が足りません", !dropOk && `${total ? "合計の" : ""}電圧降下が目安${limit}%を超えます`].filter(Boolean).join("・");
+    const sectionOnly = L > 60 && other === null ? "（この区間だけの降下です。幹線と分岐回路の合計で比べてください）" : "";
     return {
       title: `電圧降下と太さの判定（${sys.label}・${label(t, s, n)}）`,
       ok,
-      verdict: `${fmt(e)}V（${fmtVs(pct, limit, 1)[0]}%）／${ok ? "この太さで適正" : `${why}${better ? ` → ${label(t, better.s, n)} 以上` : ""}`}`,
+      verdict: `${fmt(e)}V（${fmtVs(pct, limit, 1)[0]}%${total ? `、合計 ${fmtVs(totalPct, limit, 1)[0]}%` : ""}）／${ok ? "この太さで適正" : `${why}${better ? ` → ${label(t, better.s, n)} 以上` : ""}`}${sectionOnly}`,
       steps,
       basis: amp.basis,
       notes: [

@@ -89,22 +89,34 @@ export function strList(v: unknown, name: string, maxItems = 20, maxLen = 60): s
   return v.map((x) => str(x, name, maxLen)).filter(Boolean);
 }
 
+// The whole interview goes to Claude on every turn: bound its length, not only the turns (20 × 3000 characters would
+// cost many questions while counting as one). Five answers of the screen's 3000 characters still fit; the interview
+// itself stops asking earlier (interview.ts), so a real talk reaches the card before this.
+export const MAX_TRANSCRIPT_CHARS = 16000;
+
 export function turns(v: unknown): Turn[] {
   if (!Array.isArray(v) || v.length === 0 || v.length > 20) throw new HttpsError("invalid-argument", "やりとりが長すぎるか、空です");
-  return v.map((t) => {
+  const out = v.map((t) => {
     const role = (t as Turn)?.role;
     if (role !== "veteran" && role !== "ai") throw new HttpsError("invalid-argument", "transcript role is invalid");
     return { role, text: str((t as Turn).text, "話した内容", 3000) };
   });
+  if (out.reduce((n, t) => n + t.text.length, 0) > MAX_TRANSCRIPT_CHARS)
+    throw new HttpsError("invalid-argument", `話した内容が長すぎます（合わせて${MAX_TRANSCRIPT_CHARS}字まで）。話を分けて、2枚のカードにしてください。`);
+  return out;
 }
 
 export function displayAuthor(c: Pick<CardDoc, "showAuthorName" | "authorName">): string {
   return c.showAuthorName && c.authorName ? c.authorName : "社内のベテラン";
 }
 
-const SAFETY = /活線|感電|通電|充電部|高圧|停電作業|検電|資格|無資格|変圧器|短絡|スパーク/;
+// Electricity and licences; and the work itself (heights, power tools, panels) where people get hurt without a shock.
+const SAFETY = /活線|感電|通電|充電部|高圧|停電|検電|資格|無資格|変圧器|短絡|スパーク|分電盤|配電盤|ブレーカ|キュービクル|漏電/;
+const WORK_SAFETY = /高所|脚立|足場|墜落|転落|サンダー|グラインダー|切断|はつり|電動工具|ドリル|石綿|アスベスト|酸欠/;
 export function safetyNote(text: string): string | null {
-  return SAFETY.test(text)
-    ? "感電・資格が関わる内容です。作業の可否と手順は、必ず有資格者・責任者の指示に従ってください。"
-    : null;
+  const notes = [
+    SAFETY.test(text) && "感電・資格が関わる内容です。作業の可否と手順は、必ず有資格者・責任者の指示に従ってください。",
+    WORK_SAFETY.test(text) && "高所・電動工具などの危ない作業です。保護具・特別教育・作業手順を、必ず責任者に確かめてください。",
+  ].filter((x): x is string => !!x);
+  return notes.length ? notes.join("") : null;
 }

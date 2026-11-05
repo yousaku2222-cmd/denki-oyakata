@@ -38,6 +38,37 @@ const STARTERS = [
 const STARTERS_SHOWN = 3;
 // 審査員モード: a story to send, for a judge who has none of their own
 const SAMPLE_STORY = "PF管はな、90度の曲がりが3つあったら線が通らん。そん時は途中にプルボックスを入れる。新人は無理に引っぱって、線の被覆を傷めることが多いけん、通らんと思ったら手を止めさせよる。";
+// the listener asks back after the sample story: a judge has no site's answer of their own
+const SAMPLE_REPLY = "曲がりが多いと引っぱる力が強くなって、被覆がむける。だけん、通らんと思ったら手を止めさせて、プルボックスを足させる。";
+// a young worker's question the sample story's card answers (審査員モード: to see the card in an answer)
+const SAMPLE_QUESTION = "PF管の曲がりが多くて、線が通らない時はどうする？";
+
+// 話す's story so far, kept for this tab: an iPhone may close a home-screen app while another app is used
+const KEEP_KEY = "oyakata.talkKeep";
+interface Kept {
+  turns: Turn[];
+  text: string;
+  aiQuestion: string;
+  topic: Topic | null;
+}
+function readKept(): Kept | null {
+  try {
+    const k = JSON.parse(sessionStorage.getItem(KEEP_KEY) ?? "null") as Kept | null;
+    return k && Array.isArray(k.turns) && (k.turns.length > 0 || !!k.text?.trim()) ? k : null;
+  } catch {
+    return null;
+  }
+}
+function writeKept(k: Kept | null) {
+  try {
+    if (k) sessionStorage.setItem(KEEP_KEY, JSON.stringify(k));
+    else sessionStorage.removeItem(KEEP_KEY);
+  } catch {
+    // a private window: the story is only in memory, as before
+  }
+}
+// asked only when the page was opened again: a later 話す (after 「新しく話す」 etc.) starts a new story
+let firstOpen = true;
 
 export function Talk({
   topic: topicIn,
@@ -48,6 +79,7 @@ export function Talk({
   boxOpen = 0,
   onOpenBox,
   onDirty,
+  onTryAsYoung,
 }: {
   topic: Topic | null;
   resumeCardId?: string | null;
@@ -57,6 +89,7 @@ export function Talk({
   boxOpen?: number; // young workers' questions waiting in 質問箱: answering them starts there, not here
   onOpenBox?: () => void;
   onDirty?: (dirty: boolean) => void; // something told or edited that is not published yet
+  onTryAsYoung?: (question: string) => void; // 審査員モード: ask as a young worker, to see the card in the answer
 }) {
   const [topic, setTopic] = useState(topicIn);
   const [listenerMode, setListenerMode] = useState(false);
@@ -78,6 +111,8 @@ export function Talk({
   // with no name to show, 「出さない」 is the honest default (an empty name is shown as 社内のベテラン anyway)
   const [showName, setShowName] = useState(!!getName("veteran").trim());
   const [published, setPublished] = useState(false);
+  // numbers the draft has that the talk did not, and numbers no law has: for the veteran to check (nothing is blocked)
+  const [checkNotes, setCheckNotes] = useState<string[]>([]);
   const [birth, setBirth] = useState(false); // a new draft is shown being made before it can be edited
   const endBirth = useCallback(() => setBirth(false), []);
   const [status, setStatus] = useState<"draft" | "published" | "private">("draft");
@@ -88,6 +123,26 @@ export function Talk({
 
   const dirty = !published && (draft ? snapshot !== saved : turns.length > 0 || !!text.trim());
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
+  // while the mic is on, nothing is sent or read out (the mic would hear it; words not yet written would be lost)
+  const [listening, setListening] = useState(false);
+
+  // a story left half told when the page was closed: asked before anything else
+  const [kept, setKept] = useState<Kept | null>(() => (firstOpen && fresh ? readKept() : null));
+  useEffect(() => {
+    firstOpen = false;
+  }, []);
+  useEffect(() => {
+    if (kept) return; // not answered yet: what is kept stays
+    writeKept(!draft && !published && (turns.length > 0 || !!text.trim()) ? { turns, text, aiQuestion, topic } : null);
+  }, [kept, draft, published, turns, text, aiQuestion, topic]);
+  const restore = (k: Kept) => {
+    unlockSay(); // this press lets the question be read out again
+    setTurns(k.turns);
+    setText(k.text);
+    setAiQuestion(k.aiQuestion);
+    setTopic(k.topic);
+    setKept(null);
+  };
 
   // the interview behind an opened card (a new draft uses the turns of this session)
   const [told, setTold] = useState<Turn[]>([]);
@@ -139,6 +194,18 @@ export function Talk({
       )}
       {topic.questionId ? `📮 ${topic.askerName}さんの質問に答えます：` : "🤖 AIだけで答えた質問に答えます："}
       <strong>{topic.text}</strong>
+      {/* the young worker's own question is not read out by itself (only the listener's are) */}
+      {topic.questionId && canSay() && !listening && (
+        <button
+          className="link"
+          onClick={() => {
+            unlockSay();
+            say(`${topic.askerName}さんの質問です。${topic.text}`);
+          }}
+        >
+          🔊 質問を聞く
+        </button>
+      )}
       {photo && (
         <button className={`topic-photo ${photoBig ? "big" : ""}`} onClick={() => setPhotoBig((b) => !b)} aria-label={photoBig ? "写真を小さくする" : "写真を大きくする"}>
           <img src={photo} alt={`${topic.askerName}さんが撮った写真`} />
@@ -151,7 +218,7 @@ export function Talk({
 
   // the listener's question is read out as it comes (not when the young read it out for the veteran)
   useEffect(() => {
-    if (aiQuestion && active && !listenerMode) say(aiQuestion);
+    if (aiQuestion && active && !listenerMode && !listening) say(aiQuestion);
   }, [aiQuestion]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!active) hush();
@@ -181,12 +248,13 @@ export function Talk({
       if (!r.done) {
         setAiQuestion(r.question);
       } else {
-        const d = await call<{ cardId: string; draft: Draft }>("draftCard", {
+        const d = await call<{ cardId: string; draft: Draft; unsaidNumbers?: string[]; lawNotes?: string[] }>("draftCard", {
           transcript: t,
           authorName: name,
           triggerQuestionId: topic?.questionId || undefined,
         });
         setCardId(d.cardId);
+        setCheckNotes([...(d.unsaidNumbers?.length ? [`話に無い数値があります：${d.unsaidNumbers.join("、")}（AIが足したかもしれません）`] : []), ...(d.lawNotes ?? [])]);
         setDraft(d.draft);
         setBirth(true);
         setTagsText(d.draft.tags.join("、"));
@@ -205,7 +273,7 @@ export function Talk({
     setErr("");
     try {
       setName("veteran", name);
-      const r = await call<{ status?: "published" | "private" }>("publishCard", {
+      const r = await call<{ status?: "published" | "private"; lawNotes?: string[] }>("publishCard", {
         cardId,
         authorName: name,
         showAuthorName: showName,
@@ -213,6 +281,7 @@ export function Talk({
       });
       // what the card is now (it may have been made public or hidden from わたしのカード meanwhile)
       setSavedStatus(r.status ?? "published");
+      setCheckNotes(r.lawNotes ?? []);
       setPublished(true);
     } catch (e) {
       setErr(errorText(e, "保存できませんでした。題名とやり方が入っているか、長すぎないか確かめてください。"));
@@ -281,6 +350,16 @@ export function Talk({
             )}
           </>
         )}
+        {/* 審査員モード: the other half of the app, where the card just made comes back in an answer */}
+        {getTrial() && savedStatus !== "private" && onTryAsYoung && draft && (
+          <button
+            className="secondary"
+            onClick={() => onTryAsYoung(toldShown.some((t) => t.text === SAMPLE_STORY) ? SAMPLE_QUESTION : `${draft.title}は、どうすればいい？`)}
+          >
+            🔰 若手として聞いてみる →
+          </button>
+        )}
+        {checkNotes.length > 0 && <CheckNotes notes={checkNotes} />}
         {savedStatus !== "private" && <p className="hint">あとで「わたしのカード」から直したり、非公開に戻したりできます。</p>}
       </section>
     );
@@ -323,6 +402,7 @@ export function Talk({
               ? "非公開のカードです。直しても非公開のままです（保存してから「わたしのカード」で公開できます）。"
               : "公開中のカードです。直すと、すぐに答えにも反映されます。"}
         </p>
+        {checkNotes.length > 0 && <CheckNotes notes={checkNotes} />}
         {field("title", "一言でいうと", 1)}
         {field("scene", "どんな現場・場面で")}
         {field("body", "やり方・コツ", 3)}
@@ -333,14 +413,14 @@ export function Talk({
           <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} />
         </label>
         <fieldset className="field">
-          <span>名前の出し方</span>
+          <legend>名前の出し方</legend>
           <label className="radio">
-            <input type="radio" checked={showName} onChange={() => setShowName(true)} /> 名前を出す
+            <input type="radio" name="showName" checked={showName} onChange={() => setShowName(true)} /> 名前を出す
           </label>
           {showName && <input placeholder="例: 山田（親方）" maxLength={30} value={name} onChange={(e) => setNameState(e.target.value)} />}
           {showName && !name.trim() && <p className="hint">名前が空のままだと「社内のベテラン」と表示されます。</p>}
           <label className="radio">
-            <input type="radio" checked={!showName} onChange={() => setShowName(false)} /> 出さない（「社内のベテラン」と表示）
+            <input type="radio" name="showName" checked={!showName} onChange={() => setShowName(false)} /> 出さない（「社内のベテラン」と表示）
           </label>
         </fieldset>
         {err && <p className="hint error">{err}</p>}
@@ -369,6 +449,30 @@ export function Talk({
 
   // 話す first: the mic comes right under the question; the ways to start and the promises go below it
   const blank = fresh && !turns.length && !aiQuestion && !text.trim();
+  if (kept) {
+    return (
+      <section className="screen">
+        <h1 className="screen-title">話の途中があります</h1>
+        <Notice>
+          前に話していた途中が残っています（やりとり{kept.turns.filter((t) => t.role === "veteran").length}回）。続きから話しますか？
+          {kept.topic && (
+            <>
+              <br />
+              <strong>{kept.topic.text}</strong>
+            </>
+          )}
+        </Notice>
+        <button className="primary" onClick={() => restore(kept)}>
+          続きから話す
+        </button>
+        <button className="link" onClick={() => setKept(null)}>
+          消して、新しく話す
+        </button>
+      </section>
+    );
+  }
+  // 審査員モード, right after the sample story: the listener asks back, and a judge has nothing to answer with
+  const sampleTold = getTrial() && turns.some((t) => t.text === SAMPLE_STORY) && turns.filter((t) => t.role === "veteran").length === 1;
   return (
     <section className="screen">
       {fromBox && (
@@ -382,6 +486,7 @@ export function Talk({
         <ol className="transcript">
           {turns.map((t, i) => (
             <li key={i} className={t.role}>
+              <span className="who">{t.role === "ai" ? "聞き手" : "あなた"}</span>
               {t.text}
             </li>
           ))}
@@ -394,13 +499,19 @@ export function Talk({
         <div className="ai-question">
           <span className="src-tag">{listenerMode ? "📣 親方に読み上げてください（聞き手：Claude）" : "🤖 聞き手（Claude）から"}</span>
           <p>{aiQuestion}</p>
-          {canSay() && !listenerMode && (
+          {canSay() && !listenerMode && !listening && (
             <button className="link" onClick={() => say(aiQuestion)}>
               🔊 もう一度聞く
             </button>
           )}
           {fresh && !turns.length && (
-            <button className="link" onClick={() => setAiQuestion("")}>
+            <button
+              className="link"
+              onClick={() => {
+                hush(); // the question being taken away is not read on to the end
+                setAiQuestion("");
+              }}
+            >
               ← 別のきっかけにする
             </button>
           )}
@@ -414,12 +525,20 @@ export function Talk({
         onChange={setText}
         micLabel={turns.length ? "答える" : "話す"}
         onDone={busy ? undefined : (said) => void next(false, said)}
+        onListening={setListening}
         rows={4}
-        placeholder={turns.length ? "話した内容がここに入ります" : "例: PF管はな、90度の曲がりが3つあったら線が通らん。プルボックスを入れる。"}
+        placeholder={
+          turns.length
+            ? "話した内容がここに入ります"
+            : topic
+              ? "🎤を押して、この質問への答えを話してください（方言のままで大丈夫）"
+              : "例: PF管はな、90度の曲がりが3つあったら線が通らん。プルボックスを入れる。"
+        }
       />
       {err && <p className="hint error">{err}</p>}
-      {/* shown once something was said: a grey button that cannot be pressed only gets in the way */}
-      {(busy || !!text.trim()) && (
+      {/* shown once something was said: a grey button that cannot be pressed only gets in the way. Not while
+          listening: the mic's own 「話し終わった（送る）」 sends then, with the last words */}
+      {(busy || (!!text.trim() && !listening)) && (
         <button className="primary" disabled={busy} onClick={() => next(false)}>
           {busy ? "考えています…" : turns.length ? "答えを送る" : "話した内容を送る"}
         </button>
@@ -429,6 +548,14 @@ export function Talk({
         <button className="secondary" onClick={() => setText(SAMPLE_STORY)}>
           🧪 見本の話で試す
         </button>
+      )}
+      {sampleTold && !busy && !listening && !text.trim() && (
+        <>
+          <button className="secondary" onClick={() => setText(SAMPLE_REPLY)}>
+            🧪 見本の答えを入れる
+          </button>
+          <p className="hint">見本は、ここで下の「ここまでの話をカードにする」を押しても大丈夫です。</p>
+        </>
       )}
 
       {blank && (
@@ -457,8 +584,9 @@ export function Talk({
       {/* away from 「答えを送る」: a wrong press would end the interview */}
       {turns.length > 0 && (
         <div className="finish-talk">
-          <p className="hint">話し終えたら</p>
-          <button className="secondary" disabled={busy} onClick={() => confirm("ここまでの話で、知恵カードの下書きを作りますか？（下書きは、公開する前に直せます）") && next(true)}>
+          {/* while listening, the last words are not written yet: they would be left out of the card */}
+          <p className="hint">{listening ? "🎤を止めてから押せます" : "話し終えたら"}</p>
+          <button className="secondary" disabled={busy || listening} onClick={() => confirm("ここまでの話で、知恵カードの下書きを作りますか？（下書きは、公開する前に直せます）") && next(true)}>
             🗂️ ここまでの話をカードにする
           </button>
         </div>
@@ -480,5 +608,18 @@ export function Talk({
         <li title="名前を出すかどうか、毎回選べます">👤 名前は選べる</li>
       </ul>
     </section>
+  );
+}
+
+function CheckNotes({ notes }: { notes: string[] }) {
+  return (
+    <div className="check-notes" role="note">
+      <strong>🔎 公開の前に確かめてほしい所</strong>
+      <ul>
+        {notes.map((x, i) => (
+          <li key={i}>{x}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
