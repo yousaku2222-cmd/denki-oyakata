@@ -3,7 +3,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { logger } from "firebase-functions";
 import { anthropicKey, getClient, isBusy } from "./claude";
 import { QuotaKind, callerIp, giveBackQuota, takeQuota } from "./limits";
-import { interviewNext as interviewNextImpl, draftCard as draftCardImpl, publishCard as publishCardImpl, setCardStatus as setCardStatusImpl, myCards as myCardsImpl, myCard as myCardImpl, deleteDraft as deleteDraftImpl } from "./interview";
+import { interviewNext as interviewNextImpl, draftCard as draftCardImpl, publishCard as publishCardImpl, setCardStatus as setCardStatusImpl, myCards as myCardsImpl, myCard as myCardImpl, deleteDraft as deleteDraftImpl, checkCard as checkCardImpl } from "./interview";
 import { ask as askImpl, markHelped as markHelpedImpl } from "./ask";
 import { sendToBox as sendToBoxImpl, markGoodQuestion as markGoodQuestionImpl, openQuestions as openQuestionsImpl, questionPhoto as questionPhotoImpl, myQuestions as myQuestionsImpl, talkSeeds as talkSeedsImpl, withdrawQuestion as withdrawQuestionImpl } from "./box";
 import { identifyPart as identifyPartImpl } from "./photo";
@@ -76,13 +76,16 @@ const KEEP_WARM: CallableOptions = { minInstances: 1 };
 export const interviewNext = callable(interviewNextImpl, "claude", KEEP_WARM);
 export const draftCard = callable(draftCardImpl, "claude", KEEP_WARM);
 export const publishCard = callable(publishCardImpl, false, KEEP_WARM);
+// counts itself, after the card is known to be the caller's (a stranger's call must not use up a question)
+export const checkCard = callable(checkCardImpl, "self");
 export const setCardStatus = callable(setCardStatusImpl);
 export const myCards = callable(myCardsImpl);
 export const myCard = callable(myCardImpl);
 export const deleteDraft = callable(deleteDraftImpl);
 export const ask = callable(askImpl, "self", KEEP_WARM);
 export const markHelped = callable(markHelpedImpl);
-export const sendToBox = callable(sendToBoxImpl);
+// no count for Claude here: the short check before sending counts itself ("boxCheck") and is skipped when it fails
+export const sendToBox = callable(sendToBoxImpl, false, { secrets: [anthropicKey] });
 export const markGoodQuestion = callable(markGoodQuestionImpl);
 export const openQuestions = callable(openQuestionsImpl);
 export const talkSeeds = callable(talkSeedsImpl);

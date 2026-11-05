@@ -4,8 +4,9 @@ import { useFlyToMe } from "../FlyToMe";
 import { call, errorText } from "../firebase";
 import { addPart, getName } from "../local";
 import { LawSheet } from "../LawSheet";
-import { MicInput } from "../components";
+import { MicInput, SendCheck, heldOf, type BoxHeld, type BoxSent } from "../components";
 import { PlainNote, useCardWords, type FieldWord } from "../Glossary";
+import { SpecNote } from "../LawCheck";
 
 export interface CalcStart {
   name: string;
@@ -22,7 +23,7 @@ interface PartResult {
   confusables: { name: string; diff: string }[];
   companions: string[];
   askIdeas?: string[]; // questions for the veteran that fit this part
-  cards: { id: string; title: string; body: string; reason: string; caution: string; author: string; terms?: FieldWord[]; plain?: string }[];
+  cards: { id: string; title: string; body: string; reason: string; caution: string; author: string; terms?: FieldWord[]; plain?: string; specDiffers?: string[] }[];
   laws: { id: string; label: string; summary: string }[];
   calc: ({ label: string } & CalcStart) | null;
   safetyNote?: string | null;
@@ -72,6 +73,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
   const [openLaw, setOpenLaw] = useState<string | null>(null);
   const [sent, setSent] = useState(kept.sent);
   const [q, setQ] = useState(kept.q); // what to ask the veteran about this photo (a draft is put in, free to rewrite)
+  const [held, setHeld] = useState<BoxHeld | null>(null); // held back: the veteran might not understand it
   const { fly, envelope } = useFlyToMe();
   useEffect(() => {
     kept = { file, preview, res, q, sent };
@@ -96,6 +98,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
   async function picked(f: File | undefined) {
     if (!f) return;
     setSent(false);
+    setHeld(null);
     setErr("");
     let small: string;
     try {
@@ -110,16 +113,20 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
     await identify({ image: small }, f);
   }
 
-  async function askVeteran(e: React.MouseEvent<HTMLButtonElement>) {
-    if (!file || !q.trim()) return;
-    const from = e.currentTarget.getBoundingClientRect();
+  // confirmed: chosen after the check (「直した文で送る」「このまま送る」), not checked again
+  async function askVeteran(text: string, confirmed: boolean, from: DOMRect) {
+    if (!file || !text) return;
     setSending(true);
     setErr("");
     try {
       // the box takes up to 300,000 characters: step the size down for busy photos
       let photo = await shrink(file, 1024, 0.7);
       if (photo.length > 290_000) photo = await shrink(file, 800, 0.6);
-      await call("sendToBox", { text: q.trim(), photo, photoPart: res && res.verdict !== "unknown" ? res.name : "", askerName: getName("young"), askerRole: "young" });
+      const r = await call<BoxSent>("sendToBox", { text, photo, photoPart: res && res.verdict !== "unknown" ? res.name : "", askerName: getName("young"), askerRole: "young", ...(confirmed ? { confirmed: true } : {}) });
+      const h = heldOf(r, text);
+      setHeld(h);
+      if (h) return;
+      setQ(text); // the words that went (a fixed wording, too)
       setSent(true);
       fly(from);
     } catch (e) {
@@ -274,9 +281,14 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
                   </button>
                 ))}
               </div>
-              <button className="primary" disabled={busy || sending || !q.trim()} onClick={askVeteran}>
-                {sending ? "📮 送っています…" : "📮 写真ごと親方に聞く"}
-              </button>
+              {/* 自分で書き直す: the words are still in the box above */}
+              {held ? (
+                <SendCheck key={held.text} held={held} sending={sending} onSend={(t, confirmed, from) => void askVeteran(t, confirmed, from)} onRewrite={() => setHeld(null)} />
+              ) : (
+                <button className="primary" disabled={busy || sending || !q.trim()} onClick={(e) => void askVeteran(q.trim(), false, e.currentTarget.getBoundingClientRect())}>
+                  {sending ? "📮 送っています…" : "📮 写真ごと親方に聞く"}
+                </button>
+              )}
             </>
           )}
         </div>
@@ -300,6 +312,7 @@ function PartCard({ c }: { c: PartResult["cards"][number] }) {
         <PlainNote plain={c.plain} />
         {c.reason && <p className="src-meta">理由：{w.show(1)}</p>}
         {c.caution && <p className="src-meta">新人がやりがち：{w.show(2)}</p>}
+        <SpecNote sentences={c.specDiffers} />
         <p className="src-meta">{c.author}</p>
       </details>
       {w.sheet}

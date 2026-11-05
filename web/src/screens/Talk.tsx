@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CardBirth, IntoTheBag } from "../CardMotion";
 import { call, errorText } from "../firebase";
 import { getName, getTrial, setName } from "../local";
 import { MicInput, Notice } from "../components";
 import { canSay, hush, say, unlockSay } from "../speech";
+import { LawCheckPanel, SpecNote, type LawCheckResult, type LawCheckState } from "../LawCheck";
+
+/** The card as young workers would get it (publishCard with preview): the ⚠️ / 🔍 sentences against a law taken out. */
+type YoungView = { title: string; scene: string; body: string; reason: string; caution: string; specDiffers: { field: string; text: string }[] };
 
 type Turn = { role: "veteran" | "ai"; text: string };
 interface Draft {
@@ -83,6 +87,7 @@ export function Talk({
   onOpenBox,
   onDirty,
   onTryAsYoung,
+  lead,
 }: {
   topic: Topic | null;
   resumeCardId?: string | null;
@@ -93,6 +98,7 @@ export function Talk({
   onOpenBox?: () => void;
   onDirty?: (dirty: boolean) => void; // something told or edited that is not published yet
   onTryAsYoung?: (question: string) => void; // 審査員モード: ask as a young worker, to see the card in the answer
+  lead?: React.ReactNode; // on top of a 話す with nothing told yet: the young worker's question that waited longest
 }) {
   const [topic, setTopic] = useState(topicIn);
   const [listenerMode, setListenerMode] = useState(false);
@@ -116,6 +122,15 @@ export function Talk({
   const [published, setPublished] = useState(false);
   // numbers the draft has that the talk did not, and numbers no law has: for the veteran to check (nothing is blocked)
   const [checkNotes, setCheckNotes] = useState<string[]>([]);
+  // the card's sentences against the articles (LawCheck.tsx): the last check of an opened card, the ⚠️ / 🔍
+  // sentences still on the card (young workers do not see them: asked about once more before publishing), and
+  // whether the card is checked as it is now (only then can it be published)
+  const [lawInit, setLawInit] = useState<LawCheckResult | null>(null);
+  const [lawLeft, setLawLeft] = useState<string[]>([]);
+  const [lawState, setLawState] = useState<LawCheckState>({ checked: false, busy: false, failed: false });
+  const [preview, setPreview] = useState<YoungView | null>(null); // 「若手にはこう見えます」, before publishing
+  const runCheck = useRef<(() => void) | null>(null);
+  const checkBox = useRef<HTMLDivElement>(null);
   const [birth, setBirth] = useState(false); // a new draft is shown being made before it can be edited
   const endBirth = useCallback(() => setBirth(false), []);
   const [status, setStatus] = useState<"draft" | "published" | "private">("draft");
@@ -152,8 +167,9 @@ export function Talk({
   // opened from わたしのカード: go on with a draft (or fix a published card)
   useEffect(() => {
     if (!resumeCardId) return;
-    call<{ cardId: string; status: "draft" | "published" | "private"; draft: Draft; authorName: string; showAuthorName: boolean; topic: { questionId: string; text: string; askerName: string } | null; transcript: Turn[] }>("myCard", { cardId: resumeCardId })
+    call<{ cardId: string; status: "draft" | "published" | "private"; draft: Draft; authorName: string; showAuthorName: boolean; topic: { questionId: string; text: string; askerName: string } | null; transcript: Turn[]; lawCheck?: LawCheckResult | null }>("myCard", { cardId: resumeCardId })
       .then((r) => {
+        setLawInit(r.lawCheck ?? null);
         setCardId(r.cardId);
         setStatus(r.status);
         setDraft(r.draft);
@@ -251,13 +267,17 @@ export function Talk({
       if (!r.done) {
         setAiQuestion(r.question);
       } else {
-        const d = await call<{ cardId: string; draft: Draft; unsaidNumbers?: string[]; lawNotes?: string[] }>("draftCard", {
+        const d = await call<{ cardId: string; draft: Draft; unsaidNumbers?: string[]; unsaidSentences?: string[]; lawNotes?: string[] }>("draftCard", {
           transcript: t,
           authorName: name,
           triggerQuestionId: topic?.questionId || undefined,
         });
         setCardId(d.cardId);
-        setCheckNotes([...(d.unsaidNumbers?.length ? [`話に無い数値があります：${d.unsaidNumbers.join("、")}（AIが足したかもしれません）`] : []), ...(d.lawNotes ?? [])]);
+        setCheckNotes([
+          ...(d.unsaidSentences ?? []).map((x) => `話していない中身があるかもしれない文：「${x}」（AIが足したり言い換えたりしたかもしれません。消すか残すか決めてください）`),
+          ...(d.unsaidNumbers?.length ? [`話に無い数値があります：${d.unsaidNumbers.join("、")}（AIが足したかもしれません）`] : []),
+          ...(d.lawNotes ?? []),
+        ]);
         setDraft(d.draft);
         setBirth(true);
         setTagsText(d.draft.tags.join("、"));
@@ -270,21 +290,36 @@ export function Talk({
     }
   }
 
-  async function publish() {
+  // seen = the veteran has looked at 「若手にはこう見えます」 and said yes
+  async function publish(seen = false) {
     if (!draft) return;
+    if (!lawState.checked) return; // the server refuses it too
+    const data = {
+      cardId,
+      authorName: name,
+      showAuthorName: showName,
+      edits: { ...draft, tags: tagsText.split(/[、,\n]+/).map((x) => x.trim()).filter(Boolean) }, // a word may keep its spaces (「VVF 2.0」)
+    };
     setBusy(true);
     setErr("");
     try {
+      // a sentence the check marked ⚠️ / 🔍 against a law does not reach young workers. What is left may read
+      // differently on its own (「…付け替えればよか」 without 「資格がなくても」), so the veteran sees it first.
+      if (lawLeft.length && !seen) {
+        const p = await call<{ preview: YoungView }>("publishCard", { ...data, preview: true });
+        setPreview(p.preview);
+        window.scrollTo({ top: 0 });
+        return;
+      }
       setName("veteran", name);
-      const r = await call<{ status?: "published" | "private"; lawNotes?: string[] }>("publishCard", {
-        cardId,
-        authorName: name,
-        showAuthorName: showName,
-        edits: { ...draft, tags: tagsText.split(/[、,\n]+/).map((x) => x.trim()).filter(Boolean) }, // a word may keep its spaces (「VVF 2.0」)
-      });
+      const r = await call<{ status?: "published" | "private"; lawNotes?: string[]; hidden?: number }>("publishCard", data);
+      setPreview(null);
       // what the card is now (it may have been made public or hidden from わたしのカード meanwhile)
       setSavedStatus(r.status ?? "published");
-      setCheckNotes(r.lawNotes ?? []);
+      setCheckNotes([
+        ...(r.hidden ? [`条文と違う（または確かめられない）${r.hidden}つの文は、若手には表示していません。「わたしのカード」から、言い回しを変えて照らし直せます。`] : []),
+        ...(r.lawNotes ?? []),
+      ]);
       setPublished(true);
     } catch (e) {
       setErr(errorText(e, "保存できませんでした。題名とやり方が入っているか、長すぎないか確かめてください。"));
@@ -368,6 +403,49 @@ export function Talk({
     );
   }
 
+  if (draft && preview) {
+    const parts: [Exclude<keyof YoungView, "specDiffers">, string][] = [
+      ["title", "一言でいうと"],
+      ["scene", "どんな現場・場面で"],
+      ["body", "やり方・コツ"],
+      ["reason", "なぜそうするか／やらかした失敗"],
+      ["caution", "新人がよく間違えること"],
+    ];
+    return (
+      <section className="screen">
+        <h1 className="screen-title">若手にはこう見えます</h1>
+        <Notice>条文と違う所があります。この文は若手には表示されません。取り消すか、言い回しを変えてもう一度照らしてください。（このまま公開すると、この文以外が若手に届きます）</Notice>
+        <p className="hint">若手にはこう見えます。残った文だけで、意味が変わっていないか確かめてください。</p>
+        <article className="wisdom-card">
+          {parts.map(([k, label]) =>
+            preview[k] ? (
+              <div className="wc-part" key={k}>
+                <span>{label}</span>
+                <p>{preview[k]}</p>
+              </div>
+            ) : null,
+          )}
+          <SpecNote sentences={preview.specDiffers} />
+        </article>
+        <details className="told">
+          <summary>若手には表示しない文（{lawLeft.length}つ）</summary>
+          <ul>
+            {lawLeft.map((t, i) => (
+              <li key={i}>「{t}」</li>
+            ))}
+          </ul>
+        </details>
+        {err && <p className="hint error">{err}</p>}
+        <button className="primary" disabled={busy} onClick={() => publish(true)}>
+          {busy ? "保存しています…" : status === "private" ? "この内容で保存する" : "この内容で公開する"}
+        </button>
+        <button className="secondary" disabled={busy} onClick={() => setPreview(null)}>
+          戻って直す
+        </button>
+      </section>
+    );
+  }
+
   if (draft && birth) {
     return <CardBirth said={turns.filter((t) => t.role === "veteran").map((t) => t.text)} draft={draft} onDone={endBirth} />;
   }
@@ -416,6 +494,21 @@ export function Talk({
           <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} />
         </label>
         <FieldWords draft={draft} onChange={setDraft} />
+        {cardId && (
+          <div ref={checkBox}>
+            <LawCheckPanel
+              key={cardId}
+              cardId={cardId}
+              fields={draft}
+              tags={tagsText.split(/[、,\n]+/).map((x) => x.trim()).filter(Boolean)}
+              initial={lawInit}
+              onEdit={(key, value) => setDraft((d) => d && { ...d, [key]: value })}
+              onLeft={setLawLeft}
+              onState={setLawState}
+              runRef={runCheck}
+            />
+          </div>
+        )}
         <fieldset className="field">
           <legend>名前の出し方</legend>
           <label className="radio">
@@ -428,9 +521,31 @@ export function Talk({
           </label>
         </fieldset>
         {err && <p className="hint error">{err}</p>}
-        <button className="primary" disabled={busy || !draft.title.trim() || !draft.body.trim()} onClick={publish}>
+        <button className="primary" disabled={busy || !lawState.checked || !draft.title.trim() || !draft.body.trim()} onClick={() => publish()}>
           {busy ? "保存しています…" : status === "draft" ? "確かめたので公開する" : "直して保存する"}
         </button>
+        {/* only a card checked as it is now goes out (publishCard refuses others) */}
+        {cardId && !lawState.checked && (
+          <p className="hint publish-gate">
+            {lawState.busy ? (
+              "条文と照らしています。終わると公開できます。"
+            ) : (
+              <>
+                条文との照らし合わせをしてから公開してください。{" "}
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => {
+                    checkBox.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    runCheck.current?.();
+                  }}
+                >
+                  {lawState.failed ? "もう一度照らす" : "照らす"}
+                </button>
+              </>
+            )}
+          </p>
+        )}
         {status === "draft" && <p className="hint">公開したあとも、「わたしのカード」で非公開に戻せます。</p>}
         <button
           className="link"
@@ -485,6 +600,7 @@ export function Talk({
         </button>
       )}
       {topicNote}
+      {blank && lead}
 
       {turns.length > 0 && (
         <ol className="transcript">
@@ -564,7 +680,7 @@ export function Talk({
 
       {blank && (
         <div className="talk-seeds">
-          {boxOpen > 0 && onOpenBox && (
+          {boxOpen > 0 && onOpenBox && !lead && (
             <button className="seed young-q" onClick={onOpenBox}>
               📮 質問箱に若手の質問が{boxOpen}件あります →
             </button>

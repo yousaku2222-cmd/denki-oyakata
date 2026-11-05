@@ -210,6 +210,8 @@ const cardStamp = (c: Card) =>
   JSON.stringify([
     c.id, c.title, c.scene, c.body, c.reason, c.caution, c.tags, c.triggerSearchText ?? null, c.triggerQuestionText ?? null, c.triggerAskerName ?? null, c.showAuthorName, c.authorName, c.publishedAt?.toMillis?.() ?? 0,
     ...(c.terms?.length || c.plain ? [c.terms ?? [], c.plain ?? ""] : []),
+    ...(c.lawCheck ? [{ lawCheck: c.lawCheck }] : []),
+    ...(c.specDiffers?.length ? [{ specDiffers: c.specDiffers }] : []), // the 仕様書 notes shown with it // the ⚖️ badge (cards checked before publishing; held-back sentences are already out of the words above)
   ]);
 
 export function cacheKey(text: string, cards: Card[]): { id: string; ver: string } {
@@ -354,7 +356,7 @@ async function compose(text: string, cards: Card[]) {
 
     const cardText = hits.length
       ? hits
-          .map((c) => `<card id="${c.id}">\n${fenced(`${c.title}\n場面: ${c.scene}\nやり方: ${c.body}\n理由・失敗: ${c.reason}\n新人の間違い: ${c.caution}`)}\n</card>`)
+          .map((c) => `<card id="${c.id}">\n${fenced(`${c.title}\n場面: ${c.scene}\nやり方: ${c.body}\n理由・失敗: ${c.reason}\n新人の間違い: ${c.caution}${c.specDiffers?.length ? `\n（公共工事の仕様書とは違うやり方の文。民間の現場では会社のやり方のこともある: ${c.specDiffers.map((x) => `「${x.text}」`).join("")}）` : ""}`)}\n</card>`)
           .join("\n\n")
       : "（関係する知恵カードはありません）";
     const lawText = laws.length
@@ -467,6 +469,8 @@ async function compose(text: string, cards: Card[]) {
         publishedAt: c.publishedAt?.toMillis() ?? null,
         triggerAskerName: c.triggerAskerName,
         terms: c.terms ?? [], // the veteran's words in its sentences, underlined on the screen
+        lawCheck: c.lawCheck ? { checkedAt: c.lawCheck.checkedAt } : null, // only that it was checked (the held-back sentences are not on the card)
+        specDiffers: (c.specDiffers ?? []).map((x) => x.text), // shown with 「公共工事の仕様書とは違うやり方です」
       };
     }),
     calcs,

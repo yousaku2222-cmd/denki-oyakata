@@ -21,14 +21,13 @@ const TABS: Record<Role, { id: Tab; icon: string; label: string }[]> = {
   young: [
     { id: "ask", icon: "🎤", label: "聞く" },
     { id: "browse", icon: "🔎", label: "探す" },
-    { id: "calc", icon: "🧮", label: "計算" },
+    // 計算 opens from 撮る's 🧮 (and Claude uses it on 聞く): no tab of its own
     { id: "photo", icon: "📷", label: "撮る" },
     { id: "me", icon: "🙂", label: "わたし" },
   ],
   veteran: [
     { id: "talk", icon: "🎙️", label: "話す" },
     { id: "box", icon: "📮", label: "質問箱" },
-    { id: "ask", icon: "🔎", label: "調べる" },
     { id: "mycards", icon: "🗂️", label: "わたしの\nカード" },
   ],
 };
@@ -52,13 +51,14 @@ export default function App() {
   // 質問箱: how many came in (or were joined) since it was last opened, counted when the app opens and on each
   // tab change; opening it clears the number
   const [boxNew, setBoxNew] = useState(0);
-  const [boxOpen, setBoxOpen] = useState(0); // all the open ones, for 話す's way to the box
+  const [boxQs, setBoxQs] = useState<OpenQ[]>([]); // all the open ones, for 話す's way to the box
+  const boxOpen = boxQs.length;
   useEffect(() => {
     if (role !== "veteran" || tab === "box") return;
-    call<{ questions: { lastAskedAt: number }[] }>("openQuestions", {})
+    call<{ questions: OpenQ[] }>("openQuestions", {})
       .then((r) => {
         setBoxNew(r.questions.filter((q) => q.lastAskedAt > boxLastSeen()).length);
-        setBoxOpen(r.questions.length);
+        setBoxQs(r.questions);
       })
       .catch(() => {}); // only a hint
   }, [role, tab]);
@@ -171,9 +171,18 @@ export default function App() {
       </div>
 
       <main>
+        {getTrial() && <TrialSteps role={role} />}
         {tab === "ask" && (role === "veteran" ? <VeteranAsk role={role} /> : <Ask key={askSeed?.n ?? 0} role={role} seed={askSeed?.text} seedQuestionId={askSeed?.questionId} />)}
         {tab === "browse" && <Browse />}
-        {tab === "calc" && <Calc key={calcStart ? JSON.stringify(calcStart) : "list"} start={calcStart} />}
+        {tab === "calc" && (
+          <>
+            {/* no tab of its own: the way back to 撮る, where it was opened from */}
+            <button className="link back-link calc-back" onClick={() => setTab("photo")}>
+              ← 撮るに戻る
+            </button>
+            <Calc key={calcStart ? JSON.stringify(calcStart) : "list"} start={calcStart} />
+          </>
+        )}
         {tab === "photo" && (
           <Photo
             onCalc={(s) => {
@@ -225,6 +234,7 @@ export default function App() {
               </div>
             )}
             <Talk key={talkKey} topic={topic} resumeCardId={resumeId} active={tab === "talk"} onDirty={setTalkDirty} onDone={() => startTalk(null, null, true)} boxOpen={boxOpen} onOpenBox={() => setTab("box")}
+              lead={!talkDirty && <Waiting questions={boxQs} onAnswer={(q) => startTalk(q)} onOpenBox={() => setTab("box")} />}
               onTryAsYoung={(q) => {
                 choose("young");
                 setAskSeed({ text: q, questionId: "", n: Date.now() });
@@ -243,14 +253,15 @@ export default function App() {
       </main>
 
       <nav className="tabs">
-        {TABS[role].map((t) => (
+        {TABS[role].map((t) => {
+          const on = tab === t.id || (tab === "calc" && t.id === "photo"); // 計算 is opened from 撮る: 撮る stays lit
+          return (
           <button
             key={t.id}
             data-tab={t.id}
-            className={tab === t.id ? "on" : ""}
-            aria-current={tab === t.id ? "page" : undefined}
+            className={on ? "on" : ""}
+            aria-current={on ? "page" : undefined}
             onClick={() => {
-              if (t.id === "calc") setCalcStart(null);
               if (t.id === "me") setMeDot(false);
               if (t.id === "mycards") {
                 setCardsDot(false);
@@ -272,13 +283,14 @@ export default function App() {
             </span>
             <span className="tab-label">{t.label}</span>
           </button>
-        ))}
+          );
+        })}
       </nav>
     </div>
   );
 }
 
-// Veterans keep four big tabs: 聞く, 探す and 計算 share one (they use calculations for estimates and checks too).
+// 調べる (聞く, 探す and 計算 in one) is off the veterans' tabs, so 話す comes first; kept to put back if asked for.
 function VeteranAsk({ role }: { role: Role }) {
   const [view, setView] = useState<"ask" | "browse" | "calc">("ask");
   return (
@@ -304,23 +316,68 @@ function VeteranAsk({ role }: { role: Role }) {
  * 審査員モード, on a wide screen only: what to try in 3 minutes, on the empty left side. The steps done in the
  * role now shown are marked.
  */
+// the veteran's side first: what is told there is what the young worker hears back next
+const TRIAL_STEPS: { on: Role; text: string; short: string }[] = [
+  { on: "veteran", text: "ベテランで「🧪 見本の話で試す」→ 話を送って、カードにする", short: "ベテランで「🧪 見本の話」→ カードにする" },
+  { on: "young", text: "「🔰 若手として聞いてみる」で聞くと、さっき話した言葉が緑の札で出る（約30秒かかります）", short: "若手で聞くと、話した言葉が緑の札で出る（約30秒）" },
+  { on: "young", text: "「よく聞かれる質問」を押すと、保存した答えが一瞬で出る（根拠と「✔ 原文と一致」を見る）", short: "「よく聞かれる質問」は一瞬で出る" },
+];
+
+/** 審査員モード on a phone (the PC has TrialGuide beside the app): the 3 steps, the ones of this role in bold. */
+function TrialSteps({ role }: { role: Role }) {
+  return (
+    <ol className="trial-steps">
+      {TRIAL_STEPS.map((s, i) => (
+        <li key={i} className={role === s.on ? "now" : ""}>
+          {s.short}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function TrialGuide({ role }: { role: Role | null }) {
-  const steps: { on: Role; text: string }[] = [
-    { on: "young", text: "若手で「よく聞かれる質問」を1つ押す（根拠と「✔ 原文と一致」を見る）" },
-    { on: "veteran", text: "「ベテランで試す」→「🧪 見本の話で試す」で話を送る" },
-    { on: "young", text: "カードにして公開したら「🔰 若手として聞いてみる」で、答えにそのカードが出るのを見る" },
-  ];
   return (
     <aside className="trial-guide">
       <strong>🧪 審査員向け 3分の試し方</strong>
       <ol>
-        {steps.map((s, i) => (
+        {TRIAL_STEPS.map((s, i) => (
           <li key={i} className={role === s.on ? "now" : ""}>
             {s.text}
           </li>
         ))}
       </ol>
     </aside>
+  );
+}
+
+// a question in 質問箱, as openQuestions gives it (the fields 話す's top needs)
+type OpenQ = { id: string; text: string; askerName: string; hasPhoto: boolean; followUp: Topic["followUp"]; createdAt: number; lastAskedAt: number };
+
+/**
+ * On top of 話す: the young worker who has waited longest, by name, one press from answering. A veteran opens 話す
+ * first, and a question with a person behind it is a reason to talk that a list of counts is not.
+ */
+function Waiting({ questions, onAnswer, onOpenBox }: { questions: OpenQ[]; onAnswer: (t: Topic) => void; onOpenBox: () => void }) {
+  if (!questions.length) return null;
+  const q = questions.reduce((a, b) => (b.createdAt < a.createdAt ? b : a));
+  const days = Math.floor((Date.now() - q.createdAt) / 86400000);
+  const rest = questions.length - 1;
+  return (
+    <div className="waiting-q">
+      <p className="waiting-head">
+        📮 {q.askerName || "若手"}さんが聞いています<span className="waiting-days">（{days > 0 ? `${days}日前` : "今日"}）</span>
+      </p>
+      <p className="waiting-text">{q.text}</p>
+      <button className="primary" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp })}>
+        🎤 話して答える
+      </button>
+      {rest > 0 && (
+        <button className="link" onClick={onOpenBox}>
+          ほかに{rest}件 →（質問箱へ）
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -369,12 +426,13 @@ function Entry({ onChoose, last }: { onChoose: (r: Role, trial?: boolean) => voi
         <small>現場の疑問に、根拠つきで答えます</small>
       </button>
       {getTrial() ? (
-        <p className="trial-note entry-trial">🧪 審査員モード中です。見本の質問は若手、見本の話はベテランで試せます。</p>
+        <p className="trial-note entry-trial">🧪 審査員モード中です。① ベテランで見本の話をカードにする ② 若手で聞くと、その言葉が緑の札で出る（約30秒） ③「よく聞かれる質問」は一瞬で出ます。</p>
       ) : (
-        // as strong as the two roles: the judges are the first ones to open this
-        <button className="role-btn judge" onClick={() => onChoose("young", true)}>
+        // as strong as the two roles: the judges are the first ones to open this. It starts on the veteran's side
+        // (the sample story), so the card it makes is in the young worker's answer after
+        <button className="role-btn judge" onClick={() => onChoose("veteran", true)}>
           🧪 審査員の方はこちら
-          <small>見本の質問と見本の話で、すぐ試せます</small>
+          <small>見本の話でカードを作り、若手で確かめられます</small>
         </button>
       )}
       <p className="entry-ai">AI は Claude：質問の仕分けに Haiku、答え・聞き取り・写真に Sonnet、条文の整理と点検に Opus</p>

@@ -23,6 +23,11 @@ function check(label, ok, extra = "") {
   if (!ok) failed++;
 }
 const clientGet = (path) => fetch(`${FS}/${path}`).then((r) => r.status);
+// a card goes out only once it is checked against the articles as it is (publishCard refuses others): as the edit screen does
+async function publish(data, token) {
+  await call("checkCard", { cardId: data.cardId, edits: data.edits }, token);
+  return call("publishCard", data, token);
+}
 
 // Start from an empty local database so earlier runs cannot answer for this one.
 await fetch("http://127.0.0.1:8080/emulator/v1/projects/demo-denki-oyakata/databases/(default)/documents", { method: "DELETE" });
@@ -40,7 +45,7 @@ check("draft card created", !!d.cardId, d.draft.title);
 check("draft is hidden from clients", (await clientGet(`cards/${d.cardId}`)) === 403);
 // a meaning sent for a word that is not on the card is dropped (the screens underline only words on it)
 const forged = { word: "カードに無い言葉", meaning: "x" };
-await call("publishCard", { cardId: d.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...d.draft, tags: ["PF", "合成樹脂可とう電線管", "曲げ"], terms: [...d.draft.terms, forged] } }, vet);
+await publish({ cardId: d.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...d.draft, tags: ["PF", "合成樹脂可とう電線管", "曲げ"], terms: [...d.draft.terms, forged] } }, vet);
 check("published card is readable", (await fetch(`${FS}/cards/${d.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).status === 200);
 const kept = (await call("myCard", { cardId: d.cardId }, vet)).draft;
 check("the veteran's words keep their meanings, only words on the card", JSON.stringify(kept.terms) === JSON.stringify(d.draft.terms) && kept.plain === d.draft.plain, JSON.stringify(kept.terms));
@@ -61,7 +66,7 @@ check("ungrounded question detected", !u.grounded);
 const { questionId } = await call("sendToBox", { text: "新しい現場の朝礼は何時からですか？", askerName: "テスト若手", askerRole: "young" }, young);
 const t2 = [{ role: "veteran", text: "（テスト用の文）新しい現場の朝礼は、だいたい8時から。前の日に職長に確認しておく。" }];
 const d2 = await call("draftCard", { transcript: t2, authorName: "山田（親方）", triggerQuestionId: questionId }, vet);
-await call("publishCard", { cardId: d2.cardId, authorName: "山田（親方）", showAuthorName: false, edits: { ...d2.draft, tags: ["朝礼", "集合時間", "新規入場"] } }, vet);
+await publish({ cardId: d2.cardId, authorName: "山田（親方）", showAuthorName: false, edits: { ...d2.draft, tags: ["朝礼", "集合時間", "新規入場"] } }, vet);
 if (u.mode === "claude") for (const s of u.sentences) console.log(`     [${s.source}] ${s.text}`);
 const mineQ = (await call("myQuestions", {}, young)).questions.find((x) => x.id === questionId);
 check("question marked answered", mineQ?.status === "answered" && !!mineQ.answeredCardTitle, mineQ?.answeredCardTitle);
@@ -93,7 +98,7 @@ check("clients cannot write directly", (await fetch(`${FS}/cards?documentId=x`, 
 
 // 5b. Editing a hidden card keeps it hidden.
 await call("setCardStatus", { cardId: d.cardId, status: "private" }, vet);
-await call("publishCard", { cardId: d.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...d.draft, title: "直した題名", tags: ["PF"] } }, vet);
+await publish({ cardId: d.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...d.draft, title: "直した題名", tags: ["PF"] } }, vet);
 check("editing a hidden card keeps it hidden", (await call("myCards", {}, vet)).cards.find((c) => c.id === d.cardId)?.status === "private");
 await call("setCardStatus", { cardId: d.cardId, status: "published" }, vet);
 
@@ -127,24 +132,46 @@ for (let i = 0; i < 12; i++) {
   catch (e) { if (/INVALID_ARGUMENT/.test(String(e))) refused++; }
 }
 // the talk says nothing, so Claude may rightly leave やり方 empty: the veteran would write one before publishing
-await call("publishCard", { cardId: ld.cardId, edits: { ...ld.draft, body: ld.draft.body || "（テスト）長い話。" } }, longVet);
-check("refused publishes do not use up the cap", refused === 12);
+// (only a short body here: a card of hundreds of 「長い話。」 is more than one check can read)
+const ldEdits = { ...ld.draft, scene: "", body: "（テスト）長い話。", reason: "", caution: "" };
+// not checked against the articles yet: refused, and that does not use up the day either
+let unchecked = 0, uncheckedMsg = "";
+for (let i = 0; i < 12; i++) {
+  try { await call("publishCard", { cardId: ld.cardId, edits: ldEdits }, longVet); }
+  catch (e) { if (/FAILED_PRECONDITION/.test(String(e))) { unchecked++; uncheckedMsg = String(e); } }
+}
+check("a card not checked against the articles cannot be published", unchecked === 12 && uncheckedMsg.includes("条文との照らし合わせをしてから公開してください"), uncheckedMsg.slice(0, 120));
+await publish({ cardId: ld.cardId, edits: ldEdits }, longVet);
+check("refused publishes do not use up the cap", refused === 12 && (await call("myCards", {}, longVet)).cards[0]?.status === "published");
 
 // 8. The question box has its own daily cap per device (it costs no Claude call, but every veteran downloads it).
 const spammer = await signUp();
 let accepted = 0;
 for (let i = 0; i < 21; i++) {
-  try { await call("sendToBox", { text: `テスト${i}` }, spammer); accepted++; } catch { break; }
+  try { await call("sendToBox", { text: `テスト${i}`, confirmed: true }, spammer); accepted++; } catch { break; }
 }
 check("question box: 20 posts a day per device", accepted === 20, `accepted=${accepted}`);
 
+// 8b. Before the box (with real Claude only): words the veteran could not follow are held and shown back, not sent.
+if (a.mode === "claude") {
+  const unsure = await signUp();
+  const muddled = "ブレーカー あの 上がらん 昨日の 線 どこ";
+  const h = await call("sendToBox", { text: muddled, askerName: "若手", askerRole: "young" }, unsure);
+  check("muddled words are held with a reason and a fixed wording", h.needsConfirm === true && !h.questionId && !!h.reason, `${h.reason} → ${h.suggestion}`);
+  check("a held question is not in the box", !(await call("myQuestions", {}, unsure)).questions.length);
+  const kept = await call("sendToBox", { text: muddled, askerName: "若手", askerRole: "young", confirmed: true }, unsure);
+  check("「このまま送る」 sends it without asking again", !!kept.questionId && !kept.needsConfirm);
+  const plain = await call("sendToBox", { text: "分電盤のブレーカーが上がらない時は、まず何を確かめればいいですか？", askerName: "若手", askerRole: "young" }, unsure);
+  check("a clear question goes straight in", !!plain.questionId && !plain.needsConfirm, plain.reason ?? "");
+}
+
 // 9. 審査員モード: a judge goes round the loop, and nobody else sees it.
 const judge = await signUp(), other = await signUp();
-const jq = await call("sendToBox", { text: "審査員の試しの質問です", askerName: "審査員", askerRole: "young", trial: true }, judge);
+const jq = await call("sendToBox", { text: "審査員の試しの質問です", confirmed: true, askerName: "審査員", askerRole: "young", trial: true }, judge);
 check("judge's question is only in their own box", (await call("openQuestions", { trial: true }, judge)).questions.some((q) => q.id === jq.questionId) && !(await call("openQuestions", {}, other)).questions.some((q) => q.id === jq.questionId));
 const jt = [{ role: "veteran", text: "（テスト用）脚立は開き止めを必ず掛けてから乗る。" }];
 const jd = await call("draftCard", { transcript: jt, authorName: "審査員", trial: true }, judge);
-await call("publishCard", { cardId: jd.cardId, authorName: "審査員", showAuthorName: true, edits: { ...jd.draft, tags: ["脚立", "開き止め"] }, trial: true }, judge);
+await publish({ cardId: jd.cardId, authorName: "審査員", showAuthorName: true, edits: { ...jd.draft, tags: ["脚立", "開き止め"] }, trial: true }, judge);
 check("judge sees their trial card", (await call("myCards", { trial: true }, judge)).cards.some((c) => c.id === jd.cardId));
 // the same holds for a device reading Firestore directly (the rules, not only the server)
 const otherToken = other;
@@ -154,9 +181,9 @@ const ja = await call("ask", { text: "脚立の開き止めは？", askerRole: "
 const oa = await call("ask", { text: "脚立の開き止めは？", askerRole: "young" }, other);
 check("judge's answer uses their trial card, others' does not", ja.cards.some((c) => c.id === jd.cardId) && !oa.cards.some((c) => c.id === jd.cardId));
 // answering a shared question from trial mode leaves it open for everyone else
-const sq = await call("sendToBox", { text: "共有の質問箱の質問です", askerName: "若手", askerRole: "young" }, other);
+const sq = await call("sendToBox", { text: "共有の質問箱の質問です", confirmed: true, askerName: "若手", askerRole: "young" }, other);
 const jd2 = await call("draftCard", { transcript: jt, authorName: "審査員", triggerQuestionId: sq.questionId, trial: true }, judge);
-await call("publishCard", { cardId: jd2.cardId, authorName: "審査員", showAuthorName: true, edits: { ...jd2.draft, tags: ["脚立"] }, trial: true }, judge);
+await publish({ cardId: jd2.cardId, authorName: "審査員", showAuthorName: true, edits: { ...jd2.draft, tags: ["脚立"] }, trial: true }, judge);
 check("trial card does not close a shared question", (await call("myQuestions", {}, other)).questions.find((q) => q.id === sq.questionId)?.status === "open");
 
 console.log("\n10. 同じ質問・いい質問");
@@ -181,7 +208,7 @@ const pd = await call("draftCard", { transcript: [{ role: "veteran", text: "（�
 const pcard = await (await fetch(`${FS}/cards/${pd.cardId}`, { headers: { Authorization: "Bearer owner" } })).json();
 check("a photo question's card is searched with the part's name", pcard.fields?.triggerSearchText?.stringValue === "ジョイントボックス");
 const jd3 = await call("draftCard", { transcript: [{ role: "veteran", text: "（テスト用）ジョイントボックスの結線は差込形コネクタで留める。" }], authorName: "山田（親方）", triggerQuestionId: s1.questionId }, vet2);
-await call("publishCard", { cardId: jd3.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...jd3.draft, tags: ["ジョイントボックス"] } }, vet2);
+await publish({ cardId: jd3.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...jd3.draft, tags: ["ジョイントボックス"] } }, vet2);
 const done2 = (await call("myQuestions", {}, asker2)).questions.find((q) => q.id === s1.questionId);
 check("when it is answered, the one who joined hears it too (with who answered)", done2?.status === "answered" && done2.answeredBy === "山田（親方）" && done2.answeredAt > 0);
 
@@ -218,7 +245,7 @@ const dTerm = gl.terms.find((t) => t.term === "D種接地工事");
 check("words come with a meaning and the article it is from", gl.terms.length >= 50 && !!dTerm?.meanings[0]?.plain && /^電技解釈 第\d+条/.test(dTerm.meanings[0].label), `${gl.terms.length} terms`);
 
 console.log("\n14. 質問の取り下げ");
-const wq = await call("sendToBox", { text: "（テスト）取り下げる質問", photo: "data:image/jpeg;base64,/9j/4AAQ", askerName: "若手1", askerRole: "young" }, asker1);
+const wq = await call("sendToBox", { text: "（テスト）取り下げる質問", confirmed: true, photo: "data:image/jpeg;base64,/9j/4AAQ", askerName: "若手1", askerRole: "young" }, asker1);
 let othersRefused = false;
 try {
   await call("withdrawQuestion", { questionId: wq.questionId }, stranger);
@@ -232,8 +259,8 @@ const mineAfter = (await call("myQuestions", {}, asker1)).questions.some((q) => 
 const photoAfter = (await call("questionPhoto", { questionId: wq.questionId }, vet)).photo;
 check("a question taken back leaves the box, the list and its photo", wr.withdrawn && !boxAfter && !mineAfter && photoAfter === null);
 // joined by another: the one who leaves goes, the question stays for the other
-const twoQ = await call("sendToBox", { text: "（テスト）二人で聞く質問", askerName: "若手1", askerRole: "young" }, asker1);
-await call("sendToBox", { text: "（テスト）二人で聞く質問", askerName: "若手2", askerRole: "young" }, asker2);
+const twoQ = await call("sendToBox", { text: "（テスト）二人で聞く質問", confirmed: true, askerName: "若手1", askerRole: "young" }, asker1);
+await call("sendToBox", { text: "（テスト）二人で聞く質問", confirmed: true, askerName: "若手2", askerRole: "young" }, asker2);
 const jr = await call("withdrawQuestion", { questionId: twoQ.questionId }, asker1);
 const stays = (await call("openQuestions", {}, vet)).questions.find((q) => q.id === twoQ.questionId);
 const forOther = (await call("myQuestions", {}, asker2)).questions.some((q) => q.id === twoQ.questionId);
@@ -247,11 +274,81 @@ try {
 }
 check("taking back a question already taken back says so", againMsg.includes("もう取り下げてあります"), againMsg);
 // passed on to a veteran who joined: it leaves that veteran's own box
-const vetQ = await call("sendToBox", { text: "（テスト）ベテランも聞く質問", askerName: "若手1", askerRole: "young" }, asker1);
-await call("sendToBox", { text: "（テスト）ベテランも聞く質問", askerName: "山田（親方）", askerRole: "veteran" }, vet);
+const vetQ = await call("sendToBox", { text: "（テスト）ベテランも聞く質問", confirmed: true, askerName: "若手1", askerRole: "young" }, asker1);
+await call("sendToBox", { text: "（テスト）ベテランも聞く質問", confirmed: true, askerName: "山田（親方）", askerRole: "veteran" }, vet);
 await call("withdrawQuestion", { questionId: vetQ.questionId }, asker1);
 const inOwnBox = (await call("openQuestions", {}, vet)).questions.some((q) => q.id === vetQ.questionId);
 check("a question passed on to a veteran is not in their own box", !inOwnBox);
+
+console.log("\n15. 条文との照らし合わせ");
+{ // its own block: the sections above use the short names
+// a story that disagrees with the law on purpose (who may do the work): the check should mark it, not block it
+const vet3 = await signUp();
+const lt = [{ role: "veteran", text: "（テスト）資格がなくても、コンセントの取り替えくらいはしてよか。ブレーカーを切ってから付け替えればよか。PF管の曲げは1区間で合計270度までにしとる。" }];
+const ld = await call("draftCard", { transcript: lt, authorName: "山田（親方）" }, vet3);
+// the draft may already soften what was said: put the claim itself in the body, as a veteran could have typed it
+// (a plain title and one more plain sentence, so the card still has a title and a body once the claim is held back)
+const CLAIM = "資格がなくても、コンセントの取り替えくらいはしてよか。";
+const edits = { ...ld.draft, title: "（テスト）コンセントの付け替え", body: `${CLAIM}${ld.draft.body}
+（テスト）道具は前の日にそろえておく。`, tags: ld.draft.tags };
+const pubData = { cardId: ld.cardId, authorName: "山田（親方）", showAuthorName: true, edits };
+let othersCheck = "";
+try { await call("checkCard", { cardId: ld.cardId, edits }, stranger); } catch (e) { othersCheck = String(e); }
+check("only the card's own device can check it", /permission-denied|PERMISSION_DENIED/.test(othersCheck));
+let beforeCheck = "";
+try { await call("publishCard", pubData, vet3); } catch (e) { beforeCheck = String(e); }
+check("a card is not published before it is checked", /FAILED_PRECONDITION/.test(beforeCheck) && beforeCheck.includes("条文との照らし合わせをしてから公開してください"), beforeCheck.slice(0, 120));
+const lc = await call("checkCard", { cardId: ld.cardId, edits }, vet3);
+const FIELDS = ["title", "scene", "body", "reason", "caution"];
+const shaped = Array.isArray(lc.items) && lc.items.every((x) =>
+  FIELDS.includes(x.field) && edits[x.field].includes(x.text) && ["same", "stricter", "differs", "unsure"].includes(x.verdict) &&
+  (x.verdict === "unsure" ? !x.quote : !!x.lawId && !!x.quote) && (x.verdict === "differs" || x.verdict === "unsure" ? !!x.note : !x.note));
+check("each mark is on a sentence of the card, with a quote from the article (or 要確認)", shaped, `[${lc.mode}] ${lc.items.length} marks, ${lc.lawCount} articles`);
+for (const x of lc.items) console.log(`     [${x.verdict}] ${x.text}  ${x.note}  ${x.label}「${x.quote}」`);
+const differs = lc.items.filter((x) => x.verdict === "differs");
+// the sentences young workers must never see (⚠️ and 🔍 against a law), and those shown with a note (against 標準仕様書)
+const held = lc.items.filter((x) => (x.verdict === "differs" || x.verdict === "unsure") && x.legal !== false).map((x) => x.text);
+const specOnly = lc.items.filter((x) => x.verdict === "differs" && x.legal === false).map((x) => x.text);
+check("each mark says whether it is against a law or 標準仕様書", lc.items.every((x) => typeof x.legal === "boolean" && (!x.lawId || x.legal === !x.lawId.startsWith("shiyo-"))));
+if (lc.mode === "claude") {
+  check("a sentence that disagrees with the law is marked ⚠️", differs.some((x) => x.legal));
+  // 「若手にはこう見えます」: what would go out, shown to the veteran first; nothing is published by it
+  const pv = await call("publishCard", { ...pubData, preview: true }, vet3);
+  const pvText = JSON.stringify(pv.preview ?? {});
+  check("the preview shows the card without the ⚠️ sentences, and publishes nothing", !!pv.preview?.title && held.every((t) => !pvText.includes(t)) && pv.hidden === held.length && (await clientGet(`cards/${ld.cardId}`)) === 403 && (await call("myCards", {}, vet3)).cards[0]?.status === "draft");
+  // published as it is, without taking anything out: the marked sentences stay with the veteran only
+  const pub = await call("publishCard", pubData, vet3);
+  check("publishing says how many sentences young workers do not see, and only that it was checked", pub.hidden === held.length && JSON.stringify(Object.keys(pub.lawCheck ?? {})) === '["checkedAt"]', `hidden=${pub.hidden} ${JSON.stringify(pub.lawCheck)}`);
+  // what a young worker's device reads from Firestore directly
+  const doc = await (await fetch(`${FS}/cards/${ld.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).json();
+  const docText = JSON.stringify(doc.fields ?? {});
+  check("the ⚠️ / 🔍 sentences are not on the card young workers can read", !!doc.fields && held.every((t) => !docText.includes(t)) && !docText.includes(CLAIM.slice(0, 12)), held.join(" / "));
+  check("the card young workers read only says it was checked", JSON.stringify(Object.keys(doc.fields?.lawCheck?.mapValue?.fields ?? {})) === '["checkedAt"]' && (doc.fields?.plain?.stringValue ?? "") === "", JSON.stringify(doc.fields?.lawCheck));
+  // against 標準仕様書 only (not law): left for young workers, with the note
+  check("a sentence that differs only from 標準仕様書 stays, marked for the note", specOnly.every((t) => docText.includes(t)) && (doc.fields?.specDiffers?.arrayValue?.values ?? []).length === specOnly.length, `${specOnly.length} sentence(s)`);
+  const mineFull = await call("myCard", { cardId: ld.cardId }, vet3);
+  check("わたしのカード keeps the veteran's whole card", held.every((t) => FIELDS.some((f) => mineFull.draft[f].includes(t))) && mineFull.draft.body === edits.body.trim() && (await call("myCards", {}, vet3)).cards[0]?.title === edits.title);
+  const la = await call("ask", { text: "資格がなくてもコンセントの取り替えはしていいですか？", askerRole: "young" }, young);
+  const said = la.sentences.map((x) => x.text).join(" ");
+  for (const x of la.sentences) console.log(`     [${x.source}] ${x.text}`);
+  check("the answer does not carry the ⚠️ sentence", held.every((t) => !said.includes(t.replace(/[。！？]$/, ""))), `[${la.mode}] cards: ${la.cards.map((c) => c.id === ld.cardId ? "this card" : c.id).join(",")}`);
+  // a word changed after the check: refused until it is checked again
+  let changed = "";
+  try { await call("publishCard", { ...pubData, edits: { ...edits, body: edits.body + "（足した文）" } }, vet3); } catch (e) { changed = String(e); }
+  check("a card changed after the check is refused until it is checked again", /FAILED_PRECONDITION/.test(changed) && changed.includes("照らし合わせ"), changed.slice(0, 120));
+  // hidden and shown again: the same rule (an unsaved edit checked since makes the saved card's check out of date)
+  await call("setCardStatus", { cardId: ld.cardId, status: "private" }, vet3);
+  await call("setCardStatus", { cardId: ld.cardId, status: "published" }, vet3);
+  const again = await (await fetch(`${FS}/cards/${ld.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).json();
+  check("shown again from わたしのカード, still without the ⚠️ sentences", again.fields?.status?.stringValue === "published" && held.every((t) => !JSON.stringify(again.fields).includes(t)));
+  await call("setCardStatus", { cardId: ld.cardId, status: "private" }, vet3);
+  // a word rewritten and checked, but not saved: the saved card is no longer the checked one
+  await call("checkCard", { cardId: ld.cardId, edits: { ...edits, body: edits.body.replace("道具は", "工具は") } }, vet3);
+  let stale = "";
+  try { await call("setCardStatus", { cardId: ld.cardId, status: "published" }, vet3); } catch (e) { stale = String(e); }
+  check("a hidden card whose check is out of date is not shown again", /FAILED_PRECONDITION/.test(stale), stale.slice(0, 120));
+}
+}
 
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { getName, getTrial, type Role } from "../local";
-import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
+import { MicInput, Notice, SOURCE_LABEL, SendCheck, fmtDate, heldOf, type BoxHeld, type BoxSent, type Sentence } from "../components";
 import { LawSheet, type LawRef } from "../LawSheet";
 import { CalcCard, type CalcOutput } from "../CalcCard";
 import { AnswerDiagrams } from "../Diagrams";
@@ -11,6 +11,7 @@ import { useFlyToMe } from "../FlyToMe";
 import { AnswerSample } from "../AnswerSample";
 import { GlossSheet, Glossed, fieldTerms, firstMentions, meaningsFor, useGlossary, type FieldWord, type Term } from "../Glossary";
 import { Icon, ic } from "../Icon";
+import { LawCheckBadge, SpecNote } from "../LawCheck";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
 // The list starts moving when it scrolls into view (a calculation card above can push it below the fold).
@@ -48,7 +49,7 @@ interface Answer {
   grounded: boolean;
   mode: "claude" | "dummy";
   safetyNote: string | null;
-  cards: { id: string; title: string; author: string; publishedAt: number | null; triggerAskerName: string | null; terms?: FieldWord[] }[];
+  cards: { id: string; title: string; author: string; publishedAt: number | null; triggerAskerName: string | null; terms?: FieldWord[]; lawCheck?: { checkedAt: number } | null; specDiffers?: string[] }[];
   laws: LawRef[];
   calcs?: CalcOutput[];
   cached?: boolean;
@@ -62,6 +63,8 @@ const EXAMPLES: [string, string][] = [
   [ic("license_scope"), "資格が無くても出来る作業はありますか？"],
   [ic("piping"), "PF管って何回まで曲げていい？"],
   [ic("support_spacing"), "VE管とPF管のサドルの違いは？"],
+  // calls the program's 資格の判定 (計算 has no tab of its own now: this is where a judge sees it)
+  [ic("calc"), "高圧で受電している工場の、キュービクルの工事は第二種でできる？"],
 ];
 const GENERAL_PREVIEW = 2; // general sentences shown before 「もっと見る」 when a checked source comes first
 
@@ -78,6 +81,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
   const [boxErr, setBoxErr] = useState(""); // a failed 親方に聞く, shown under that button
+  const [boxHeld, setBoxHeld] = useState<BoxHeld | null>(null); // held back: the veteran might not understand it
   const last = seed ? undefined : lastOf[role];
   const pending = seed ? undefined : pendingOf[role];
   const [busy, setBusy] = useState(!!pending);
@@ -123,6 +127,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
     setBusy(true);
     setErr("");
     setBoxErr("");
+    setBoxHeld(null);
     setAnswer(null);
     setOpenGeneral(false);
     setHelped(false);
@@ -173,16 +178,25 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
     });
   }
 
-  async function sendToBox(e: React.MouseEvent<HTMLButtonElement>) {
-    const from = e.currentTarget.getBoundingClientRect(); // fly from the button that was pressed (always on screen)
+  // fly from the button that was pressed (always on screen)
+  const sendToBox = (e: React.MouseEvent<HTMLButtonElement>) => void toBox(asked, false, e.currentTarget.getBoundingClientRect());
+
+  // confirmed: the asker chose these words after the check (「直した文で送る」「このまま送る」): not checked again
+  async function toBox(q: string, confirmed: boolean, from: DOMRect) {
     setSent(true);
     setBoxErr("");
-    let r: { duplicate?: boolean; merged?: boolean; askers?: number };
+    let r: BoxSent;
     try {
-      r = await call("sendToBox", { text: asked, askerName: getName(role), askerRole: role });
+      r = await call<BoxSent>("sendToBox", { text: q, askerName: getName(role), askerRole: role, ...(confirmed ? { confirmed: true } : {}) });
     } catch (e) {
       setSent(false);
       setBoxErr(errorText(e, "質問箱に送れませんでした。もう一度お試しください。"));
+      return;
+    }
+    const held = heldOf(r, q);
+    setBoxHeld(held);
+    if (held) {
+      setSent(false); // not sent: the asker chooses below
       return;
     }
     if (r.duplicate) {
@@ -194,8 +208,9 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
     const note = r.merged
       ? `同じことを聞いた人が、ほかにもいます（あなたで${r.askers}人目）。親方が答えると、全員の「わたし」に届きます。`
       : "親方が答えると、「わたし」に届きます。";
-    setSentNote(note);
-    remember({ sent: true, sentNote: note });
+    const fixed = q !== asked ? `「${q}」として送りました。` : ""; // the words the veteran will read
+    setSentNote(fixed + note);
+    remember({ sent: true, sentNote: fixed + note });
     fly(from); // only once it is really in the box: it flies to わたし, where the answer will come back
   }
 
@@ -207,6 +222,15 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
     if (folded) top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [folded]);
   const cardOf = (id?: string) => answer?.cards.find((c) => c.id === id);
+  // 審査員モード: the judge's own cards in this answer (what they told as a veteran a minute ago), marked as theirs.
+  // The answer does not say whose a card is: myCards does (this device's cards, in any space)
+  const [mine, setMine] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!getTrial() || !answer?.cards.length) return;
+    call<{ cards: { id: string }[] }>("myCards", {})
+      .then((r) => setMine(new Set(r.cards.map((c) => c.id))))
+      .catch(() => {}); // only a label
+  }, [answer]);
   // in the order the groups are shown, so a word is underlined where it is first read
   const ordered = answer ? SOURCES.flatMap((src) => answer.sentences.filter((s) => s.source === src)) : [];
   // a veteran's sentence also underlines the words of its own card (dialect, the company's names), before the glossary's
@@ -230,6 +254,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
               setAnswerState(null);
               setErr("");
               setBoxErr("");
+              setBoxHeld(null);
               delete lastOf[role];
             }}
           >
@@ -346,6 +371,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
                       const newCard = c && rows[i - 1]?.cardId !== s.cardId;
                       return (
                         <motion.div key={i} className="src-row" variants={SENTENCE} initial={src === "general" ? "hidden" : undefined} animate={src === "general" ? "shown" : undefined}>
+                          {newCard && mine.has(c.id) && <p className="own-words">🧪 いま、あなたが話した言葉です</p>}
                           <p>
                             <Glossed text={s.text} marks={glossMarks[ordered.indexOf(s)] ?? []} onOpen={(t) => setGloss(meaningsFor(t, answerLawIds))} />
                           </p>
@@ -353,8 +379,10 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
                             <p className="src-meta">
                               {c.author}の話{c.publishedAt ? `・${fmtDate(c.publishedAt)}` : ""}
                               {c.triggerAskerName ? `（きっかけ: ${c.triggerAskerName}さんの質問）` : ""}
+                              <LawCheckBadge check={c.lawCheck} />
                             </p>
                           )}
+                          {newCard && <SpecNote sentences={c.specDiffers} />}
                           {law && (
                             <div className="cite-line">
                               <button className="cite-chip" onClick={() => setOpenLaw({ id: law.id, quote: s.quote })} title={s.quote}>
@@ -406,8 +434,9 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
               </button>
             )}
             {!fromMe && (
-            <button className={answer.grounded ? "secondary" : "primary"} disabled={sent} onClick={sendToBox}>
-              {sent ? "📮 質問箱に入れました" : "📮 親方に聞く"}
+            <button className={answer.grounded ? "secondary" : "primary"} disabled={sent || !!boxHeld} onClick={sendToBox}>
+              {/* the note comes once it is really in (the words are checked first) */}
+              {sent ? (sentNote ? "📮 質問箱に入れました" : "📮 送っています…") : "📮 親方に聞く"}
             </button>
             )}
           </div>
@@ -416,6 +445,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
               {boxErr}
             </p>
           )}
+          {boxHeld && <SendCheck key={boxHeld.text} held={boxHeld} sending={sent} onSend={(q, confirmed, from) => void toBox(q, confirmed, from)} />}
           {fromMe && seed && seedQuestionId && <FollowUp role={role} prev={seed} prevId={seedQuestionId} first={asked !== seed ? asked : ""} busy={busy} onAsk={(q) => void submit(q, seed)} />}
           {sent && (
             <motion.p className="hint sent-note" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
@@ -441,13 +471,18 @@ function FollowUp({ role, prev, prevId, first, busy, onAsk }: { role: Role; prev
   const [err, setErr] = useState("");
   const { fly, envelope } = useFlyToMe();
 
-  async function toBox(e: React.MouseEvent<HTMLButtonElement>) {
-    const from = e.currentTarget.getBoundingClientRect();
+  const [held, setHeld] = useState<BoxHeld | null>(null); // held back: the veteran might not understand it
+
+  // confirmed: chosen after the check, not checked again
+  async function toBox(q: string, confirmed: boolean, from: DOMRect) {
     setSending(true);
     setErr("");
     try {
-      await call("sendToBox", { text: text.trim(), askerName: getName(role), askerRole: role, followUpOf: prevId });
-      setNote(`「${text.trim()}」を、続きの質問として質問箱に入れました。親方が答えると、「わたし」に届きます。`);
+      const r = await call<BoxSent>("sendToBox", { text: q, askerName: getName(role), askerRole: role, followUpOf: prevId, ...(confirmed ? { confirmed: true } : {}) });
+      const h = heldOf(r, q);
+      setHeld(h);
+      if (h) return;
+      setNote(`「${q}」を、続きの質問として質問箱に入れました。親方が答えると、「わたし」に届きます。`);
       setText("");
       fly(from);
     } catch (e) {
@@ -466,10 +501,12 @@ function FollowUp({ role, prev, prevId, first, busy, onAsk }: { role: Role; prev
         <button className="primary" disabled={!text.trim() || busy} onClick={() => onAsk(text)}>
           AIに聞く
         </button>
-        <button className="secondary" disabled={!text.trim() || sending} onClick={toBox}>
+        <button className="secondary" disabled={!text.trim() || sending || !!held} onClick={(e) => void toBox(text.trim(), false, e.currentTarget.getBoundingClientRect())}>
           📮 親方に続けて聞く
         </button>
       </div>
+      {/* 自分で書き直す: the words are still in the box above */}
+      {held && <SendCheck key={held.text} held={held} sending={sending} onSend={(q, confirmed, from) => void toBox(q, confirmed, from)} onRewrite={() => setHeld(null)} />}
       {err && <p className="hint error">{err}</p>}
       {note && <p className="hint sent-note">{note}</p>}
       {envelope}

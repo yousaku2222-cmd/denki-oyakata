@@ -30,6 +30,9 @@ export const CAPS = {
   // A saved answer calls no Claude but still writes the answer record: a loose cap of its own.
   cached: { prefix: "c_", user: 200, ip: 600, all: 20000, userMsg: () => "今日はこの端末からの質問が多すぎます。また明日お試しください。", allMsg: "今日の利用回数の上限に達しました。また明日お試しください。" },
   photo: { prefix: "photo_", user: 20, ip: 60, all: PHOTOS_PER_DAY, userMsg: (n: number) => `写真で調べられるのは、この端末から1日${n}回までです。`, allMsg: "今日の写真の判定は上限に達しました。また明日お試しください。" },
+  // the check before a question goes in the box (box.ts, one short Haiku call): counted apart from the box itself.
+  // Once full, questions go in without the check (sent unchecked is better than not sent).
+  boxCheck: { prefix: "bc_", user: BOX_PER_USER_PER_DAY * 2, ip: BOX_PER_USER_PER_DAY * 6, all: BOX_ALL_USERS_PER_DAY * 5, userMsg: () => "今日は確かめの回数が上限です。", allMsg: "今日は確かめの回数が上限です。" },
   box: { prefix: "box_", user: BOX_PER_USER_PER_DAY, ip: BOX_PER_USER_PER_DAY * 3, all: BOX_ALL_USERS_PER_DAY, userMsg: (n: number) => `質問箱に送れるのは、この端末から1日 ${n} 件までです。`, allMsg: "今日は質問箱がいっぱいです。また明日お試しください。" },
   publish: { prefix: "pub_", user: PUBLISH_PER_USER_PER_DAY, ip: PUBLISH_PER_USER_PER_DAY * 3, all: PUBLISH_ALL_USERS_PER_DAY, userMsg: (n: number) => `新しく公開できるカードは、この端末から1日 ${n} 枚までです。`, allMsg: "今日はこれ以上カードを公開できません。また明日お試しください。" },
   edit: { prefix: "ed_", user: PUBLISH_EDITS_PER_DAY, ip: PUBLISH_EDITS_PER_DAY * 3, all: 300, userMsg: (n: number) => `公開したカードの直し・公開と非公開の切り替えは、この端末から1日 ${n} 回までです。`, allMsg: "今日はこれ以上カードを直せません。また明日お試しください。" },
@@ -174,7 +177,7 @@ const IP_MSG = "今日は同じ回線からの利用が上限に達しました�
 export async function takeQuota(uid: string, kind: QuotaKind = "claude", ip = "", now = Date.now()): Promise<void> {
   const cfg = await limitsConfig(now);
   const cap = capOf(kind, cfg);
-  if (kind === "claude" || kind === "photo") await checkBudget(now, cfg);
+  if (kind === "claude" || kind === "photo" || kind === "boxCheck") await checkBudget(now, cfg);
   const day = today(now);
   const usage = db.collection("usage");
   const count = (s: FirebaseFirestore.DocumentSnapshot) => (s.get("count") as number | undefined) ?? 0;

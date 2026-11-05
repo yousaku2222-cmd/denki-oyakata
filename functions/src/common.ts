@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
+import type { CardSentence, LawCheckSummary } from "./lawcheck";
 
 if (!getApps().length) initializeApp();
 export const db = getFirestore();
@@ -57,6 +58,10 @@ export interface CardDoc {
   // the draft and checked by the veteran; the card's text itself stays as told. Older cards may have neither.
   terms?: FieldTerm[];
   plain?: string;
+  // the card's sentences checked against the articles before it was published (lawcheck.ts); older cards: none
+  lawCheck?: LawCheckSummary;
+  // its sentences that differ from 公共建築工事標準仕様書 (not law): shown with a note (sentences that differ from a law are not on the card)
+  specDiffers?: CardSentence[];
   category: (typeof CATEGORIES)[number];
   location: (typeof LOCATIONS)[number];
   // who wrote it lives in cardPrivate (authorId): a public card must not link a hidden name to a named one.

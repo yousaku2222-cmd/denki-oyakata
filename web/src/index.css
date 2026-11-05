@@ -2710,3 +2710,65 @@ body {
 .field-words-plain { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); font-size: var(--fs-m); }
 .field-words-list li .src-meta { display: block; }
 .field-words-x { flex: none; min-width: 44px; min-height: 44px; }
+
+/* 話すの上: いちばん長く待っている若手の質問（名前・何日前つき）。押せばそのまま話して答えられる */
+.waiting-q { display: grid; gap: 8px; margin: 0; padding: 14px 16px; border: 2px solid var(--wisdom); border-radius: var(--r-m); background: var(--wisdom-bg); }
+.waiting-q p { margin: 0; }
+.waiting-head { font-weight: 800; color: var(--wisdom); }
+.waiting-days { font-weight: 700; font-size: var(--fs-s); }
+.waiting-text { font-size: var(--fs-xl); font-weight: 700; line-height: 1.5; }
+.waiting-q .link { justify-self: start; }
+
+/* 審査員モード（スマホ）: 3つの手順。今の役割でやる所を太く（PC は横の TrialGuide に出す） */
+.trial-steps { margin: 8px 16px 0; padding: 8px 12px 8px 2.2em; border-radius: var(--r-m); background: var(--note-bg); color: var(--note-fg); font-size: var(--fs-xs); line-height: 1.6; }
+.trial-steps li.now { font-weight: 800; }
+@media (min-width: 1000px) {
+  .trial-steps { display: none; }
+}
+/* 審査員モード: 答えに出た、自分がさっき話したカード */
+.own-words { margin: 0 0 4px; font-size: var(--fs-s); font-weight: 800; color: var(--wisdom); }
+/* 計算（撮るの 🧮 から開く）: 撮るへ戻る道 */
+.calc-back { margin: 12px 16px 0; }
+
+/* 質問箱へ送る前の確かめ: 親方に伝わりにくそうな時だけ出る（責めない色: 注意の黄色、赤は使わない） */
+.send-check { margin-top: 10px; padding: 12px 14px; border-radius: var(--r-m); border: 1px solid var(--line); border-left: 4px solid var(--yellow); background: var(--surface); }
+.send-check p { margin: 0 0 6px; }
+.send-check-head { font-weight: 800; font-size: var(--fs-m); }
+.send-check-q { color: var(--muted); font-size: var(--fs-s); word-break: break-word; }
+.send-check-why { font-size: var(--fs-s); }
+.send-check-fix { margin: 8px 0; padding: 8px 10px; border-radius: var(--r-s); background: var(--note-bg); color: var(--note-fg); }
+.send-check-fix .src-meta { color: inherit; font-weight: 700; }
+.send-check-fix p { margin: 2px 0 0; font-size: var(--fs-m); word-break: break-word; }
+.send-check-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.send-check .mic-input { margin-top: 6px; }
+
+/* 知恵カードの下書き: 条文との照らし合わせ（責めない色: ⚠️ も注意の黄色、赤は使わない） */
+.law-check { margin: 14px 0; padding: 12px 14px; border-radius: var(--r-m); border: 1px solid var(--line); border-left: 4px solid var(--law); background: var(--surface); }
+.law-check p { margin: 0 0 4px; }
+.law-check-head { margin: 0; font-size: var(--fs-l); }
+.law-check-sub { color: var(--muted); font-size: var(--fs-xs); }
+.law-check-busy { color: var(--law); font-weight: 700; font-size: var(--fs-m); }
+.law-check-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.law-check-item { padding: 8px 10px; border-radius: var(--r-s); background: var(--bg); }
+.law-check-item.differs, .law-check-item.unsure { background: var(--note-bg); color: var(--note-fg); }
+.law-check-item.stricter { background: var(--law-bg); }
+.law-check-item.same { background: var(--wisdom-bg); }
+.law-check-item.out .law-check-text { text-decoration: line-through; opacity: 0.6; }
+.law-check-mark { font-weight: 800; font-size: var(--fs-s); }
+.law-check-text { font-size: var(--fs-m); word-break: break-word; }
+.law-check-note { font-size: var(--fs-s); font-weight: 700; }
+.law-check-quote { font-size: var(--fs-xs); color: var(--muted); word-break: break-word; }
+.law-check-item.differs .law-check-quote { color: inherit; opacity: 0.85; }
+.law-check-x { margin-top: 6px; width: 100%; }
+.law-check-done { font-size: var(--fs-s); }
+/* ⚠️ / 🔍 の文: 親方のカードには残るが、若手には出ない */
+.law-check-held { font-size: var(--fs-s); font-weight: 800; }
+/* 照らしていない時、公開ボタンの下に出す案内 */
+.publish-gate { margin: 6px 0 0; font-size: var(--fs-s); }
+.law-check-again { margin-top: 8px; }
+/* 若手の答え・カードを開いた時の小さな札 */
+.law-badge { display: inline-block; margin: 2px 0 0 6px; padding: 0 8px; border-radius: var(--r-pill); background: var(--law-bg); color: var(--law); font-size: var(--fs-xs); font-weight: 700; white-space: normal; }
+.wisdom-card > .law-badge { margin: 0 0 6px; }
+/* 仕様書（法令でない）と違うやり方の文に添える言葉 */
+.spec-note { margin: 6px 0 0; padding: 0; list-style: none; font-size: var(--fs-xs); color: var(--note-fg); }
+.spec-note li { margin: 2px 0; padding: 4px 8px; border-radius: var(--r-s); background: var(--note-bg); }
