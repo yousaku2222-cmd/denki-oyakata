@@ -5,7 +5,7 @@ import { CATEGORY_LABEL, LOCATION_LABEL, LoadFailed, Skeleton, authorOf, fmtDate
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
 import { Meanings, PlainNote, useCardWords, useGlossary } from "../Glossary";
 import { Icon, ic } from "../Icon";
-import { LawCheckBadge, SpecNote } from "../LawCheck";
+import { LawCheckBadge, LawLinks, SpecNote } from "../LawCheck";
 
 // pictures first: the same icons wherever a place or a kind is shown
 const LOCATION_ICON: Record<string, string> = { ceiling: ic("ceiling"), floor: ic("floor"), outdoor: ic("outdoor"), panel: ic("panel"), other: "…" };
@@ -290,13 +290,15 @@ function veterans(cards: Card[]) {
 /** One card, opened: the veteran's words as told, their own words underlined (a tap shows the meaning). */
 function CardDetail({ c }: { c: Card }) {
   const w = useCardWords([c.title, c.scene, c.body, c.reason, c.caution], c.terms);
+  const links = c.lawRefs ?? [];
+  const linksId = `law-links-${c.id}`;
   return (
     <>
       <article className="wisdom-card">
         <p className="wc-author">
           🧰 {authorOf(c)}の知恵・{fmtDate(c.publishedAt?.toMillis())}・👍 {c.helpedCount}
         </p>
-        <LawCheckBadge check={c.lawCheck} />
+        <LawCheckBadge check={c.lawCheck} to={links.length ? linksId : undefined} />
         <h1>{w.show(0)}</h1>
         {c.scene && <Part label="場面">{w.show(1)}</Part>}
         <Part label="やり方・コツ">{w.show(2)}</Part>
@@ -306,6 +308,8 @@ function CardDetail({ c }: { c: Card }) {
         <SpecNote sentences={c.specDiffers} />
         {c.triggerAskerName && <p className="src-meta">きっかけ: {c.triggerAskerName}さんの質問</p>}
       </article>
+      {/* open from the start, under the card: from the veteran's words to the article */}
+      <LawLinks id={linksId} links={links} />
       {/* beside the card, not in it: the card styles its own headings and lines */}
       {w.sheet}
     </>

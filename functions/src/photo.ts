@@ -216,7 +216,7 @@ export async function identifyPart(data: Record<string, unknown>, uid: string) {
   const cards = [...new Set(j.cardIds)]
     .flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
     .slice(0, 3)
-    .map((c) => ({ id: c.id, title: c.title, body: c.body, reason: c.reason, caution: c.caution, author: displayAuthor(c), terms: c.terms ?? [], plain: c.plain ?? "", specDiffers: (c.specDiffers ?? []).map((x) => x.text) }));
+    .map((c) => ({ id: c.id, title: c.title, body: c.body, reason: c.reason, caution: c.caution, author: displayAuthor(c), terms: c.terms ?? [], plain: c.plain ?? "", specDiffers: (c.specDiffers ?? []).map((x) => x.text), lawCheck: c.lawCheck ? { checkedAt: c.lawCheck.checkedAt } : null, lawRefs: c.lawRefs ?? [] }));
   const laws = [...new Set(j.lawIds)]
     .flatMap((id) => {
       const l = getLawById(id);

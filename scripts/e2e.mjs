@@ -326,11 +326,19 @@ if (lc.mode === "claude") {
   check("the card young workers read only says it was checked", JSON.stringify(Object.keys(doc.fields?.lawCheck?.mapValue?.fields ?? {})) === '["checkedAt"]' && (doc.fields?.plain?.stringValue ?? "") === "", JSON.stringify(doc.fields?.lawCheck));
   // against 標準仕様書 only (not law): left for young workers, with the note
   check("a sentence that differs only from 標準仕様書 stays, marked for the note", specOnly.every((t) => docText.includes(t)) && (doc.fields?.specDiffers?.arrayValue?.values ?? []).length === specOnly.length, `${specOnly.length} sentence(s)`);
+  // ✅ / 🟦 sentences go out with their article and quote (⚖️ 条文で確かめる), never a held-back one
+  const refs = (doc.fields?.lawRefs?.arrayValue?.values ?? []).map((v) => Object.fromEntries(Object.entries(v.mapValue?.fields ?? {}).map(([k, x]) => [k, x.stringValue])));
+  const agreed = lc.items.filter((x) => x.verdict === "same" || x.verdict === "stricter");
+  check("the card carries its ✅ / 🟦 sentences with the article and the checked quote", refs.length === agreed.length && refs.every((r) => agreed.some((x) => x.text === r.text && x.verdict === r.verdict && x.lawId === r.lawId && x.quote === r.quote && x.field === r.field) && (doc.fields?.[r.field]?.stringValue ?? "").includes(r.text) && !!r.label), `${refs.length} link(s): ${refs.map((r) => `[${r.verdict}] ${r.label}`).join(" / ")}`);
+  check("a held-back sentence is never linked to an article", held.every((t) => !refs.some((r) => r.text === t)) && refs.every((r) => r.verdict === "same" || r.verdict === "stricter"));
   const mineFull = await call("myCard", { cardId: ld.cardId }, vet3);
   check("わたしのカード keeps the veteran's whole card", held.every((t) => FIELDS.some((f) => mineFull.draft[f].includes(t))) && mineFull.draft.body === edits.body.trim() && (await call("myCards", {}, vet3)).cards[0]?.title === edits.title);
   const la = await call("ask", { text: "資格がなくてもコンセントの取り替えはしていいですか？", askerRole: "young" }, young);
   const said = la.sentences.map((x) => x.text).join(" ");
   for (const x of la.sentences) console.log(`     [${x.source}] ${x.text}`);
+  const refKey = (r) => [r.field, r.text, r.verdict, r.lawId, r.label, r.quote].join("|");
+  const usedHere = la.cards.find((c) => c.id === ld.cardId);
+  if (usedHere) check("the answer's card carries the same links to the articles", JSON.stringify((usedHere.lawRefs ?? []).map(refKey)) === JSON.stringify(refs.map(refKey)), `${usedHere.lawRefs?.length} link(s)`);
   check("the answer does not carry the ⚠️ sentence", held.every((t) => !said.includes(t.replace(/[。！？]$/, ""))), `[${la.mode}] cards: ${la.cards.map((c) => c.id === ld.cardId ? "this card" : c.id).join(",")}`);
   // a word changed after the check: refused until it is checked again
   let changed = "";
@@ -341,6 +349,7 @@ if (lc.mode === "claude") {
   await call("setCardStatus", { cardId: ld.cardId, status: "published" }, vet3);
   const again = await (await fetch(`${FS}/cards/${ld.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).json();
   check("shown again from わたしのカード, still without the ⚠️ sentences", again.fields?.status?.stringValue === "published" && held.every((t) => !JSON.stringify(again.fields).includes(t)));
+  check("shown again, the links to the articles are made again the same", (again.fields?.lawRefs?.arrayValue?.values ?? []).length === refs.length);
   await call("setCardStatus", { cardId: ld.cardId, status: "private" }, vet3);
   // a word rewritten and checked, but not saved: the saved card is no longer the checked one
   await call("checkCard", { cardId: ld.cardId, edits: { ...edits, body: edits.body.replace("道具は", "工具は") } }, vet3);

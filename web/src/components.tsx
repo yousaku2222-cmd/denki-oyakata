@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { unlockSay, useSpeech } from "./speech";
 import { ic } from "./Icon";
+import type { LawLink } from "./LawCheck";
 
 export type Source = "law" | "wisdom" | "general";
 export interface Sentence {
@@ -31,6 +32,7 @@ export interface Card {
   // checked against the articles before it was published (functions/src/lawcheck.ts); older cards: none
   lawCheck?: { checkedAt: number }; // only that it was checked: sentences that may differ from a law are never on the card
   specDiffers?: { field: string; text: string }[]; // sentences that differ from 標準仕様書 (not law): shown with a note
+  lawRefs?: LawLink[]; // sentences that agree with an article (✅ / 🟦), with the quote: ⚖️ 条文で確かめる
 }
 
 export const SOURCE_LABEL: Record<Source, { icon: string; label: string }> = {

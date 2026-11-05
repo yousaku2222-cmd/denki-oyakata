@@ -1,7 +1,7 @@
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
-import type { CardSentence, LawCheckSummary } from "./lawcheck";
+import type { CardSentence, LawCheckSummary, LawRefDoc } from "./lawcheck";
 
 if (!getApps().length) initializeApp();
 export const db = getFirestore();
@@ -62,6 +62,9 @@ export interface CardDoc {
   lawCheck?: LawCheckSummary;
   // its sentences that differ from 公共建築工事標準仕様書 (not law): shown with a note (sentences that differ from a law are not on the card)
   specDiffers?: CardSentence[];
+  // its sentences the check found the same as an article or stricter (✅ / 🟦), each with the article and the quote:
+  // young workers go from the veteran's words to the article (sentences held back are not on it); older cards: none
+  lawRefs?: LawRefDoc[];
   category: (typeof CATEGORIES)[number];
   location: (typeof LOCATIONS)[number];
   // who wrote it lives in cardPrivate (authorId): a public card must not link a hidden name to a named one.

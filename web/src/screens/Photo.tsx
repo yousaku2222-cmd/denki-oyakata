@@ -6,7 +6,7 @@ import { addPart, getName } from "../local";
 import { LawSheet } from "../LawSheet";
 import { MicInput, SendCheck, heldOf, type BoxHeld, type BoxSent } from "../components";
 import { PlainNote, useCardWords, type FieldWord } from "../Glossary";
-import { SpecNote } from "../LawCheck";
+import { LawCheckBadge, LawLinks, SpecNote, type LawLink } from "../LawCheck";
 
 export interface CalcStart {
   name: string;
@@ -23,7 +23,7 @@ interface PartResult {
   confusables: { name: string; diff: string }[];
   companions: string[];
   askIdeas?: string[]; // questions for the veteran that fit this part
-  cards: { id: string; title: string; body: string; reason: string; caution: string; author: string; terms?: FieldWord[]; plain?: string; specDiffers?: string[] }[];
+  cards: { id: string; title: string; body: string; reason: string; caution: string; author: string; terms?: FieldWord[]; plain?: string; specDiffers?: string[]; lawCheck?: { checkedAt: number } | null; lawRefs?: LawLink[] }[];
   laws: { id: string; label: string; summary: string }[];
   calc: ({ label: string } & CalcStart) | null;
   safetyNote?: string | null;
@@ -302,6 +302,8 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
 /** A veteran's card about the part, opened on a tap: their own words underlined (not in the summary: a tap there folds it). */
 function PartCard({ c }: { c: PartResult["cards"][number] }) {
   const w = useCardWords([c.body, c.reason, c.caution], c.terms);
+  const links = c.lawRefs ?? [];
+  const linksId = `law-links-photo-${c.id}`;
   return (
     <>
       <details className="part-link wisdom">
@@ -313,8 +315,13 @@ function PartCard({ c }: { c: PartResult["cards"][number] }) {
         {c.reason && <p className="src-meta">理由：{w.show(1)}</p>}
         {c.caution && <p className="src-meta">新人がやりがち：{w.show(2)}</p>}
         <SpecNote sentences={c.specDiffers} />
-        <p className="src-meta">{c.author}</p>
+        <p className="src-meta">
+          {c.author}
+          <LawCheckBadge check={c.lawCheck} to={links.length ? linksId : undefined} />
+        </p>
       </details>
+      {/* outside the folded card: seen without opening it */}
+      <LawLinks id={linksId} links={links} />
       {w.sheet}
     </>
   );

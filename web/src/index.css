@@ -434,7 +434,9 @@ input[type="text"] {
 .src-group {
   display: grid;
   gap: 8px;
-  border-left: 6px solid;
+  /* width and style only: the colour comes from .src-law / .src-wisdom / .src-general */
+  border-left-width: 6px;
+  border-left-style: solid;
   border-radius: var(--r-m);
   padding: 8px 12px;
 }
@@ -2769,6 +2771,26 @@ body {
 /* 若手の答え・カードを開いた時の小さな札 */
 .law-badge { display: inline-block; margin: 2px 0 0 6px; padding: 0 8px; border-radius: var(--r-pill); background: var(--law-bg); color: var(--law); font-size: var(--fs-xs); font-weight: 700; white-space: normal; }
 .wisdom-card > .law-badge { margin: 0 0 6px; }
+/* the badge as a way to the card's ⚖️ 条文で確かめる box */
+button.law-badge-go { border: 1px solid var(--law); min-height: 28px; font: inherit; font-size: var(--fs-xs); font-weight: 700; cursor: pointer; }
+/* ⚖️ 条文で確かめる: the veteran's sentences that agree with an article, open from the start (blue: the law's colour) */
+.law-links { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--law); border-left: 6px solid var(--law); border-radius: var(--r-m); background: var(--law-bg); outline: none; }
+.law-links.lit { animation: law-links-lit 1.4s ease-out; }
+@keyframes law-links-lit { from { box-shadow: 0 0 0 4px color-mix(in srgb, var(--law) 45%, transparent); } to { box-shadow: 0 0 0 0 transparent; } }
+.law-links-head { margin: 0; color: var(--law); display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
+.law-links-head strong { font-size: var(--fs-l); }
+.law-links-head span { font-size: var(--fs-xs); font-weight: 700; }
+.law-links-sub { margin: 2px 0 6px; font-size: var(--fs-xs); color: var(--muted); }
+.law-links ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.law-links li { padding: 8px 10px; border-radius: var(--r-s); background: var(--surface); }
+.law-links-from { display: block; font-size: var(--fs-xs); color: var(--wisdom); font-weight: 700; }
+.law-links-text { margin: 0; color: var(--text); }
+.law-links-go { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--law); font-weight: 700; }
+.law-links-go .cite-chip { text-align: left; white-space: normal; }
+.law-links-kind { display: inline-block; margin-top: 4px; font-size: var(--fs-xs); font-weight: 700; color: var(--muted); }
+.law-links-kind.stricter { color: var(--law); }
+.law-links > .link { margin-top: 6px; font-size: var(--fs-s); }
+@media (prefers-reduced-motion: reduce) { .law-links.lit { animation: none; outline: 3px solid var(--law); } }
 /* 仕様書（法令でない）と違うやり方の文に添える言葉 */
 .spec-note { margin: 6px 0 0; padding: 0; list-style: none; font-size: var(--fs-xs); color: var(--note-fg); }
 .spec-note li { margin: 2px 0; padding: 4px 8px; border-radius: var(--r-s); background: var(--note-bg); }

@@ -121,3 +121,37 @@ test("young workers get the checked card without its ⚠️ and 🔍 sentences",
   assert.ok(dummy.ok);
   assert.equal(dummy.summary, null);
 });
+
+test("the card's ✅ / 🟦 sentences go out with their article, never a held-back or taken-out one", () => {
+  const f: CheckFields = { title: "PF管の曲げ", scene: "", body: "PF管の曲げは合計270度までにしとる。うちは180度までにしとる。資格がなくてもコンセントの取り替えはしてよか。", reason: "", caution: "" };
+  const sentences = cardSentences(f);
+  const pf = getLawById(PF)!;
+  const it = (n: number, verdict: CheckItem["verdict"], lawId: string, quote: string, legal = true): CheckItem => ({ n, field: sentences[n - 1].field, text: sentences[n - 1].text, verdict, lawId, label: "古い名前", quote, note: verdict === "differs" ? "x" : "", legal });
+  const saved: SavedCheck = {
+    at: Timestamp.fromMillis(2_000),
+    sentences,
+    items: [it(2, "same", PF, pfQuote, false), it(3, "stricter", PF, pfQuote, false), it(4, "differs", LICENSE, licQuote)],
+  };
+  const r = shownCard(saved, f);
+  assert.ok(r.ok);
+  assert.deepEqual(r.lawRefs, [
+    { field: "body", text: "PF管の曲げは合計270度までにしとる。", verdict: "same", lawId: PF, label: `${pf.short} ${pf.article}【${pf.heading}】`, quote: pfQuote },
+    { field: "body", text: "うちは180度までにしとる。", verdict: "stricter", lawId: PF, label: `${pf.short} ${pf.article}【${pf.heading}】`, quote: pfQuote },
+  ], "the label is made again from the article; the ⚠️ sentence is not there");
+  assert.ok(!JSON.stringify(r.lawRefs).includes("資格がなくても"));
+
+  // taken out on the screen after the check: not on the card, so not linked
+  const taken = shownCard(saved, { ...f, body: f.body.replace("うちは180度までにしとる。", "") });
+  assert.ok(taken.ok);
+  assert.deepEqual(taken.lawRefs.map((x) => x.verdict), ["same"]);
+
+  // a quote no longer in the original (or never was): not linked
+  const wrong = shownCard({ ...saved, items: [it(2, "same", PF, "原文に無い引用です、照合で外れます")] }, f);
+  assert.ok(wrong.ok && wrong.lawRefs.length === 0);
+
+  // no Claude, or no article related to any sentence: no links and no badge
+  const dummy = shownCard({ ...saved, dummy: true }, f);
+  assert.ok(dummy.ok && dummy.lawRefs.length === 0 && dummy.summary === null);
+  const none = shownCard({ ...saved, items: [] }, f);
+  assert.ok(none.ok && none.lawRefs.length === 0 && none.summary === null);
+});

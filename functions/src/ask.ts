@@ -212,6 +212,7 @@ const cardStamp = (c: Card) =>
     ...(c.terms?.length || c.plain ? [c.terms ?? [], c.plain ?? ""] : []),
     ...(c.lawCheck ? [{ lawCheck: c.lawCheck }] : []),
     ...(c.specDiffers?.length ? [{ specDiffers: c.specDiffers }] : []), // the 仕様書 notes shown with it // the ⚖️ badge (cards checked before publishing; held-back sentences are already out of the words above)
+    ...(c.lawRefs?.length ? [{ lawRefs: c.lawRefs }] : []), // the ✅ / 🟦 sentences and their articles, shown under the answer's 親方の知恵
   ]);
 
 export function cacheKey(text: string, cards: Card[]): { id: string; ver: string } {
@@ -471,6 +472,7 @@ async function compose(text: string, cards: Card[]) {
         terms: c.terms ?? [], // the veteran's words in its sentences, underlined on the screen
         lawCheck: c.lawCheck ? { checkedAt: c.lawCheck.checkedAt } : null, // only that it was checked (the held-back sentences are not on the card)
         specDiffers: (c.specDiffers ?? []).map((x) => x.text), // shown with 「公共工事の仕様書とは違うやり方です」
+        lawRefs: c.lawRefs ?? [], // the card's sentences that agree with an article, with the quote (⚖️ 条文で確かめる)
       };
     }),
     calcs,

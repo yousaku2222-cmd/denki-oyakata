@@ -1,5 +1,6 @@
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { call, errorText } from "./firebase";
+import { LawSheet } from "./LawSheet";
 
 // 親方のカードを、公開する前に条文と照らし合わせる（functions/src/lawcheck.ts の checkCard）。
 // AI が照らし、引用はプログラムが原文と確かめてある。⚠️ と 🔍 の文は、公開しても若手には出さない（親方のカードには残る）。
@@ -249,12 +250,87 @@ export function LawCheckPanel({
 
 /**
  * The card's small badge where young workers read it (an answer's 親方の知恵, the card opened from 探す). Only that it
- * was checked: the sentences that may differ are not on the card young workers read at all.
+ * was checked: the sentences that may differ are not on the card young workers read at all. With to (the id of the
+ * card's ⚖️ 条文で確かめる box), a tap goes to that box.
  */
-export function LawCheckBadge({ check }: { check?: { checkedAt: number } | null }) {
+export function LawCheckBadge({ check, to }: { check?: { checkedAt: number } | null; to?: string }) {
   if (!check) return null; // a card from before the check
   // the app holds only some of the articles: not a promise that the card is safe
-  return <span className="law-badge">⚖️ アプリの条文と照らし済み</span>;
+  if (!to) return <span className="law-badge">⚖️ アプリの条文と照らし済み</span>;
+  return (
+    <button type="button" className="law-badge law-badge-go" onClick={() => goToLinks(to)}>
+      ⚖️ アプリの条文と照らし済み ›
+    </button>
+  );
+}
+
+/** One of the card's sentences that the check found the same as an article or stricter (functions/src/lawcheck.ts LawRefDoc). */
+export interface LawLink {
+  field: string;
+  text: string;
+  verdict: "same" | "stricter";
+  lawId: string;
+  label: string;
+  quote: string; // checked against the article's original text by the program
+}
+
+/** The box, scrolled into view and lit for a moment (the badge's tap). */
+function goToLinks(id: string) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  box.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
+  box.classList.remove("lit");
+  void box.offsetWidth; // start the light again on a second tap
+  box.classList.add("lit");
+  setTimeout(() => box.classList.remove("lit"), 1500);
+  box.focus({ preventScroll: true });
+}
+
+const LINKS_SHOWN = 3;
+const LINK_KIND: Record<LawLink["verdict"], string> = { same: "✅ 条文と同じ", stricter: "🟦 条文より厳しい、会社の決まり" };
+
+/**
+ * Under a card young workers read, open from the start: the veteran's sentences that agree with an article, each a
+ * tap away from the article's original text, sent to the quote and marked there. Only sentences young workers see
+ * (the held-back ones are not on the card), and only quotes the program found in the original. from: whose card,
+ * when the links of several cards are in one box (an answer).
+ */
+export function LawLinks({ id, links }: { id: string; links: (LawLink & { from?: string })[] }) {
+  const [all, setAll] = useState(false);
+  const [open, setOpen] = useState<{ id: string; quote: string } | null>(null);
+  if (!links.length) return null;
+  const shown = all ? links : links.slice(0, LINKS_SHOWN);
+  return (
+    <section id={id} className="law-links" tabIndex={-1} aria-label="条文で確かめる">
+      <p className="law-links-head">
+        <strong>⚖️ 条文で確かめる</strong>
+        <span>（アプリの条文と照らし済み）</span>
+      </p>
+      <p className="law-links-sub">親方の話のうち、条文と照らして合っていると分かった文です。押すと条文の原文の、その所が開きます。</p>
+      <ul>
+        {shown.map((l, i) => (
+          <li key={`${l.lawId}-${i}`}>
+            {l.from && <span className="law-links-from">🧰 {l.from}</span>}
+            <p className="law-links-text">「{l.text}」</p>
+            <div className="law-links-go">
+              <span aria-hidden>→</span>
+              <button type="button" className="cite-chip" onClick={() => setOpen({ id: l.lawId, quote: l.quote })}>
+                📜 {l.label} ›
+              </button>
+            </div>
+            <span className={`law-links-kind ${l.verdict}`}>{LINK_KIND[l.verdict]}</span>
+          </li>
+        ))}
+      </ul>
+      {links.length > LINKS_SHOWN && (
+        <button type="button" className="link" onClick={() => setAll(!all)}>
+          {all ? "▲ 閉じる" : `▼ ほかに${links.length - LINKS_SHOWN}件`}
+        </button>
+      )}
+      {open && <LawSheet id={open.id} highlight={open.quote} onClose={() => setOpen(null)} />}
+    </section>
+  );
 }
 
 export const SPEC_NOTE = "公共工事の仕様書とは違うやり方です（民間の現場では会社のやり方のこともあります）";

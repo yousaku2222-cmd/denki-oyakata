@@ -52,6 +52,19 @@ export interface CheckItem {
 export interface LawCheckSummary {
   checkedAt: number; // ms
 }
+/**
+ * A sentence of the public card that the check found the same as an article (✅ same) or stricter (🟦 stricter),
+ * kept on cards/{id}.lawRefs so young workers can go from the veteran's words to the article. Only sentences young
+ * workers see, and only a quote found in the article's original text word for word.
+ */
+export interface LawRefDoc {
+  field: CheckField;
+  text: string; // the sentence as it is on the public card
+  verdict: "same" | "stricter";
+  lawId: string;
+  label: string; // lawLabel: 標準仕様書 2.3.3【…】
+  quote: string; // in the article's original text (quoteIsInOriginal)
+}
 /** What checkCard keeps in cardPrivate (closed to clients): publishCard makes the young workers' card from it. */
 export interface SavedCheck {
   at: Timestamp;
@@ -167,7 +180,7 @@ export function keptSentences(sentences: CardSentence[], f: CheckFields): Set<nu
 const hasWords = (s: string) => normalizeForQuote(s).replace(/[。！？!?、]/g, "").length > 0;
 
 export type Shown =
-  | { ok: true; fields: CheckFields; hidden: number; specDiffers: CardSentence[]; summary: LawCheckSummary | null }
+  | { ok: true; fields: CheckFields; hidden: number; specDiffers: CardSentence[]; lawRefs: LawRefDoc[]; summary: LawCheckSummary | null }
   | { ok: false; why: "unchecked" | "empty" };
 
 /**
@@ -204,7 +217,16 @@ export function shownCard(saved: SavedCheck | undefined, f: CheckFields): Shown 
     out[field] = hasWords(tidy) ? tidy : "";
   }
   if (!out.title || !out.body) return { ok: false, why: "empty" };
-  return { ok: true, fields: out, hidden: hide.size, specDiffers, summary: saved.dummy ? null : { checkedAt: saved.at.toMillis() } };
+  // ✅ / 🟦 sentences still on the card, with the quote checked against the article once more (laws.json may have changed)
+  const lawRefs = (saved.items ?? []).flatMap((x): LawRefDoc[] => {
+    if ((x.verdict !== "same" && x.verdict !== "stricter") || !kept.has(x.n) || hide.has(x.n)) return [];
+    const law = x.lawId ? getLawById(x.lawId) : undefined;
+    if (!law || !x.quote || !quoteIsInOriginal(x.quote, law.text, MIN_ANSWER_QUOTE) || !out[x.field].includes(x.text)) return [];
+    return [{ field: x.field, text: x.text, verdict: x.verdict, lawId: law.id, label: lawLabel(law), quote: x.quote }];
+  });
+  // the ⚖️ badge only when some sentence still on the card was checked against an article (none: a card of 現場のコツ only)
+  const related = (saved.items ?? []).some((x) => kept.has(x.n));
+  return { ok: true, fields: out, hidden: hide.size, specDiffers, lawRefs: saved.dummy ? [] : lawRefs, summary: saved.dummy || !related ? null : { checkedAt: saved.at.toMillis() } };
 }
 
 const CHECK_SYSTEM = `電気工事のベテラン（親方）が話した「知恵カード」の文を、渡された条文の原文と照らし合わせます。

@@ -362,7 +362,7 @@ function forYoung(saved: SavedCheck | undefined, full: FullCard, unchecked = UNC
   const r: Shown = shownCard(saved, full);
   if (!r.ok) throw new HttpsError("failed-precondition", r.why === "empty" ? ALL_HIDDEN_MSG : unchecked);
   // specDiffers: sentences that differ from 標準仕様書 (not law): shown, with a note where young workers read them
-  const update = { ...r.fields, terms: fitTerms(full.terms, r.fields), plain: r.hidden ? "" : full.plain, specDiffers: r.specDiffers, lawCheck: r.summary ?? FieldValue.delete() };
+  const update = { ...r.fields, terms: fitTerms(full.terms, r.fields), plain: r.hidden ? "" : full.plain, specDiffers: r.specDiffers, lawRefs: r.lawRefs, lawCheck: r.summary ?? FieldValue.delete() };
   return { update, hidden: r.hidden, summary: r.summary };
 }
 
@@ -386,8 +386,8 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
   const { update: young, hidden, summary } = forYoung(priv.get("lawCheck") as SavedCheck | undefined, full);
   // 「若手にはこう見えます」: the card as young workers would get it, before the veteran says yes (nothing is saved)
   if (data.preview === true) {
-    const { title, scene, body, reason, caution, specDiffers } = young;
-    return { preview: { title, scene, body, reason, caution, specDiffers }, hidden };
+    const { title, scene, body, reason, caution, specDiffers, lawRefs } = young;
+    return { preview: { title, scene, body, reason, caution, specDiffers, lawRefs }, hidden };
   }
   // Anyone can act as a veteran (no login by design), so first publications per device are capped; so are later
   // fixes, since each one makes the saved answers of the cards' questions stale (ask.ts cacheKey).

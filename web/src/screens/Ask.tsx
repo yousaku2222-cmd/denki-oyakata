@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { getName, getTrial, type Role } from "../local";
@@ -11,7 +11,7 @@ import { useFlyToMe } from "../FlyToMe";
 import { AnswerSample } from "../AnswerSample";
 import { GlossSheet, Glossed, fieldTerms, firstMentions, meaningsFor, useGlossary, type FieldWord, type Term } from "../Glossary";
 import { Icon, ic } from "../Icon";
-import { LawCheckBadge, SpecNote } from "../LawCheck";
+import { LawCheckBadge, LawLinks, SpecNote, type LawLink } from "../LawCheck";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
 // The list starts moving when it scrolls into view (a calculation card above can push it below the fold).
@@ -49,7 +49,7 @@ interface Answer {
   grounded: boolean;
   mode: "claude" | "dummy";
   safetyNote: string | null;
-  cards: { id: string; title: string; author: string; publishedAt: number | null; triggerAskerName: string | null; terms?: FieldWord[]; lawCheck?: { checkedAt: number } | null; specDiffers?: string[] }[];
+  cards: { id: string; title: string; author: string; publishedAt: number | null; triggerAskerName: string | null; terms?: FieldWord[]; lawCheck?: { checkedAt: number } | null; specDiffers?: string[]; lawRefs?: LawLink[] }[];
   laws: LawRef[];
   calcs?: CalcOutput[];
   cached?: boolean;
@@ -222,6 +222,10 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
     if (folded) top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [folded]);
   const cardOf = (id?: string) => answer?.cards.find((c) => c.id === id);
+  // ⚖️ 条文で確かめる under the 親方の知恵 group: the cards' sentences that agree with an article, in the order the cards are read
+  const wisdomCards = answer ? [...new Set(answer.sentences.filter((s) => s.source === "wisdom").map((s) => s.cardId))].flatMap((id) => cardOf(id) ?? []) : [];
+  const lawLinks = wisdomCards.flatMap((c) => (c.lawRefs ?? []).map((l) => ({ ...l, from: wisdomCards.length > 1 ? c.title : undefined })));
+  const linksId = answer ? `law-links-${answer.answerId}` : "";
   // 審査員モード: the judge's own cards in this answer (what they told as a veteran a minute ago), marked as theirs.
   // The answer does not say whose a card is: myCards does (this device's cards, in any space)
   const [mine, setMine] = useState<Set<string>>(new Set());
@@ -357,50 +361,58 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
               const quoted = rows.filter((r) => r.quote).length;
               const matched = rows.filter((r) => r.verified).length;
               return (
-                <motion.div key={src} className={`src-group src-${src}`} variants={GROUP}>
-                  <div className="src-head">
-                    <span className="src-tag">
-                      <Icon of={SOURCE_LABEL[src].icon} /> {SOURCE_LABEL[src].label} {count}
-                    </span>
-                    {src === "law" && matched > 0 && <Stamp n={matched} of={quoted} />}
-                  </div>
-                  {shownRows.map((s, i) => {
-                      const c = s.source === "wisdom" ? cardOf(s.cardId) : undefined;
-                      const law = s.source === "law" ? answer.laws.find((l) => l.id === s.lawId) : undefined;
-                      // say whose story it is once per run of sentences from the same card
-                      const newCard = c && rows[i - 1]?.cardId !== s.cardId;
-                      return (
-                        <motion.div key={i} className="src-row" variants={SENTENCE} initial={src === "general" ? "hidden" : undefined} animate={src === "general" ? "shown" : undefined}>
-                          {newCard && mine.has(c.id) && <p className="own-words">🧪 いま、あなたが話した言葉です</p>}
-                          <p>
-                            <Glossed text={s.text} marks={glossMarks[ordered.indexOf(s)] ?? []} onOpen={(t) => setGloss(meaningsFor(t, answerLawIds))} />
-                          </p>
-                          {newCard && (
-                            <p className="src-meta">
-                              {c.author}の話{c.publishedAt ? `・${fmtDate(c.publishedAt)}` : ""}
-                              {c.triggerAskerName ? `（きっかけ: ${c.triggerAskerName}さんの質問）` : ""}
-                              <LawCheckBadge check={c.lawCheck} />
+                <Fragment key={src}>
+                  <motion.div className={`src-group src-${src}`} variants={GROUP}>
+                    <div className="src-head">
+                      <span className="src-tag">
+                        <Icon of={SOURCE_LABEL[src].icon} /> {SOURCE_LABEL[src].label} {count}
+                      </span>
+                      {src === "law" && matched > 0 && <Stamp n={matched} of={quoted} />}
+                    </div>
+                    {shownRows.map((s, i) => {
+                        const c = s.source === "wisdom" ? cardOf(s.cardId) : undefined;
+                        const law = s.source === "law" ? answer.laws.find((l) => l.id === s.lawId) : undefined;
+                        // say whose story it is once per run of sentences from the same card
+                        const newCard = c && rows[i - 1]?.cardId !== s.cardId;
+                        return (
+                          <motion.div key={i} className="src-row" variants={SENTENCE} initial={src === "general" ? "hidden" : undefined} animate={src === "general" ? "shown" : undefined}>
+                            {newCard && mine.has(c.id) && <p className="own-words">🧪 いま、あなたが話した言葉です</p>}
+                            <p>
+                              <Glossed text={s.text} marks={glossMarks[ordered.indexOf(s)] ?? []} onOpen={(t) => setGloss(meaningsFor(t, answerLawIds))} />
                             </p>
-                          )}
-                          {newCard && <SpecNote sentences={c.specDiffers} />}
-                          {law && (
-                            <div className="cite-line">
-                              <button className="cite-chip" onClick={() => setOpenLaw({ id: law.id, quote: s.quote })} title={s.quote}>
-                                📜 引用元：{law.short} {law.article} ›
-                              </button>
-                              {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
-                              {s.verified && <span className="match-mark">✔ 引用が一致</span>}
-                            </div>
-                          )}
-                        </motion.div>
-                      );
-                    })}
-                  {partial && (
-                    <button className="link more" onClick={() => setOpenGeneral(!openGeneral)}>
-                      {openGeneral ? "▲ 閉じる" : `▼ もっと見る（あと${rows.length - GENERAL_PREVIEW}件）`}
-                    </button>
+                            {newCard && (
+                              <p className="src-meta">
+                                {c.author}の話{c.publishedAt ? `・${fmtDate(c.publishedAt)}` : ""}
+                                {c.triggerAskerName ? `（きっかけ: ${c.triggerAskerName}さんの質問）` : ""}
+                                <LawCheckBadge check={c.lawCheck} to={c.lawRefs?.length ? linksId : undefined} />
+                              </p>
+                            )}
+                            {newCard && <SpecNote sentences={c.specDiffers} />}
+                            {law && (
+                              <div className="cite-line">
+                                <button className="cite-chip" onClick={() => setOpenLaw({ id: law.id, quote: s.quote })} title={s.quote}>
+                                  📜 引用元：{law.short} {law.article} ›
+                                </button>
+                                {/* only the quote is checked word for word; the sentence is the AI's reading of it */}
+                                {s.verified && <span className="match-mark">✔ 引用が一致</span>}
+                              </div>
+                            )}
+                          </motion.div>
+                        );
+                      })}
+                    {partial && (
+                      <button className="link more" onClick={() => setOpenGeneral(!openGeneral)}>
+                        {openGeneral ? "▲ 閉じる" : `▼ もっと見る（あと${rows.length - GENERAL_PREVIEW}件）`}
+                      </button>
+                    )}
+                  </motion.div>
+                  {/* right under the green group, open from the start: from the veteran's words to the article */}
+                  {src === "wisdom" && lawLinks.length > 0 && (
+                    <motion.div variants={GROUP}>
+                      <LawLinks id={linksId} links={lawLinks} />
+                    </motion.div>
                   )}
-                </motion.div>
+                </Fragment>
               );
             })}
           </motion.div>
