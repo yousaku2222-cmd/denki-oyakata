@@ -1300,7 +1300,8 @@ input[inputmode="decimal"] {
 }
 .ask-bar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
   background: var(--surface);
   border: 1px solid var(--line, #d6dbe6);
@@ -1316,8 +1317,13 @@ input[inputmode="decimal"] {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-.ask-bar .secondary {
-  flex: none;
+.ask-bar-btns {
+  display: flex;
+  gap: 8px;
+}
+.ask-bar-btns button {
+  flex: 1;
+  width: auto;
   min-height: 40px;
   padding: 0 12px;
 }

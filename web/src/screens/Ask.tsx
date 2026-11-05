@@ -250,20 +250,29 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
       {folded ? (
         <div className="ask-bar">
           <span className="ask-bar-q">🎤 {asked}</span>
-          <button
-            className="secondary"
-            disabled={busy}
-            onClick={() => {
-              setText(asked); // to fix the words and ask again
-              setAnswerState(null);
-              setErr("");
-              setBoxErr("");
-              setBoxHeld(null);
-              delete lastOf[role];
-            }}
-          >
-            聞き直す
-          </button>
+          <div className="ask-bar-btns">
+            {/* a new question starts empty; 言い直す keeps the words, to fix a mishearing */}
+            {[
+              { label: "別のことを聞く", cls: "primary", words: "" },
+              { label: "言い直す", cls: "secondary", words: asked },
+            ].map((b) => (
+              <button
+                key={b.label}
+                className={b.cls}
+                disabled={busy}
+                onClick={() => {
+                  setText(b.words);
+                  setAnswerState(null);
+                  setErr("");
+                  setBoxErr("");
+                  setBoxHeld(null);
+                  delete lastOf[role];
+                }}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
         </div>
       ) : (
         <>
