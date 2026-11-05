@@ -2557,3 +2557,156 @@ body {
 .thanks-note li { margin: 2px 0; }
 .thanks-plus { font-weight: 700; }
 .thanks-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+/* 図で見る: figures drawn by the program from the checked articles' numbers (Diagrams.tsx) */
+.diagrams {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-m);
+  border: 2px solid var(--law);
+  background: var(--surface);
+}
+.diagrams-head {
+  margin: 0;
+  font-weight: 800;
+  color: var(--law);
+}
+.diagrams-head span {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--muted);
+}
+.dg {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.dg + .dg {
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.calc-card .dg {
+  padding: 8px 0 4px;
+}
+.dg svg {
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  justify-self: center;
+  overflow: visible;
+}
+.dg-title,
+.dg-rule,
+.dg-note,
+.dg-source {
+  margin: 0;
+}
+.dg-title {
+  font-weight: 700;
+}
+.dg-rule {
+  font-size: var(--fs-m);
+  font-weight: 700;
+}
+.dg-rule strong {
+  color: var(--law);
+}
+.dg-note {
+  font-size: var(--fs-s);
+}
+.dg-source {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.dg-examples {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: var(--fs-m);
+}
+.dg-examples .ok {
+  color: var(--wisdom);
+}
+.dg-examples .ng {
+  color: var(--danger);
+}
+.dg-box {
+  fill: var(--general-bg);
+  stroke: var(--text);
+  stroke-width: 2;
+}
+.dg-pipe {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dg-pipe.thin {
+  stroke-width: 4;
+}
+.dg-saddle {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 3;
+}
+.dg-mark {
+  fill: var(--law);
+}
+.dg-mark-n {
+  fill: var(--surface);
+  font-size: 10px;
+  font-weight: 800;
+}
+.dg svg text {
+  fill: var(--text);
+}
+.dg svg .dg-mark-n {
+  fill: var(--surface);
+}
+.dg-small {
+  font-size: 12px;
+}
+.dg-big {
+  font-size: 15px;
+  font-weight: 800;
+}
+.dg-dim {
+  stroke: var(--law);
+  stroke-width: 1.5;
+}
+.dg-arrow {
+  fill: var(--law);
+}
+.dg svg .dg-dim-t {
+  fill: var(--law);
+  font-size: 13px;
+  font-weight: 800;
+}
+.dg-track {
+  fill: var(--general-bg);
+  stroke: var(--line);
+}
+.dg-bar.ok {
+  fill: var(--wisdom);
+}
+.dg-bar.ng {
+  fill: var(--danger);
+}
+.dg-limit {
+  stroke: var(--text);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+/* 親方の言葉: カードの「標準語では」と、下書きで確かめる言葉の意味の一覧 */
+.plain-note { margin: -4px 0 8px; padding: 6px 10px; border-left: 3px solid var(--line); color: var(--muted); font-size: var(--fs-s); }
+.plain-note-head { font-weight: 700; }
+.plain-note .src-meta { display: block; margin-top: 2px; }
+.field-words { padding: 10px 12px; border-radius: var(--r-m); border: 1px dashed var(--line); }
+.field-words .hint { margin: 0; }
+.field-words-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.field-words-list li,
+.field-words-plain { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); font-size: var(--fs-m); }
+.field-words-list li .src-meta { display: block; }
+.field-words-x { flex: none; min-width: 44px; min-height: 44px; }

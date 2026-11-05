@@ -2,7 +2,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER } from "./models";
-import { CATEGORIES, COMPANY, CardDoc, LOCATIONS, Turn, db, spaceOf, spacesOf, str, strList, turns } from "./common";
+import { CATEGORIES, COMPANY, CardDoc, FieldTerm, LOCATIONS, Turn, db, spaceOf, spacesOf, str, strList, turns } from "./common";
 import { takeQuota } from "./limits";
 import { lawLabel, numbersMissing, searchLaws } from "./laws";
 
@@ -58,6 +58,8 @@ interface Draft {
   category: CardDoc["category"];
   location: CardDoc["location"];
   relatedLaws: string[];
+  terms: FieldTerm[];
+  plain: string;
 }
 
 const DRAFT_SYSTEM = `電気工事のベテランの話を「知恵カード」に整理します。
@@ -65,10 +67,15 @@ const DRAFT_SYSTEM = `電気工事のベテランの話を「知恵カード」�
 - 言い回しは現場の言葉を残し、若手が読んでわかる短い文に整える（各項目60〜150字目安）。
 - title: 一言でいうと（30字以内）／scene: どんな現場・場面か／body: やり方・コツ／reason: なぜそうするか、やらかした失敗とその結果／caution: 新人がよく間違えること（話に無ければ空文字）
 - tags: 検索用。部材や工具の別名・現場の呼び名・略称（例: PF管→「PF」「合成樹脂可とう電線管」）を5〜10個
-- relatedLaws: ベテランが法令・基準に触れた場合だけ、その名前（例「電技解釈 第158条」）。推測で足さない`;
+- relatedLaws: ベテランが法令・基準に触れた場合だけ、その名前（例「電技解釈 第158条」）。推測で足さない
+- terms: カードの文（title・scene・body・reason・caution）に出てくる、若手には通じにくい言葉と、その意味（0〜8個）。
+  - 入れるのは、方言の言い回し（例「多か時は」）・会社や地域だけの呼び名・現場の略語（例「プルボ」）だけ。漏電遮断器・PF管のような一般的な電気の専門用語は、別の用語集が説明するので入れない。
+  - word はカードの文に書いたとおりの表記をそのまま（言い換えたり、送り仮名を変えたりしない）。meaning は若手向けのやさしい言葉で30字以内（例: プルボ→「プルボックス。電線をまとめて通す箱」）。
+  - 話から意味が分からない言葉は入れない。通じにくい言葉が無ければ空の配列。
+- plain: カードの文の方言が強く、若手が読んでも意味が取りにくい時だけ、やり方・コツ（body）の中身を標準語で言い換えた文（150字以内、話に無いことは足さない）。普通に読めるカードなら空文字`;
 
 // What a published card may hold (publishCard checks these; drafts are cut to fit so they can be published).
-export const CARD_LIMITS = { title: 60, scene: 500, body: 1500, reason: 1000, caution: 1000, tags: 15, tag: 30 } as const;
+export const CARD_LIMITS = { title: 60, scene: 500, body: 1500, reason: 1000, caution: 1000, tags: 15, tag: 30, terms: 8, word: 20, meaning: 40, plain: 400 } as const;
 // cut by characters, not UTF-16 units: half an emoji would be saved as "�"
 const cut = (s: string, n: number) => (s.length <= n ? s : Array.from(s).slice(0, n).join("").slice(0, n).replace(/[\uD800-\uDBFF]$/, ""));
 function fitDraft(d: Draft): Draft {
@@ -81,7 +88,37 @@ function fitDraft(d: Draft): Draft {
     caution: cut(d.caution, CARD_LIMITS.caution),
     // the edit screen splits the words at 、 and line breaks only, so a word may keep its spaces
     tags: d.tags.flatMap((x) => x.split(/[、,\n]+/)).map((x) => cut(x.trim(), CARD_LIMITS.tag)).filter(Boolean).slice(0, CARD_LIMITS.tags),
+    terms: d.terms.map((t) => ({ word: t.word, meaning: cut(t.meaning.trim(), CARD_LIMITS.meaning) })),
+    plain: cut(d.plain.trim(), CARD_LIMITS.plain),
   };
+}
+
+/**
+ * The words of a card that get a meaning: only those really written on it (the screens underline them where they
+ * are read, so a word the AI spelt another way, or one the veteran has since rewritten, would mark nothing), once each.
+ */
+export function fitTerms(terms: FieldTerm[], d: Pick<Draft, "title" | "scene" | "body" | "reason" | "caution">): FieldTerm[] {
+  const text = [d.title, d.scene, d.body, d.reason, d.caution].join("\n");
+  const seen = new Set<string>();
+  return terms
+    .map((t) => ({ word: t.word.trim(), meaning: t.meaning.trim() }))
+    .filter((t) => {
+      if (!t.word || !t.meaning || t.word === t.meaning || t.word.length > CARD_LIMITS.word || !text.includes(t.word) || seen.has(t.word)) return false;
+      seen.add(t.word);
+      return true;
+    })
+    .slice(0, CARD_LIMITS.terms);
+}
+
+/** The words and meanings sent back from the edit screen (callable data is untrusted). */
+export function termList(v: unknown): FieldTerm[] {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v) || v.length > CARD_LIMITS.terms) throw new HttpsError("invalid-argument", `現場の言葉は${CARD_LIMITS.terms}個までです`);
+  return v.map((x) => {
+    if (typeof x !== "object" || x === null) throw new HttpsError("invalid-argument", "現場の言葉の形式が違います");
+    const t = x as Record<string, unknown>;
+    return { word: str(t.word, "現場の言葉", CARD_LIMITS.word), meaning: str(t.meaning, "言葉の意味", CARD_LIMITS.meaning) };
+  });
 }
 
 const draftText = (d: Pick<Draft, "title" | "scene" | "body" | "reason" | "caution">) => [d.title, d.scene, d.body, d.reason, d.caution].join(" ");
@@ -123,6 +160,8 @@ function dummyDraft(t: Turn[]): Draft {
     category: "other",
     location: "other",
     relatedLaws: [],
+    terms: [],
+    plain: "",
   };
 }
 
@@ -152,8 +191,18 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
           category: { type: "string", enum: [...CATEGORIES] },
           location: { type: "string", enum: [...LOCATIONS] },
           relatedLaws: { type: "array", items: { type: "string" } },
+          terms: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { word: { type: "string" }, meaning: { type: "string" } },
+              required: ["word", "meaning"],
+              additionalProperties: false,
+            },
+          },
+          plain: { type: "string" },
         },
-        required: ["title", "scene", "body", "reason", "caution", "tags", "category", "location", "relatedLaws"],
+        required: ["title", "scene", "body", "reason", "caution", "tags", "category", "location", "relatedLaws", "terms", "plain"],
         additionalProperties: false,
       },
     });
@@ -163,6 +212,7 @@ export async function draftCard(data: Record<string, unknown>, uid: string) {
   }
 
   draft = fitDraft(draft);
+  draft.terms = fitTerms(draft.terms, draft);
 
   let triggerAskerName: string | null = null;
   let triggerQuestionText: string | null = null;
@@ -237,7 +287,10 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
     reason: str(e.reason, "理由・失敗", CARD_LIMITS.reason, false),
     caution: str(e.caution, "新人が間違えること", CARD_LIMITS.caution, false),
     tags: strList(e.tags, "探す時の言葉", CARD_LIMITS.tags, CARD_LIMITS.tag), // a short list: long ones would match every question
+    plain: str(e.plain, "標準語の言い換え", CARD_LIMITS.plain, false),
   };
+  // a word the veteran has since rewritten is no longer on the card: its meaning is dropped, not refused
+  const terms = fitTerms(termList(e.terms), fields);
   const nameIn = str(data.authorName, "名前", 30, false);
   // Anyone can act as a veteran (no login by design), so first publications per device are capped; so are later
   // fixes, since each one makes the saved answers of the cards' questions stale (ask.ts cacheKey).
@@ -255,6 +308,7 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
   await privRef.set({ authorId, authorName, ...(card.transcript?.length ? { transcript: card.transcript } : {}) }, { merge: true });
   await ref.update({
     ...fields,
+    terms,
     authorName: shownName,
     showAuthorName,
     // editing a hidden card keeps it hidden; a draft or a published card is (re)published
@@ -325,7 +379,7 @@ export async function myCard(data: Record<string, unknown>, uid: string) {
   return {
     cardId,
     status: card.status,
-    draft: { title: card.title, scene: card.scene, body: card.body, reason: card.reason, caution: card.caution, tags: card.tags },
+    draft: { title: card.title, scene: card.scene, body: card.body, reason: card.reason, caution: card.caution, tags: card.tags, terms: card.terms ?? [], plain: card.plain ?? "" },
     authorName: (priv.get("authorName") as string | undefined) ?? card.authorName,
     showAuthorName: card.showAuthorName,
     topic: card.triggerQuestionText ? { questionId: card.triggerQuestionId ?? "", text: card.triggerQuestionText, askerName: card.triggerAskerName ?? "若手" } : null,

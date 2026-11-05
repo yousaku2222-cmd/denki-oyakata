@@ -19,6 +19,8 @@ export interface Card {
   reason: string;
   caution: string;
   tags: string[];
+  terms?: { word: string; meaning: string }[]; // the veteran's own words with a meaning by the AI (older cards: none)
+  plain?: string; // the card in standard Japanese, only when told in strong dialect
   category: string;
   location: string;
   authorName: string;

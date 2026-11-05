@@ -37,6 +37,12 @@ export interface Turn {
 export const CATEGORIES = ["piping", "wiring", "grounding", "license", "calc", "safety", "other"] as const;
 export const LOCATIONS = ["ceiling", "floor", "outdoor", "panel", "other"] as const;
 
+/** A word as written on the card (「プルボ」) and what it means (「プルボックス。電線をまとめる箱」). */
+export interface FieldTerm {
+  word: string;
+  meaning: string;
+}
+
 export interface CardDoc {
   companyId: string;
   title: string;
@@ -46,6 +52,11 @@ export interface CardDoc {
   caution: string;
   relatedLaws: string[];
   tags: string[];
+  // The veteran's own words (dialect, the company's or the area's names for things) with a meaning for young
+  // workers, and the whole card in standard Japanese when the dialect is strong (else ""). Written by the AI with
+  // the draft and checked by the veteran; the card's text itself stays as told. Older cards may have neither.
+  terms?: FieldTerm[];
+  plain?: string;
   category: (typeof CATEGORIES)[number];
   location: (typeof LOCATIONS)[number];
   // who wrote it lives in cardPrivate (authorId): a public card must not link a hidden name to a named one.

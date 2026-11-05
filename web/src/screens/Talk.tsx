@@ -13,6 +13,9 @@ interface Draft {
   reason: string;
   caution: string;
   tags: string[];
+  // the AI's meanings of the veteran's own words, and the card in standard Japanese (see functions/src/interview.ts)
+  terms?: { word: string; meaning: string }[];
+  plain?: string;
 }
 export interface Topic {
   questionId: string;
@@ -412,6 +415,7 @@ export function Talk({
           <span>探す時の言葉（現場の呼び名など）</span>
           <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} />
         </label>
+        <FieldWords draft={draft} onChange={setDraft} />
         <fieldset className="field">
           <legend>名前の出し方</legend>
           <label className="radio">
@@ -620,6 +624,49 @@ function CheckNotes({ notes }: { notes: string[] }) {
           <li key={i}>{x}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * The meanings the AI put on the veteran's own words, to check before publishing: the card's words stay as told,
+ * young workers see them underlined. A wrong one is taken off with ✕ (publishCard keeps only what is sent).
+ */
+function FieldWords({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
+  const terms = draft.terms ?? [];
+  if (!terms.length && !draft.plain) return null;
+  const text = [draft.title, draft.scene, draft.body, draft.reason, draft.caution].join("\n");
+  return (
+    <div className="field field-words">
+      <span>若手向けに付けた言葉の意味（AI が付けました）</span>
+      <p className="hint">カードの文はあなたの言葉のままです。この言葉に下線が付き、押すと意味が出ます。違う時は ✕ で外してください。</p>
+      {terms.length > 0 && (
+        <ul className="field-words-list">
+          {terms.map((t) => (
+            <li key={t.word}>
+              <span>
+                <b>{t.word}</b>：{t.meaning}
+                {/* the server keeps only words still written on the card */}
+                {!text.includes(t.word) && <span className="src-meta">（文から消えたので、保存すると外れます）</span>}
+              </span>
+              <button type="button" className="link field-words-x" aria-label={`「${t.word}」の意味を外す`} onClick={() => onChange({ ...draft, terms: terms.filter((x) => x.word !== t.word) })}>
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {draft.plain && (
+        <div className="field-words-plain">
+          <span>
+            <b>標準語では：</b>
+            {draft.plain}
+          </span>
+          <button type="button" className="link field-words-x" aria-label="標準語の言い換えを外す" onClick={() => onChange({ ...draft, plain: "" })}>
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

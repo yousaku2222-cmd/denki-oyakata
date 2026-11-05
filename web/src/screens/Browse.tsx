@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { call, db, spaces } from "../firebase";
 import { CATEGORY_LABEL, LOCATION_LABEL, LoadFailed, Skeleton, authorOf, fmtDate, type Card } from "../components";
 import { LawSheet, lawTitle, type LawRef } from "../LawSheet";
-import { Meanings, useGlossary } from "../Glossary";
+import { Meanings, PlainNote, useCardWords, useGlossary } from "../Glossary";
 import { Icon, ic } from "../Icon";
 
 // pictures first: the same icons wherever a place or a kind is shown
@@ -176,17 +176,7 @@ function CardList() {
         <button className="link" onClick={() => setOpen(null)}>
           {who ? `← ${who.name}さんのページへ` : "← 一覧へ"}
         </button>
-        <article className="wisdom-card">
-          <p className="wc-author">
-            🧰 {authorOf(open)}の知恵・{fmtDate(open.publishedAt?.toMillis())}・👍 {open.helpedCount}
-          </p>
-          <h1>{open.title}</h1>
-          {open.scene && <Part label="場面" text={open.scene} />}
-          <Part label="やり方・コツ" text={open.body} />
-          {open.reason && <Part label="なぜ・失敗" text={open.reason} />}
-          {open.caution && <Part label="新人がよく間違えること" text={open.caution} />}
-          {open.triggerAskerName && <p className="src-meta">きっかけ: {open.triggerAskerName}さんの質問</p>}
-        </article>
+        <CardDetail c={open} />
       </section>
     );
   }
@@ -296,11 +286,34 @@ function veterans(cards: Card[]) {
     .sort((a, b) => b.helped - a.helped || b.cards.length - a.cards.length);
 }
 
-function Part({ label, text }: { label: string; text: string }) {
+/** One card, opened: the veteran's words as told, their own words underlined (a tap shows the meaning). */
+function CardDetail({ c }: { c: Card }) {
+  const w = useCardWords([c.title, c.scene, c.body, c.reason, c.caution], c.terms);
+  return (
+    <>
+      <article className="wisdom-card">
+        <p className="wc-author">
+          🧰 {authorOf(c)}の知恵・{fmtDate(c.publishedAt?.toMillis())}・👍 {c.helpedCount}
+        </p>
+        <h1>{w.show(0)}</h1>
+        {c.scene && <Part label="場面">{w.show(1)}</Part>}
+        <Part label="やり方・コツ">{w.show(2)}</Part>
+        <PlainNote plain={c.plain} />
+        {c.reason && <Part label="なぜ・失敗">{w.show(3)}</Part>}
+        {c.caution && <Part label="新人がよく間違えること">{w.show(4)}</Part>}
+        {c.triggerAskerName && <p className="src-meta">きっかけ: {c.triggerAskerName}さんの質問</p>}
+      </article>
+      {/* beside the card, not in it: the card styles its own headings and lines */}
+      {w.sheet}
+    </>
+  );
+}
+
+function Part({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="wc-part">
       <span>{label}</span>
-      <p>{text}</p>
+      <p>{children}</p>
     </div>
   );
 }

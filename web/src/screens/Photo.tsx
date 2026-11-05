@@ -5,6 +5,7 @@ import { call, errorText } from "../firebase";
 import { addPart, getName } from "../local";
 import { LawSheet } from "../LawSheet";
 import { MicInput } from "../components";
+import { PlainNote, useCardWords, type FieldWord } from "../Glossary";
 
 export interface CalcStart {
   name: string;
@@ -21,7 +22,7 @@ interface PartResult {
   confusables: { name: string; diff: string }[];
   companions: string[];
   askIdeas?: string[]; // questions for the veteran that fit this part
-  cards: { id: string; title: string; body: string; reason: string; caution: string; author: string }[];
+  cards: { id: string; title: string; body: string; reason: string; caution: string; author: string; terms?: FieldWord[]; plain?: string }[];
   laws: { id: string; label: string; summary: string }[];
   calc: ({ label: string } & CalcStart) | null;
   safetyNote?: string | null;
@@ -225,15 +226,7 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
             </button>
           )}
           {res.cards.map((c) => (
-            <details key={c.id} className="part-link wisdom">
-              <summary>
-                <span className="src-tag wisdom">🧰 親方の知恵</span> {c.title}
-              </summary>
-              <p>{c.body}</p>
-              {c.reason && <p className="src-meta">理由：{c.reason}</p>}
-              {c.caution && <p className="src-meta">新人がやりがち：{c.caution}</p>}
-              <p className="src-meta">{c.author}</p>
-            </details>
+            <PartCard key={c.id} c={c} />
           ))}
           {res.laws.map((l) => (
             <button key={l.id} className="law-cite" onClick={() => setOpenLaw(l.id)}>
@@ -291,5 +284,25 @@ export function Photo({ onCalc }: { onCalc: (s: CalcStart) => void }) {
       {envelope}
       {openLaw && <LawSheet id={openLaw} onClose={() => setOpenLaw(null)} />}
     </section>
+  );
+}
+
+/** A veteran's card about the part, opened on a tap: their own words underlined (not in the summary: a tap there folds it). */
+function PartCard({ c }: { c: PartResult["cards"][number] }) {
+  const w = useCardWords([c.body, c.reason, c.caution], c.terms);
+  return (
+    <>
+      <details className="part-link wisdom">
+        <summary>
+          <span className="src-tag wisdom">🧰 親方の知恵</span> {c.title}
+        </summary>
+        <p>{w.show(0)}</p>
+        <PlainNote plain={c.plain} />
+        {c.reason && <p className="src-meta">理由：{w.show(1)}</p>}
+        {c.caution && <p className="src-meta">新人がやりがち：{w.show(2)}</p>}
+        <p className="src-meta">{c.author}</p>
+      </details>
+      {w.sheet}
+    </>
   );
 }

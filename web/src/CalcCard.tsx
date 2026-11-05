@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { LawSheet } from "./LawSheet";
+import { CalcDiagram } from "./Diagrams";
 
 export interface CalcOutput {
   name: string;
@@ -57,6 +58,8 @@ function CalcDetail({ c, onCite, foldSteps }: { c: CalcOutput; onCite: (o: { id:
   return (
     <>
       {c.figure?.kind === "fill" && <FillFigure f={c.figure} />}
+      {/* inside an answer (compact) the drop figure is already in 「図で見る」 above the card */}
+      {foldSteps && <CalcDiagram c={c} />}
       {c.figure?.kind === "rack" && <RackFigure f={c.figure} />}
       {foldSteps ? (
         <details>

@@ -202,9 +202,15 @@ export function normalizeQuestion(text: string): string {
 /** Raise by hand to drop every saved answer (e.g. after a change to the checks in this file). */
 export const ANSWER_CACHE_VER = 1;
 
-/** What of a card can change an answer: the words searched and shown, and the name and date shown with it. */
+/**
+ * What of a card can change an answer: the words searched and shown, the name and date shown with it, and the
+ * meanings of its words (the saved answer carries them). A card with no meanings keeps the stamp it had before them.
+ */
 const cardStamp = (c: Card) =>
-  JSON.stringify([c.id, c.title, c.scene, c.body, c.reason, c.caution, c.tags, c.triggerSearchText ?? null, c.triggerQuestionText ?? null, c.triggerAskerName ?? null, c.showAuthorName, c.authorName, c.publishedAt?.toMillis?.() ?? 0]);
+  JSON.stringify([
+    c.id, c.title, c.scene, c.body, c.reason, c.caution, c.tags, c.triggerSearchText ?? null, c.triggerQuestionText ?? null, c.triggerAskerName ?? null, c.showAuthorName, c.authorName, c.publishedAt?.toMillis?.() ?? 0,
+    ...(c.terms?.length || c.plain ? [c.terms ?? [], c.plain ?? ""] : []),
+  ]);
 
 export function cacheKey(text: string, cards: Card[]): { id: string; ver: string } {
   // A new version when what goes into an answer changes: the cards' contents (a new one, one made private, an edit
@@ -460,6 +466,7 @@ async function compose(text: string, cards: Card[]) {
         author: displayAuthor(c),
         publishedAt: c.publishedAt?.toMillis() ?? null,
         triggerAskerName: c.triggerAskerName,
+        terms: c.terms ?? [], // the veteran's words in its sentences, underlined on the screen
       };
     }),
     calcs,

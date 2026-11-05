@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import Anthropic from "@anthropic-ai/sdk";
 import { CAPS, USD_PER_DAY, USD_TOTAL, capOf, daysBetween, overBudget, parseLimitsConfig } from "./limits";
 import { MAX_TRANSCRIPT_CHARS, safetyNote, turns } from "./common";
-import { lawNumberNotes, unsaidNumbers } from "./interview";
+import { CARD_LIMITS, fitTerms, lawNumberNotes, termList, unsaidNumbers } from "./interview";
 import { isBusy, systemBlocks } from "./claude";
 import { costUsd } from "./usage";
 import { MODEL_ANSWER } from "./models";
@@ -80,4 +80,26 @@ test("rate limits and overload count as busy, other errors do not", () => {
 
 test("writing the prompt cache is priced at 1.25 times the input", () => {
   assert.equal(costUsd(MODEL_ANSWER, { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 1_000_000 }), 2.5);
+});
+
+test("a card's words get a meaning only as written on the card, once each, and a bad list is refused", () => {
+  const card = { title: "プルボの中は束ねる", scene: "天井裏", body: "線が多か時は、プルボで分けて結束する。", reason: "", caution: "" };
+  const t = (word: string, meaning = "意味") => ({ word, meaning });
+  assert.deepEqual(
+    fitTerms([t(" プルボ ", "プルボックス。電線をまとめて通す箱"), t("多か時は", "多い時は"), t("プルボ"), t("プルボックス"), t("結束", "結束"), t(""), t("天井裏", "")], card),
+    [
+      { word: "プルボ", meaning: "プルボックス。電線をまとめて通す箱" }, // trimmed; the second プルボ is dropped
+      { word: "多か時は", meaning: "多い時は" },
+    ],
+  ); // not on the card (プルボックス), a meaning that only repeats the word, an empty word or meaning: left out
+  const many = ["プ", "ル", "ボ", "中", "束", "天", "井", "裏", "線"].map((w) => t(w, `${w}の意味`));
+  assert.equal(fitTerms(many, card).length, CARD_LIMITS.terms); // at most 8 words
+  assert.deepEqual(termList(undefined), []);
+  assert.deepEqual(termList([{ word: "プルボ", meaning: "プルボックス" }]), [{ word: "プルボ", meaning: "プルボックス" }]);
+  assert.throws(() => termList("プルボ"), /8個まで/);
+  assert.throws(() => termList(Array.from({ length: 9 }, () => ({ word: "a", meaning: "b" }))), /8個まで/);
+  assert.throws(() => termList([null]), /形式が違います/);
+  assert.throws(() => termList([{ word: "プルボ", meaning: "" }]), /言葉の意味を入れてください/);
+  assert.throws(() => termList([{ word: "プルボ", meaning: "長".repeat(CARD_LIMITS.meaning + 1) }]), /長すぎます/);
+  assert.throws(() => termList([{ word: "長".repeat(CARD_LIMITS.word + 1), meaning: "x" }]), /長すぎます/);
 });

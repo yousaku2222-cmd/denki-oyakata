@@ -25,6 +25,10 @@ test("a saved answer goes stale when the cards' contents change, not when they a
   assert.notEqual(cacheKey("PF管", [card("a", "x"), card("b", "y2")]).ver, a.ver); // an edited card
   assert.notEqual(cacheKey("PF管", [card("a", "x")]).ver, a.ver); // a card made private
   assert.notEqual(cacheKey("PF管", [card("a", "x"), card("b", "y"), card("c", "z")]).ver, a.ver); // a new card
+  const worded = (terms: { word: string; meaning: string }[], plain = "") => ({ ...card("b", "y"), terms, plain }) as Card;
+  assert.equal(cacheKey("PF管", [card("a", "x"), worded([])]).ver, a.ver); // no meanings yet: the stamp of before
+  assert.notEqual(cacheKey("PF管", [card("a", "x"), worded([{ word: "y", meaning: "わい" }])]).ver, a.ver); // a meaning added
+  assert.notEqual(cacheKey("PF管", [card("a", "x"), worded([], "標準語で")]).ver, a.ver);
   const before = process.env.K_REVISION;
   process.env.K_REVISION = "another-deploy";
   assert.equal(cacheKey("PF管", [card("a", "x"), card("b", "y")]).ver, a.ver); // a deploy alone keeps the saved answers

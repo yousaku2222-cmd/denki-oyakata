@@ -5,10 +5,11 @@ import { getName, getTrial, type Role } from "../local";
 import { MicInput, Notice, SOURCE_LABEL, fmtDate, type Sentence } from "../components";
 import { LawSheet, type LawRef } from "../LawSheet";
 import { CalcCard, type CalcOutput } from "../CalcCard";
+import { AnswerDiagrams } from "../Diagrams";
 import { AskWaiting, CheckedLine } from "../AskWaiting";
 import { useFlyToMe } from "../FlyToMe";
 import { AnswerSample } from "../AnswerSample";
-import { GlossSheet, Glossed, firstMentions, meaningsFor, useGlossary, type Term } from "../Glossary";
+import { GlossSheet, Glossed, fieldTerms, firstMentions, meaningsFor, useGlossary, type FieldWord, type Term } from "../Glossary";
 import { Icon, ic } from "../Icon";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
@@ -47,7 +48,7 @@ interface Answer {
   grounded: boolean;
   mode: "claude" | "dummy";
   safetyNote: string | null;
-  cards: { id: string; title: string; author: string; publishedAt: number | null; triggerAskerName: string | null }[];
+  cards: { id: string; title: string; author: string; publishedAt: number | null; triggerAskerName: string | null; terms?: FieldWord[] }[];
   laws: LawRef[];
   calcs?: CalcOutput[];
   cached?: boolean;
@@ -208,7 +209,12 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
   const cardOf = (id?: string) => answer?.cards.find((c) => c.id === id);
   // in the order the groups are shown, so a word is underlined where it is first read
   const ordered = answer ? SOURCES.flatMap((src) => answer.sentences.filter((s) => s.source === src)) : [];
-  const glossMarks = firstMentions(ordered.map((s) => s.text), terms);
+  // a veteran's sentence also underlines the words of its own card (dialect, the company's names), before the glossary's
+  const glossMarks = firstMentions(
+    ordered.map((s) => s.text),
+    terms,
+    ordered.map((s) => (s.source === "wisdom" ? fieldTerms(cardOf(s.cardId)?.terms) : [])),
+  );
   const answerLawIds = ordered.flatMap((s) => (s.lawId ? [s.lawId] : []));
 
   return (
@@ -291,6 +297,8 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
           )}
           {/* right under the conclusion: someone who reads only the top still sees it */}
           {answer.safetyNote && <Notice>⚠️ {answer.safetyNote}</Notice>}
+          {/* drawn by the program from the numbers of the checked articles and of the calculations (nothing for other answers) */}
+          <AnswerDiagrams answer={answer} />
           {/* a tester went to look it up on the internet: the way to check is already here */}
           {answer.sentences.some((s) => s.source === "law") && (
             <div className="how-to-check">

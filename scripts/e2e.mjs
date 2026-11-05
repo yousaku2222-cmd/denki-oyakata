@@ -38,8 +38,12 @@ t = [...t, { role: "ai", text: n.question }, { role: "veteran", text: "曲げす
 const d = await call("draftCard", { transcript: t, authorName: "山田（親方）" }, vet);
 check("draft card created", !!d.cardId, d.draft.title);
 check("draft is hidden from clients", (await clientGet(`cards/${d.cardId}`)) === 403);
-await call("publishCard", { cardId: d.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...d.draft, tags: ["PF", "合成樹脂可とう電線管", "曲げ"] } }, vet);
+// a meaning sent for a word that is not on the card is dropped (the screens underline only words on it)
+const forged = { word: "カードに無い言葉", meaning: "x" };
+await call("publishCard", { cardId: d.cardId, authorName: "山田（親方）", showAuthorName: true, edits: { ...d.draft, tags: ["PF", "合成樹脂可とう電線管", "曲げ"], terms: [...d.draft.terms, forged] } }, vet);
 check("published card is readable", (await fetch(`${FS}/cards/${d.cardId}`, { headers: { Authorization: `Bearer ${young}` } })).status === 200);
+const kept = (await call("myCard", { cardId: d.cardId }, vet)).draft;
+check("the veteran's words keep their meanings, only words on the card", JSON.stringify(kept.terms) === JSON.stringify(d.draft.terms) && kept.plain === d.draft.plain, JSON.stringify(kept.terms));
 
 // 2. Someone else cannot publish or hide it.
 try { await call("setCardStatus", { cardId: d.cardId, status: "private" }, young); check("other device blocked", false); }
@@ -122,7 +126,8 @@ for (let i = 0; i < 12; i++) {
   try { await call("publishCard", { cardId: ld.cardId, edits: { ...ld.draft, body: "長".repeat(1501) } }, longVet); }
   catch (e) { if (/INVALID_ARGUMENT/.test(String(e))) refused++; }
 }
-await call("publishCard", { cardId: ld.cardId, edits: ld.draft }, longVet);
+// the talk says nothing, so Claude may rightly leave やり方 empty: the veteran would write one before publishing
+await call("publishCard", { cardId: ld.cardId, edits: { ...ld.draft, body: ld.draft.body || "（テスト）長い話。" } }, longVet);
 check("refused publishes do not use up the cap", refused === 12);
 
 // 8. The question box has its own daily cap per device (it costs no Claude call, but every veteran downloads it).

@@ -3,12 +3,15 @@ import { call } from "./firebase";
 import { LawSheet } from "./LawSheet";
 import { Sheet } from "./Sheet";
 
-export interface Meaning {
-  plain: string;
-  kind: "law";
-  lawId: string;
-  label: string; // 電技解釈 第29条
-}
+export type Meaning =
+  | {
+      plain: string;
+      kind: "law";
+      lawId: string;
+      label: string; // 電技解釈 第29条
+    }
+  // a veteran's own word on a card (dialect, the company's name for a thing): its meaning was written by the AI
+  | { plain: string; kind: "field" };
 export interface Term {
   term: string;
   meanings: Meaning[];
@@ -45,15 +48,24 @@ export interface Mark {
   term: Term;
 }
 
+/** A card's own words (CardDoc.terms on the server) as terms to underline. Older cards have none. */
+export interface FieldWord {
+  word: string;
+  meaning: string;
+}
+export const fieldTerms = (words: FieldWord[] | undefined): Term[] => (words ?? []).map((w) => ({ term: w.word, meanings: [{ plain: w.meaning, kind: "field" }] }));
+
 /**
  * Where each term is read in `text`, longest first so 漏電遮断器 wins over 遮断器: a shorter term inside a longer one
  * (接触防護措置 in 簡易接触防護措置) is part of that word, not a mention of its own, even when the longer one is not
  * underlined there. The first place of each term outside the longer ones.
+ * `first`: the card's own words, placed before any of `terms` (the veteran's meaning of a word wins where they overlap).
  */
-export function termsIn(text: string, terms: Term[]): Mark[] {
+export function termsIn(text: string, terms: Term[], first: Term[] = []): Mark[] {
   const taken: { at: number; end: number }[] = [];
   const marks: Mark[] = [];
-  const sorted = terms.filter((x) => keyOf(x.term).length >= 2 && text.includes(keyOf(x.term))).sort((a, b) => keyOf(b.term).length - keyOf(a.term).length);
+  const byLength = (list: Term[]) => list.filter((x) => keyOf(x.term).length >= 2 && text.includes(keyOf(x.term))).sort((a, b) => keyOf(b.term).length - keyOf(a.term).length);
+  const sorted = [...byLength(first), ...byLength(terms)];
   for (const term of sorted) {
     const k = keyOf(term.term);
     const free: { at: number; end: number }[] = [];
@@ -67,13 +79,17 @@ export function termsIn(text: string, terms: Term[]): Mark[] {
   return marks.sort((a, b) => a.at - b.at);
 }
 
-/** For each text in reading order, the places to underline there: each term only where it is first read, so a long answer is not covered in lines. */
-export function firstMentions(texts: string[], terms: Term[]): Mark[][] {
+/**
+ * For each text in reading order, the places to underline there: each term only where it is first read, so a long
+ * answer is not covered in lines. `local[i]`: words that belong to text i only (a card's own words, in its sentences).
+ */
+export function firstMentions(texts: string[], terms: Term[], local: Term[][] = []): Mark[][] {
   const seen = new Set<string>();
-  return texts.map((text) =>
-    termsIn(text, terms).filter((m) => {
-      if (seen.has(m.term.term)) return false;
-      seen.add(m.term.term);
+  return texts.map((text, i) =>
+    termsIn(text, terms, local[i]).filter((m) => {
+      const key = `${m.term.meanings[0]?.kind}|${m.term.term}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
       return true;
     }),
   );
@@ -85,7 +101,7 @@ export function firstMentions(texts: string[], terms: Term[]): Mark[][] {
  */
 export const meaningsFor = (term: Term, lawIds: string[]): Term => ({
   ...term,
-  meanings: [...term.meanings].sort((a, b) => Number(lawIds.includes(b.lawId)) - Number(lawIds.includes(a.lawId))),
+  meanings: [...term.meanings].sort((a, b) => Number(b.kind === "law" && lawIds.includes(b.lawId)) - Number(a.kind === "law" && lawIds.includes(a.lawId))),
 });
 
 /** `text` with `marks` underlined; a tap opens the meaning. */
@@ -135,7 +151,7 @@ export function Meanings({ term, onLaw }: { term: Term; onLaw: (lawId: string) =
         <details className="gloss-more">
           <summary>ほかの条文での説明（{more.length}件）</summary>
           {more.map((m) => (
-            <MeaningRow key={m.lawId + m.plain} m={m} onLaw={onLaw} />
+            <MeaningRow key={(m.kind === "law" ? m.lawId : "") + m.plain} m={m} onLaw={onLaw} />
           ))}
         </details>
       )}
@@ -144,6 +160,13 @@ export function Meanings({ term, onLaw }: { term: Term; onLaw: (lawId: string) =
 }
 
 function MeaningRow({ m, onLaw }: { m: Meaning; onLaw: (lawId: string) => void }) {
+  if (m.kind === "field")
+    return (
+      <div className="gloss-meaning">
+        <p>{m.plain}</p>
+        <p className="src-meta">💬 現場の言葉（意味は AI が付けました。元は親方の言葉）</p>
+      </div>
+    );
   return (
     <div className="gloss-meaning">
       <p>{m.plain}</p>
@@ -152,5 +175,31 @@ function MeaningRow({ m, onLaw }: { m: Meaning; onLaw: (lawId: string) => void }
         ⚖️ 条文の全文を見る ›
       </button>
     </div>
+  );
+}
+
+/**
+ * A card's words as told, with its own words (dialect, the company's names) underlined where each is first read;
+ * a tap shows the meaning. `texts` in reading order; render `sheet` once beside them.
+ */
+export function useCardWords(texts: string[], words: FieldWord[] | undefined) {
+  const [open, setOpen] = useState<Term | null>(null);
+  const local = fieldTerms(words);
+  const marks = firstMentions(texts, [], texts.map(() => local));
+  return {
+    show: (i: number) => <Glossed text={texts[i]} marks={marks[i] ?? []} onOpen={setOpen} />,
+    sheet: open && <GlossSheet term={open} onClose={() => setOpen(null)} />,
+  };
+}
+
+/** Under a card told in strong dialect: the same in standard Japanese (the AI's, so it says so). Nothing when empty. */
+export function PlainNote({ plain }: { plain?: string }) {
+  if (!plain) return null;
+  return (
+    <p className="plain-note">
+      <span className="plain-note-head">標準語では：</span>
+      {plain}
+      <span className="src-meta">（AI の言い換え。元は親方の言葉）</span>
+    </p>
   );
 }
