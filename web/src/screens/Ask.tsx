@@ -71,7 +71,7 @@ const GENERAL_PREVIEW = 2; // general sentences shown before 「もっと見る�
 
 // the last answer stays while other tabs are open (this screen unmounts), until the app is reloaded;
 // one per role (切替 shows the other role its own), with whether 助かった / 親方にも聞く was already pressed
-type Last = { asked: string; answer: Answer; helped?: boolean; sent?: boolean; sentNote?: string };
+type Last = { asked: string; answer: Answer; helped?: boolean; sent?: boolean; sentNote?: string; thanked?: boolean };
 const lastOf: Partial<Record<Role, Last>> = {};
 // a question still on its way: leaving the tab does not lose it. Coming back shows the waiting again, and an
 // answer that lands while away is kept in lastOf for the next opening
@@ -103,6 +103,8 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
   const [helped, setHelped] = useState(!!last?.helped);
   const [sent, setSent] = useState(!!last?.sent);
   const [sentNote, setSentNote] = useState(last?.sentNote ?? "");
+  // 親方にひとこと, under 助かった: once per answer (remembered in lastOf)
+  const [thanked, setThanked] = useState(!!last?.thanked);
   const [openLaw, setOpenLaw] = useState<{ id: string; quote?: string } | null>(null);
   const terms = useGlossary();
   const [gloss, setGloss] = useState<Term | null>(null);
@@ -135,6 +137,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
     setHelped(false);
     setSent(false);
     setSentNote("");
+    setThanked(false);
     setAsked(q.trim());
     delete lastOf[role];
     const p: Pending = { asked: q.trim(), done: call<Answer>("ask", { text: q.trim(), askerRole: role, ...(after ? { after } : {}) }) };
@@ -463,6 +466,17 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
             </button>
             )}
           </div>
+          {/* a veteran's card helped (just now, not an answer thanked before): a few words to the veteran, if they like */}
+          {helped && !answer.helpedBefore && answer.sentences.some((x) => x.source === "wisdom") && (
+            <ThanksNote
+              answerId={answer.answerId}
+              done={thanked}
+              onDone={() => {
+                setThanked(true);
+                remember({ thanked: true });
+              }}
+            />
+          )}
           {boxErr && (
             <p className="hint error" role="alert">
               {boxErr}
@@ -479,6 +493,46 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
       )}
       {envelope}
     </section>
+  );
+}
+
+/** 親方にひとこと: a short thanks to the veterans whose cards helped. Checked on the server before it reaches them. */
+function ThanksNote({ answerId, done, onDone }: { answerId: string; done: boolean; onDone: () => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  if (done) return <p className="thanks-done" role="status">✉️ 親方に届けました</p>;
+  async function send() {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await call<{ sent: boolean; reason?: string }>("sendThanks", { answerId, text: text.trim() });
+      if (r.sent) onDone();
+      else setErr(r.reason || "親方に届けられない言葉が入っているようです。言い回しを変えてください");
+    } catch (e) {
+      setErr(errorText(e, "届けられませんでした。電波の良い所で、もう一度お試しください。"));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="thanks-box">
+      <label className="thanks-box-head" htmlFor={`thanks-${answerId}`}>
+        親方にひとこと（なくても大丈夫・60字まで）
+      </label>
+      <div className="thanks-box-row">
+        <input id={`thanks-${answerId}`} value={text} maxLength={60} placeholder="例: おかげで通線できました" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && void send()} />
+        <button className="secondary" disabled={busy || !text.trim()} onClick={() => void send()}>
+          {busy ? "送っています…" : "送る"}
+        </button>
+      </div>
+      {err && (
+        <p className="hint error" role="alert">
+          {err}
+        </p>
+      )}
+    </div>
   );
 }
 

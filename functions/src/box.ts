@@ -2,7 +2,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db, displayAuthor, reachesYoung, spaceOf, spacesOf, str, type CardDoc } from "./common";
-import { giveBackQuota, takeQuota } from "./limits";
+import { giveBackQuota, takeQuota, today } from "./limits";
 import { normalizeQuestion } from "./ask";
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ROUTER } from "./models";
@@ -183,8 +183,10 @@ export async function markGoodQuestion(data: Record<string, unknown>, uid: strin
 const BOX_LIST = 50;
 const ms = (t: Timestamp | null | undefined) => t?.toMillis() ?? 0;
 
-/** Open questions for a veteran (newest first, without photos; not the veteran's own). */
-export async function openQuestions(data: Record<string, unknown>, uid: string) {
+const lastAsked = (d: FirebaseFirestore.QueryDocumentSnapshot) => ms(d.get("lastAskedAt")) || ms(d.get("createdAt"));
+
+/** The open questions in this veteran's box (not the veteran's own), newest first. */
+async function openForVeteran(data: Record<string, unknown>, uid: string) {
   // only the small fields: the photos (up to 300KB each) stay in Firestore until one is opened
   const snap = await db
     .collection("questions")
@@ -192,8 +194,17 @@ export async function openQuestions(data: Record<string, unknown>, uid: string) 
     .where("status", "==", "open")
     .select("text", "askerName", "askerRole", "excludeVeteranId", "goodBy", "alsoAskerIds", "createdAt", "hasPhoto", "photoPart", "followUp", "lastAskedAt")
     .get();
-  const lastAsked = (d: FirebaseFirestore.QueryDocumentSnapshot) => ms(d.get("lastAskedAt")) || ms(d.get("createdAt"));
-  const list = snap.docs.filter((d) => d.get("excludeVeteranId") !== uid).sort((a, b) => lastAsked(b) - lastAsked(a));
+  return snap.docs.filter((d) => d.get("excludeVeteranId") !== uid).sort((a, b) => lastAsked(b) - lastAsked(a));
+}
+
+/** How many questions wait in this veteran's box, counted as the box lists them (わたしのカード). */
+export async function openQuestionCount(data: Record<string, unknown>, uid: string) {
+  return (await openForVeteran(data, uid)).length;
+}
+
+/** Open questions for a veteran (newest first, without photos; not the veteran's own). */
+export async function openQuestions(data: Record<string, unknown>, uid: string) {
+  const list = await openForVeteran(data, uid);
   return {
     more: Math.max(0, list.length - BOX_LIST),
     questions: list.slice(0, BOX_LIST).map((d) => ({
@@ -226,10 +237,11 @@ export async function questionPhoto(data: Record<string, unknown>, uid: string) 
 /** The questions this device asked, and the card that answered each. */
 export async function myQuestions(data: Record<string, unknown>, uid: string) {
   const spaces = spacesOf(data, uid);
-  const [mine, joined] = await Promise.all([
+  const [mine, joined, stats] = await Promise.all([
     db.collection("questions").where("companyId", "in", spaces).where("askerId", "==", uid).get(),
     // one field only (no composite index): the space is checked below
     db.collection("questions").where("alsoAskerIds", "array-contains", uid).get(),
+    youngStats(spaces, uid),
   ]);
   const docs = [...mine.docs, ...joined.docs.filter((d) => spaces.includes(d.get("companyId")))].filter((d) => d.get("status") !== "withdrawn");
   const snap = { docs };
@@ -241,6 +253,7 @@ export async function myQuestions(data: Record<string, unknown>, uid: string) {
   // who answered, as the card shows it (a hidden name stays hidden)
   const author = new Map(cards.map((c) => [c.id, shown(c) ? displayAuthor(c.data() as CardDoc) : null]));
   return {
+    stats,
     questions: snap.docs
       .map((d) => ({
         id: d.id,
@@ -259,6 +272,56 @@ export async function myQuestions(data: Record<string, unknown>, uid: string) {
         answeredAt: ms(d.get("answeredAt")),
       }))
       .sort((a, b) => b.createdAt - a.createdAt),
+  };
+}
+
+/** "YYYY-MM" of a moment, in Japan time (the months of わたしの記録 turn at midnight JST). */
+export const monthOf = (at: number) => today(at).slice(0, 7);
+export function monthBefore(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+const RECENT_UNDERSTOOD = 5;
+
+/**
+ * わたしの記録 (young): what this device came to understand (answers with a source behind them; the same question
+ * asked again is one, dated when it was first understood), and how many young workers the cards born from its own
+ * questions helped. Counted here, so the screen gets the numbers and a few lines, not the answers.
+ */
+export async function youngStats(spaces: string[], uid: string, now = Date.now()) {
+  const [answers, asked] = await Promise.all([
+    // one field only (no composite index), and only the fields counted: answers grow with every question
+    db.collection("answers").where("askerId", "==", uid).select("companyId", "question", "grounded", "createdAt").get(),
+    db.collection("questions").where("askerId", "==", uid).select("companyId").get(),
+  ]);
+  const first = new Map<string, { text: string; at: number }>();
+  for (const d of answers.docs) {
+    if (d.get("grounded") !== true || !spaces.includes(d.get("companyId") as string)) continue;
+    const text = ((d.get("question") as string | undefined) ?? "").trim();
+    if (!text) continue;
+    const key = normalizeQuestion(text);
+    const at = ms(d.get("createdAt"));
+    const kept = first.get(key);
+    if (!kept || at < kept.at) first.set(key, { text, at });
+  }
+  const understood = [...first.values()].sort((a, b) => b.at - a.at);
+  const thisMonth = monthOf(now);
+  const lastMonth = monthBefore(thisMonth);
+  // cards whose talk began from one of this device's questions (one field, 30 ids a query)
+  const ids = asked.docs.filter((d) => spaces.includes(d.get("companyId") as string)).map((d) => d.id);
+  let grownHelped = 0;
+  for (let i = 0; i < ids.length; i += 30) {
+    const cards = await db.collection("cards").where("triggerQuestionId", "in", ids.slice(i, i + 30)).select("companyId", "status", "lawCheckVer", "helpedCount").get();
+    for (const c of cards.docs) if (reachesYoung(c.data()) && spaces.includes(c.get("companyId") as string)) grownHelped += (c.get("helpedCount") as number | undefined) ?? 0;
+  }
+  return {
+    understood: {
+      total: understood.length,
+      thisMonth: understood.filter((u) => monthOf(u.at) === thisMonth).length,
+      lastMonth: understood.filter((u) => monthOf(u.at) === lastMonth).length,
+      recent: understood.slice(0, RECENT_UNDERSTOOD),
+    },
+    grownHelped,
   };
 }
 

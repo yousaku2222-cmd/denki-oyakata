@@ -5,6 +5,8 @@ import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER, MODEL_FAITHFUL } from "./models";
 import { CATEGORIES, COMPANY, CardDoc, FieldTerm, LAW_CHECK_VER, LOCATIONS, Turn, db, spaceOf, spacesOf, str, strList, turns } from "./common";
 import { takeQuota } from "./limits";
+import { openQuestionCount } from "./box";
+import { thanksTo } from "./thanks";
 import { lawLabel, numbersMissing, searchLaws } from "./laws";
 import { CheckFields, MAX_SENTENCES, SavedCheck, Shown, cardSentences, runLawCheck, savedCheckShown, shownCard, termLine, termsText } from "./lawcheck";
 
@@ -480,7 +482,7 @@ export async function setCardStatus(data: Record<string, unknown>, uid: string, 
   return { ok: true };
 }
 
-export async function myCards(_data: Record<string, unknown>, uid: string) {
+export async function myCards(data: Record<string, unknown>, uid: string) {
   const [priv, legacy] = await Promise.all([
     db.collection("cardPrivate").where("authorId", "==", uid).get(),
     db.collection("cards").where("companyId", "==", COMPANY).where("authorId", "==", uid).get(),
@@ -488,21 +490,62 @@ export async function myCards(_data: Record<string, unknown>, uid: string) {
   const ids = [...new Set([...priv.docs.map((d) => d.id), ...legacy.docs.map((d) => d.id)])];
   const docs = ids.length ? (await db.getAll(...ids.map((id) => db.collection("cards").doc(id)))).filter((d) => d.exists) : [];
   const fullTitle = new Map(priv.docs.map((d) => [d.id, (d.get("full") as FullCard | undefined)?.title]));
-  return {
-    cards: docs
-      .map((d) => {
-        const c = d.data() as CardDoc;
-        return {
-          id: d.id,
-          title: fullTitle.get(d.id) ?? c.title, // the title as the veteran wrote it
-          status: c.status,
-          helpedCount: c.helpedCount,
-          triggerAskerName: c.triggerAskerName,
-          updatedAt: c.updatedAt.toMillis(),
-        };
-      })
-      .sort((a, b) => b.updatedAt - a.updatedAt),
-  };
+  const cards = docs
+    .map((d) => {
+      const c = d.data() as CardDoc;
+      return {
+        id: d.id,
+        title: fullTitle.get(d.id) ?? c.title, // the title as the veteran wrote it
+        status: c.status,
+        helpedCount: c.helpedCount,
+        triggerAskerName: c.triggerAskerName,
+        updatedAt: c.updatedAt.toMillis(),
+        publishedAt: c.publishedAt?.toMillis() ?? null, // the first time it went out (kept when hidden and shown again)
+        fromQuestion: !!c.triggerQuestionId, // told as the answer to a question in the box
+      };
+    })
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  // あなたの知恵が届いた先: the box waiting, the young workers' words, and the milestones (only what is needed)
+  const [openQuestions, thanks, helpAts] = await Promise.all([
+    openQuestionCount(data, uid),
+    thanksTo(uid, spacesOf(data, uid), new Map(cards.map((c) => [c.id, c.title]))),
+    helpTimes(cards.map((c) => c.id)),
+  ]);
+  return { cards, openQuestions, thanks, milestones: milestonesOf(cards, helpAts) };
+}
+
+/** When each 助かった to these cards was pressed (helps/{cardId}_{uid}, ask.ts), oldest first. 30 ids a query. */
+async function helpTimes(cardIds: string[]): Promise<number[]> {
+  const at: number[] = [];
+  for (let i = 0; i < cardIds.length; i += 30) {
+    const snap = await db.collection("helps").where("cardId", "in", cardIds.slice(i, i + 30)).select("at").get();
+    for (const d of snap.docs) at.push((d.get("at") as Timestamp | undefined)?.toMillis() ?? 0);
+  }
+  return at.sort((a, b) => a - b);
+}
+
+export type MilestoneKind = "firstCard" | "fifthCard" | "firstHelp" | "help10" | "help30" | "firstAnswer";
+const HELP_MILESTONES: [number, MilestoneKind][] = [[1, "firstHelp"], [10, "help10"], [30, "help30"]];
+
+/**
+ * The milestones reached, oldest first (the ones not reached are not listed). A 助かった milestone is dated by the
+ * helps that reached that number. Thanks counted before helps were kept (helpedCount above the helps found) have no
+ * date: they came first, so a milestone that falls among them is listed with at: null, shown as 「日付は記録前」 —
+ * it was reached, and its day is honestly not known (rather than leaving out a milestone that was reached, or
+ * dating it by a later help). Hidden cards count too: what was reached stays reached.
+ */
+export function milestonesOf(cards: { publishedAt: number | null; fromQuestion: boolean; helpedCount: number }[], helpAts: number[]) {
+  const out: { kind: MilestoneKind; at: number | null }[] = [];
+  const published = cards.flatMap((c) => (c.publishedAt ? [c.publishedAt] : [])).sort((a, b) => a - b);
+  if (published.length >= 1) out.push({ kind: "firstCard", at: published[0] });
+  if (published.length >= 5) out.push({ kind: "fifthCard", at: published[4] });
+  const answered = cards.flatMap((c) => (c.fromQuestion && c.publishedAt ? [c.publishedAt] : [])).sort((a, b) => a - b);
+  if (answered.length) out.push({ kind: "firstAnswer", at: answered[0] });
+  const helped = cards.reduce((t, c) => t + (c.helpedCount ?? 0), 0);
+  const undated = Math.max(0, helped - helpAts.length);
+  for (const [n, kind] of HELP_MILESTONES) if (helped >= n) out.push({ kind, at: n <= undated ? null : (helpAts[n - undated - 1] ?? null) });
+  // the undated ones came before any dated one
+  return out.sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
 }
 
 /** One of my cards, to go on editing it (a draft left behind, or a published card to fix). */

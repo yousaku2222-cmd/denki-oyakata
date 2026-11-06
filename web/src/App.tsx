@@ -248,7 +248,7 @@ export default function App() {
           </div>
         )}
         {tab === "box" && <Box onAnswer={startTalk} />}
-        {tab === "mycards" && <MyCards onEdit={(id) => startTalk(null, id)} />}
+        {tab === "mycards" && <MyCards onEdit={(id) => startTalk(null, id)} onOpenBox={() => setTab("box")} />}
         <p className="disclaimer">最終判断は、有資格者・責任者が行ってください。</p>
       </main>
 

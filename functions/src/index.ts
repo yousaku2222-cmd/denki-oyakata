@@ -7,6 +7,7 @@ import { interviewNext as interviewNextImpl, draftCard as draftCardImpl, publish
 import { ask as askImpl, markHelped as markHelpedImpl } from "./ask";
 import { sendToBox as sendToBoxImpl, markGoodQuestion as markGoodQuestionImpl, openQuestions as openQuestionsImpl, questionPhoto as questionPhotoImpl, myQuestions as myQuestionsImpl, talkSeeds as talkSeedsImpl, withdrawQuestion as withdrawQuestionImpl } from "./box";
 import { identifyPart as identifyPartImpl } from "./photo";
+import { sendThanks as sendThanksImpl, hideThanks as hideThanksImpl } from "./thanks";
 import { makeTransferCode as makeTransferCodeImpl, useTransferCode as useTransferCodeImpl } from "./transfer";
 import { listLaws as listLawsImpl, getLaw as getLawImpl, listGlossary as listGlossaryImpl } from "./laws";
 import { listCalcs as listCalcsImpl, runCalc } from "./calc";
@@ -86,6 +87,9 @@ export const ask = callable(askImpl, "self", KEEP_WARM);
 export const markHelped = callable(markHelpedImpl);
 // no count for Claude here: the short check before sending counts itself ("boxCheck") and is skipped when it fails
 export const sendToBox = callable(sendToBoxImpl, false, { secrets: [anthropicKey] });
+// counts itself ("thanks", which also stops at the budget), after the answer is known to be the caller's
+export const sendThanks = callable(sendThanksImpl, false, { secrets: [anthropicKey] });
+export const hideThanks = callable(hideThanksImpl);
 export const markGoodQuestion = callable(markGoodQuestionImpl);
 export const openQuestions = callable(openQuestionsImpl);
 export const talkSeeds = callable(talkSeedsImpl);

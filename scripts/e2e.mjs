@@ -136,6 +136,35 @@ catch (e) { check("no いい質問 on your own question", /FAILED_PRECONDITION|f
 const mine = await call("myCards", {}, vet);
 const pf = mine.cards.find((c) => c.id === d.cardId);
 check("helped count reached the veteran", pf?.helpedCount === 1, `cards=${mine.cards.length}`);
+
+// 5a. 親方にひとこと: under a helped answer, once, checked; it reaches the card's veteran without the sender's id.
+const linkThanks = await call("sendThanks", { answerId: a.answerId, text: "詳しくは https://example.com へ" }, young);
+check("a thanks with a link is not delivered", linkThanks.sent === false && !!linkThanks.reason);
+try { await call("sendThanks", { answerId: a.answerId, text: "助かりました" }, vet); check("a thanks on someone else's answer is refused", false); }
+catch (e) { check("a thanks on someone else's answer is refused", /PERMISSION_DENIED/.test(String(e))); }
+const th = await call("sendThanks", { answerId: a.answerId, text: "おかげで床の配管、通線できました" }, young);
+check("a thanks reaches the veteran", th.sent === true, JSON.stringify(th));
+try { await call("sendThanks", { answerId: a.answerId, text: "もう一回" }, young); check("one thanks per answer", false); }
+catch (e) { check("one thanks per answer", /FAILED_PRECONDITION/.test(String(e))); }
+const reach = await call("myCards", {}, vet);
+const youngId = JSON.parse(Buffer.from(young.split(".")[1], "base64url").toString()).user_id;
+check("the veteran sees the words, not who sent them", reach.thanks.some((x) => x.text === "おかげで床の配管、通線できました") && !JSON.stringify(reach).includes(youngId), JSON.stringify(reach.thanks));
+check("milestones: the first card and the first help", reach.milestones.some((m) => m.kind === "firstCard" && m.at) && reach.milestones.some((m) => m.kind === "firstHelp" && m.at), JSON.stringify(reach.milestones));
+check("thanks are not readable by clients", (await fetch(`${FS}/thanks/${reach.thanks[0]?.id}`, { headers: { Authorization: `Bearer ${vet}` } })).status === 403);
+try { await call("hideThanks", { thanksId: reach.thanks[0].id }, young); check("only the veteran can hide a thanks", false); }
+catch (e) { check("only the veteran can hide a thanks", /PERMISSION_DENIED/.test(String(e))); }
+await call("hideThanks", { thanksId: reach.thanks[0].id }, vet);
+check("a hidden thanks is gone", !(await call("myCards", {}, vet)).thanks.length);
+// わたしの記録: the PF question was asked twice and the 朝礼 one answered from its new card (the first 朝礼 answer had no source)
+const rec = (await call("myQuestions", {}, young)).stats;
+check("わたしの記録: the same question twice is one", rec?.understood.total === 2 && rec.understood.recent.some((r) => r.text === "PF管って何回まで曲げていいですか？"), JSON.stringify(rec));
+// with real Claude only: words not fit for a veteran's screen are stopped by the check
+if (a.mode === "claude") {
+  const rude = await call("sendThanks", { answerId: again.answerId, text: "こんなの常識やろ、親方のくせに説明下手すぎ" }, young);
+  check("rude words are not delivered", rude.sent === false, rude.reason ?? "");
+  const kind = await call("sendThanks", { answerId: again.answerId, text: "ほんなこつ助かったです、明日やってみます" }, young);
+  check("thanks in dialect are delivered", kind.sent === true, kind.reason ?? "");
+}
 check("clients cannot write directly", (await fetch(`${FS}/cards?documentId=x`, { method: "POST", body: JSON.stringify({ fields: { title: { stringValue: "x" } } }) })).status === 403);
 
 // 5b. Editing a hidden card keeps it hidden.

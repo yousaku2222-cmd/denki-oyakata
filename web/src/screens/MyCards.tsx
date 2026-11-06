@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { animate, motion } from "motion/react";
+import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
 import { fmtDate } from "../components";
 import { Transfer } from "../Transfer";
+import { CountOnce, RecordFrame } from "../Record";
 
 interface Mine {
   id: string;
@@ -11,7 +12,25 @@ interface Mine {
   helpedCount: number;
   triggerAskerName: string | null;
   updatedAt: number;
+  publishedAt: number | null;
+  fromQuestion: boolean;
 }
+
+/** What myCards returns besides the cards: the box waiting, the young workers' words, and what was reached. */
+interface Reach {
+  openQuestions: number;
+  thanks: { id: string; text: string; cardTitle: string | null; createdAt: number }[];
+  milestones: { kind: MilestoneKind; at: number | null }[];
+}
+type MilestoneKind = "firstCard" | "fifthCard" | "firstHelp" | "help10" | "help30" | "firstAnswer";
+const MILESTONE: Record<MilestoneKind, string> = {
+  firstCard: "はじめての知恵カードを公開",
+  fifthCard: "知恵カード5枚目を公開",
+  firstHelp: "若手の役に初めて立った",
+  help10: "10人の若手の役に立った",
+  help30: "30人の若手の役に立った",
+  firstAnswer: "質問箱の質問に初めて答えた",
+};
 
 const STATUS = { draft: "下書き", published: "公開中", private: "非公開" };
 
@@ -39,18 +58,78 @@ export function newlyHelped(cards: { id: string; helpedCount: number; status?: s
   });
 }
 
-/** The total, counted up from what was seen last time. */
-function CountUp({ from, to }: { from: number; to: number }) {
-  const [n, setN] = useState(from);
-  useEffect(() => {
-    const a = animate(from, to, { duration: Math.min(1.6, 0.4 + (to - from) * 0.15), ease: "easeOut", onUpdate: (v) => setN(Math.round(v)) });
-    return () => a.stop();
-  }, [from, to]);
-  return <>{n}</>;
+/**
+ * あなたの知恵が届いた先: one quiet frame above the cards. What the veteran's words did, the questions waiting for
+ * them, and what young workers wrote back. Only what happened is shown (nothing to unlock, no ranks).
+ */
+function ReachFrame({ cards, reach, onOpenBox, onHide }: { cards: Mine[]; reach: Reach; onOpenBox: () => void; onHide: (id: string) => void }) {
+  const live = cards.filter((c) => c.status === "published");
+  const helped = live.reduce((n, c) => n + c.helpedCount, 0);
+  const best = live.reduce<Mine | null>((b, c) => (c.helpedCount > (b?.helpedCount ?? 0) ? c : b), null);
+  return (
+    <RecordFrame className="reach" label="あなたの知恵が届いた先">
+      <p className="record-kicker">あなたの知恵が届いた先</p>
+      {helped > 0 ? (
+        <p className="record-lead">
+          あなたの知恵で、<span className="record-num"><CountOnce to={helped} /></span>人の若手が助かりました
+        </p>
+      ) : (
+        <p className="record-lead">若手の役に立つと、ここに届きます</p>
+      )}
+      {reach.openQuestions > 0 && (
+        <div className="record-row">
+          <span>📮 若手の質問が{reach.openQuestions}件、あなたを待っています</span>
+          <button className="secondary" onClick={onOpenBox}>
+            質問箱を見る
+          </button>
+        </div>
+      )}
+      {best && (
+        <div className="record-part">
+          <p className="record-sub">いちばん役に立ったカード</p>
+          <p className="record-best">
+            「{best.title}」<span className="record-count">👍 {best.helpedCount}</span>
+          </p>
+        </div>
+      )}
+      {reach.thanks.length > 0 && (
+        <div className="record-part">
+          <p className="record-sub">届いたひとこと</p>
+          <ul className="record-thanks">
+            {reach.thanks.map((t) => (
+              <li key={t.id}>
+                <p className="record-thanks-text">{t.text}</p>
+                <p className="src-meta">
+                  若手より{t.cardTitle ? `・「${t.cardTitle}」` : ""}・{fmtDate(t.createdAt)}
+                  <button className="link record-hide" onClick={() => onHide(t.id)}>
+                    表示しない
+                  </button>
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {reach.milestones.length > 0 && (
+        <div className="record-part">
+          <p className="record-sub">節目の記録</p>
+          <ul className="record-milestones">
+            {reach.milestones.map((m) => (
+              <li key={m.kind}>
+                <span className="record-date">{m.at ? fmtDate(m.at) : "（日付は記録前）"}</span>
+                <span>{MILESTONE[m.kind]}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </RecordFrame>
+  );
 }
 
-export function MyCards({ onEdit }: { onEdit: (cardId: string) => void }) {
+export function MyCards({ onEdit, onOpenBox }: { onEdit: (cardId: string) => void; onOpenBox: () => void }) {
   const [cards, setCards] = useState<Mine[] | null>(null);
+  const [reach, setReach] = useState<Reach | null>(null);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [openCard, setOpenCard] = useState<string | null>(null);
@@ -61,16 +140,31 @@ export function MyCards({ onEdit }: { onEdit: (cardId: string) => void }) {
   }, [cards]);
   const load = useCallback(() => {
     setErr("");
-    call<{ cards: Mine[] }>("myCards", {})
-      .then((r) => setCards(r.cards))
+    call<{ cards: Mine[] } & Reach>("myCards", {})
+      .then((r) => {
+        setCards(r.cards);
+        setReach({ openQuestions: r.openQuestions ?? 0, thanks: r.thanks ?? [], milestones: r.milestones ?? [] });
+      })
       .catch((e) => setErr(errorText(e, "カードを読み込めませんでした。電波の良い所で、ページを開き直してください。")));
   }, []);
   useEffect(load, [load]);
 
-  const total = cards?.reduce((n, c) => n + (c.status === "published" ? c.helpedCount : 0), 0) ?? 0;
   const fresh = cards ? newlyHelped(cards, seen) : [];
   const freshOf = new Map(fresh.map((f) => [f.id, f.n]));
   const freshTotal = fresh.reduce((t, f) => t + f.n, 0);
+
+  // 「表示しない」: gone from the frame at once; brought back if the server did not take it
+  async function hideThanks(id: string) {
+    const before = reach;
+    setReach((r) => (r ? { ...r, thanks: r.thanks.filter((t) => t.id !== id) } : r));
+    setErr("");
+    try {
+      await call("hideThanks", { thanksId: id });
+    } catch (e) {
+      setReach(before);
+      setErr(errorText(e, "うまくいきませんでした。電波の良い所で、もう一度お試しください。"));
+    }
+  }
 
   async function act(c: Mine, name: string, data: Record<string, unknown>) {
     setBusy(c.id);
@@ -103,10 +197,14 @@ export function MyCards({ onEdit }: { onEdit: (cardId: string) => void }) {
           </ul>
         </motion.div>
       )}
-      <div className="stat">
-        <span className="stat-num">{cards === null ? "—" : <CountUp from={Math.max(0, total - freshTotal)} to={total} />}</span>
-        <span>回、あなたの知恵が若手を助けました</span>
-      </div>
+      {cards && reach ? (
+        <ReachFrame cards={cards} reach={reach} onOpenBox={onOpenBox} onHide={(id) => void hideThanks(id)} />
+      ) : (
+        <div className="stat">
+          <span className="stat-num">—</span>
+          <span>人の若手が、あなたの知恵で助かりました</span>
+        </div>
+      )}
       {cards === null && !err && <p className="hint">読み込み中…</p>}
       {err && <p className="hint error">{err}</p>}
       {cards?.length === 0 && <p className="empty">まだカードがありません。「話す」から始めましょう。</p>}

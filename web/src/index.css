@@ -2800,3 +2800,34 @@ button.law-badge-go { border: 1px solid var(--law); min-height: 28px; font: inhe
 /* 仕様書（法令でない）と違うやり方の文に添える言葉 */
 .spec-note { margin: 6px 0 0; padding: 0; list-style: none; font-size: var(--fs-xs); color: var(--note-fg); }
 .spec-note li { margin: 2px 0; padding: 4px 8px; border-radius: var(--r-s); background: var(--note-bg); }
+/* あなたの知恵が届いた先（わたしのカード）・わたしの記録（わたし）: a quiet frame, like a letter of thanks */
+.record { margin: 0 0 14px; padding: 14px 16px; border: 1px solid var(--line); border-top: 4px solid var(--wisdom); border-radius: var(--r-m); background: var(--surface); color: var(--text); overflow-wrap: anywhere; }
+.record-kicker { margin: 0 0 2px; font-size: var(--fs-xs); font-weight: 700; color: var(--muted); letter-spacing: 0.08em; }
+.record-private { margin: 0 0 6px; font-size: var(--fs-xs); color: var(--muted); }
+.record-lead { margin: 0; font-size: var(--fs-l); font-weight: 700; line-height: 1.5; }
+.record-num { font-size: 2rem; font-weight: 800; color: var(--wisdom); margin: 0 2px; font-variant-numeric: tabular-nums; }
+.record-months { display: inline-block; font-size: var(--fs-s); font-weight: 400; color: var(--muted); }
+.record-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: var(--fs-m); }
+.record-row > span { flex: 1 1 12em; }
+.record-part { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--line); font-size: var(--fs-m); }
+.record-sub { margin: 0 0 4px; font-size: var(--fs-s); font-weight: 700; color: var(--muted); }
+.record-best { margin: 0; font-weight: 700; }
+.record-count { margin-left: 6px; color: var(--wisdom); white-space: nowrap; }
+.record-thanks, .record-milestones, .record-asked, .record-links { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.record-thanks li { padding: 8px 10px; border-left: 3px solid var(--wisdom); border-radius: var(--r-s); background: var(--wisdom-bg); }
+.record-thanks-text { margin: 0; color: var(--text); }
+.record-thanks .src-meta { margin: 2px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+.record-hide { margin-left: auto; min-height: 32px; font-size: var(--fs-xs); }
+.record-milestones li, .record-asked li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
+.record-date { font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.record-milestones .record-date { min-width: 5.5em; }
+.record-asked { margin-top: 6px; }
+.record-asked .link { min-height: 36px; padding: 2px 0; text-align: left; white-space: normal; color: var(--text); }
+.record-links li { font-size: var(--fs-s); }
+/* 聞く: 親方にひとこと, under 👍 助かった */
+.thanks-box { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); }
+.thanks-box-head { display: block; margin: 0 0 6px; font-size: var(--fs-s); color: var(--muted); }
+.thanks-box-row { display: flex; gap: 8px; }
+.thanks-box-row input { flex: 1; min-width: 0; }
+.thanks-box-row button { flex: none; }
+.thanks-done { margin: 8px 0 0; font-size: var(--fs-s); color: var(--wisdom); font-weight: 700; }

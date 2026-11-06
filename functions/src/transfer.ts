@@ -71,6 +71,9 @@ export async function useTransferCode(data: Record<string, unknown>, uid: string
   const cards = new Set([...privSnap.docs.map((d) => d.id), ...legacy.docs.map((d) => d.id)]).size;
   const questions = await move("questions", "askerId", from, uid, (d) => (d.excludeVeteranId === from ? { excludeVeteranId: uid } : {}));
   await move("answers", "askerId", from, uid);
+  // the young workers' thanks to the cards go with them (one field only; the array keeps the other veterans)
+  const thanks = await db.collection("thanks").where("authorIds", "array-contains", from).get();
+  for (const d of thanks.docs) await d.ref.update({ authorIds: ((d.get("authorIds") as string[]) ?? []).map((x) => (x === from ? uid : x)) });
   const user = await db.collection("users").doc(from).get();
   if (user.exists) await db.collection("users").doc(uid).set(user.data()!, { merge: true });
   return { cards, questions };

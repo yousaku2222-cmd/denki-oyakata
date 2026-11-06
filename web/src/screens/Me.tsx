@@ -4,6 +4,7 @@ import { call, errorText } from "../firebase";
 import { getName, getParts, savePart, setName, type PartEntry } from "../local";
 import { fmtDate, LoadFailed, Skeleton } from "../components";
 import { Transfer } from "../Transfer";
+import { CountOnce, RecordFrame } from "../Record";
 
 interface Q {
   id: string;
@@ -17,6 +18,57 @@ interface Q {
   askers: number; // people who sent this same question
   createdAt: number;
   answeredAt: number;
+}
+
+/** わたしの記録, counted on the server (myQuestions): only this device's own. */
+interface Stats {
+  understood: { total: number; thisMonth: number; lastMonth: number; recent: { text: string; at: number }[] };
+  grownHelped: number; // young workers helped by the cards born from this device's questions
+}
+
+/**
+ * わたしの記録: what this device came to understand and who answered it. Seen by no one else, and compared with no
+ * one (no ranks, no streaks).
+ */
+function MyRecord({ stats, answered, onAsk }: { stats: Stats; answered: Q[]; onAsk: (text: string) => void }) {
+  const u = stats.understood;
+  // the name only when the card shows it (「社内のベテラン」 is the card's word for a hidden one)
+  const who = (q: Q) => (q.answeredBy && q.answeredBy !== "社内のベテラン" ? `${q.answeredBy}さんが` : "親方が");
+  const short = (s: string) => (s.length > 30 ? s.slice(0, 29) + "…" : s);
+  return (
+    <RecordFrame className="my-record" label="わたしの記録">
+      <p className="record-private">この記録は、あなたにしか見えません</p>
+      <p className="record-lead">
+        📘 わかったこと <span className="record-num"><CountOnce to={u.total} /></span>件
+        <span className="record-months">（今月 {u.thisMonth}件・先月 {u.lastMonth}件）</span>
+      </p>
+      {u.recent.length > 0 && (
+        <ul className="record-asked">
+          {u.recent.map((r) => (
+            <li key={r.text}>
+              <button className="link" onClick={() => onAsk(r.text)}>
+                {short(r.text)}
+              </button>
+              <span className="record-date">{fmtDate(r.at)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {answered.length > 0 && (
+        <div className="record-part">
+          <p className="record-sub">🤝 親方とつながった {answered.length}件</p>
+          <ul className="record-links">
+            {answered.slice(0, 3).map((q) => (
+              <li key={q.id}>
+                「{short(q.text)}」→ {who(q)}カードで答えてくれました
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {stats.grownHelped > 0 && <p className="record-part">🌱 あなたの質問から生まれたカードが、ほかの若手を{stats.grownHelped}人助けました</p>}
+    </RecordFrame>
+  );
 }
 
 // When this device last saw its answers, so the ones that came back since then are announced at the top.
@@ -39,6 +91,7 @@ function markSeen(at: number) {
 /** わたし (young): the answers that came back come first; settings go to the bottom. */
 export function Me({ onAskAgain, onAsk }: { onAskAgain: (text: string, questionId: string) => void; onAsk: (text: string) => void }) {
   const [items, setItems] = useState<Q[] | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [err, setErr] = useState("");
   const [name, setNameState] = useState(getName("young"));
   const [parts, setParts] = useState(getParts);
@@ -53,9 +106,10 @@ export function Me({ onAskAgain, onAsk }: { onAskAgain: (text: string, questionI
   // read through Functions (questions are not readable from the screen: they carry device ids and photos)
   const load = useCallback(() => {
     setErr("");
-    call<{ questions: Q[] }>("myQuestions", {})
+    call<{ questions: Q[]; stats?: Stats }>("myQuestions", {})
       .then((r) => {
         setItems(r.questions);
+        setStats(r.stats ?? null);
         // the news stays for this visit; next time only answers newer than these are news
         const newest = Math.max(0, ...r.questions.map((q) => q.answeredAt));
         if (newest > lastSeen()) markSeen(newest);
@@ -118,6 +172,7 @@ export function Me({ onAskAgain, onAsk }: { onAskAgain: (text: string, questionI
   return (
     <section className="screen">
       <h1 className="screen-title">わたし</h1>
+      {stats && <MyRecord stats={stats} answered={answered} onAsk={onAsk} />}
 
       {news.map((q, i) => (
         <motion.div

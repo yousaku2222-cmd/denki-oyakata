@@ -14,6 +14,7 @@ export const BOX_PER_USER_PER_DAY = 20;
 export const BOX_ALL_USERS_PER_DAY = 300;
 export const PUBLISH_PER_USER_PER_DAY = 10;
 export const PUBLISH_ALL_USERS_PER_DAY = 100;
+export const THANKS_PER_USER_PER_DAY = 10;
 export const PHOTOS_PER_DAY = 150; // a photo also counts as two answers (index.ts); this caps photos on their own
 
 export const PUBLISH_EDITS_PER_DAY = 20; // fixing or hiding a published card: each one makes the saved answers stale
@@ -33,6 +34,8 @@ export const CAPS = {
   // the check before a question goes in the box (box.ts, one short Haiku call): counted apart from the box itself.
   // Once full, questions go in without the check (sent unchecked is better than not sent).
   boxCheck: { prefix: "bc_", user: BOX_PER_USER_PER_DAY * 2, ip: BOX_PER_USER_PER_DAY * 6, all: BOX_ALL_USERS_PER_DAY * 5, userMsg: () => "今日は確かめの回数が上限です。", allMsg: "今日は確かめの回数が上限です。" },
+  // 若手の「親方にひとこと」 (thanks.ts, one short Haiku check each): a handful a day is plenty for real thanks
+  thanks: { prefix: "th_", user: THANKS_PER_USER_PER_DAY, ip: THANKS_PER_USER_PER_DAY * 3, all: 1000, userMsg: (n: number) => `親方へのひとことは、この端末から1日 ${n} 件までです。`, allMsg: "今日は親方へのひとことが上限に達しました。また明日お試しください。" },
   box: { prefix: "box_", user: BOX_PER_USER_PER_DAY, ip: BOX_PER_USER_PER_DAY * 3, all: BOX_ALL_USERS_PER_DAY, userMsg: (n: number) => `質問箱に送れるのは、この端末から1日 ${n} 件までです。`, allMsg: "今日は質問箱がいっぱいです。また明日お試しください。" },
   publish: { prefix: "pub_", user: PUBLISH_PER_USER_PER_DAY, ip: PUBLISH_PER_USER_PER_DAY * 3, all: PUBLISH_ALL_USERS_PER_DAY, userMsg: (n: number) => `新しく公開できるカードは、この端末から1日 ${n} 枚までです。`, allMsg: "今日はこれ以上カードを公開できません。また明日お試しください。" },
   edit: { prefix: "ed_", user: PUBLISH_EDITS_PER_DAY, ip: PUBLISH_EDITS_PER_DAY * 3, all: 300, userMsg: (n: number) => `公開したカードの直し・公開と非公開の切り替えは、この端末から1日 ${n} 回までです。`, allMsg: "今日はこれ以上カードを直せません。また明日お試しください。" },
@@ -177,7 +180,7 @@ const IP_MSG = "今日は同じ回線からの利用が上限に達しました�
 export async function takeQuota(uid: string, kind: QuotaKind = "claude", ip = "", now = Date.now()): Promise<void> {
   const cfg = await limitsConfig(now);
   const cap = capOf(kind, cfg);
-  if (kind === "claude" || kind === "photo" || kind === "boxCheck") await checkBudget(now, cfg);
+  if (kind === "claude" || kind === "photo" || kind === "boxCheck" || kind === "thanks") await checkBudget(now, cfg);
   const day = today(now);
   const usage = db.collection("usage");
   const count = (s: FirebaseFirestore.DocumentSnapshot) => (s.get("count") as number | undefined) ?? 0;
