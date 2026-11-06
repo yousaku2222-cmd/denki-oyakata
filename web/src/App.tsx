@@ -320,7 +320,7 @@ function VeteranAsk({ role }: { role: Role }) {
 const TRIAL_STEPS: { on: Role; text: string; short: string }[] = [
   { on: "veteran", text: "ベテランで「🧪 見本の話で試す」→ 話を送って、カードにする", short: "ベテランで「🧪 見本の話」→ カードにする" },
   { on: "young", text: "「🔰 若手として聞いてみる」で聞くと、さっき話した言葉が緑の札で出る（約30秒かかります）", short: "若手で聞くと、話した言葉が緑の札で出る（約30秒）" },
-  { on: "young", text: "「よく聞かれる質問」を押すと、保存した答えが一瞬で出る（根拠と「✔ 原文と一致」を見る）", short: "「よく聞かれる質問」は一瞬で出る" },
+  { on: "young", text: "「よく聞かれる質問」を押すと、保存した答えが一瞬で出る（根拠と「✔ 原文と一致」を見る。さっきの話に近い質問だけは、あなたのカードを入れて作るので初回は約20秒）", short: "「よく聞かれる質問」は一瞬で出る（話に近い質問は初回だけ約20秒）" },
 ];
 
 /** 審査員モード on a phone (the PC has TrialGuide beside the app): the 3 steps, the ones of this role in bold. */
@@ -426,7 +426,7 @@ function Entry({ onChoose, last }: { onChoose: (r: Role, trial?: boolean) => voi
         <small>現場の疑問に、根拠つきで答えます</small>
       </button>
       {getTrial() ? (
-        <p className="trial-note entry-trial">🧪 審査員モード中です。① ベテランで見本の話をカードにする ② 若手で聞くと、その言葉が緑の札で出る（約30秒） ③「よく聞かれる質問」は一瞬で出ます。</p>
+        <p className="trial-note entry-trial">🧪 審査員モード中です。① ベテランで見本の話をカードにする ② 若手で聞くと、その言葉が緑の札で出る（約30秒） ③「よく聞かれる質問」は一瞬で出ます（さっきの話に近い質問は、初回だけ約20秒）。</p>
       ) : (
         // as strong as the two roles: the judges are the first ones to open this. It starts on the veteran's side
         // (the sample story), so the card it makes is in the young worker's answer after

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { callerIp } from "./limits";
-import { cacheKey, normalizeQuestion, type Card } from "./ask";
+import { cacheKey, normalizeQuestion, trialCacheId, type Card } from "./ask";
 import { spaceOf, spacesOf } from "./common";
 
 test("callerIp takes the address Google appended, not what the caller sent", () => {
@@ -42,4 +42,16 @@ test("trial mode can only ever pick the caller's own space", () => {
   assert.equal(spaceOf({ trial: true }, "u1"), "trial_u1");
   assert.deepEqual(spacesOf({ trial: true }, "u1"), ["demo", "trial_u1"]);
   assert.deepEqual(spacesOf({}, "u1"), ["demo"]);
+});
+
+test("an answer made with a judge's cards is saved apart from the shared one, per judge", () => {
+  const shared = { id: "s1", companyId: "demo" } as Card;
+  const mine = { id: "t1", companyId: "trial_u1" } as Card;
+  const theirs = { id: "t2", companyId: "trial_u2" } as Card;
+  const q = cacheKey("PF管って何回まで曲げていい？", [shared]).id;
+  const a = trialCacheId(q, [shared, mine]);
+  assert.notEqual(a, q); // never overwrites the shared saved answer
+  assert.ok(a.startsWith(q));
+  assert.equal(a, trialCacheId(q, [mine, shared])); // the same judge gets it again
+  assert.notEqual(a, trialCacheId(q, [shared, theirs])); // another judge does not
 });

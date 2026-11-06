@@ -237,6 +237,12 @@ export function cacheKey(text: string, cards: Card[]): { id: string; ver: string
   return { id: createHash("sha256").update(normalizeQuestion(text)).digest("hex").slice(0, 32), ver };
 }
 
+/** The saved-answer doc for a question answered with trial cards: the question's id plus the trial cards' ids. */
+export function trialCacheId(questionId: string, cards: Card[]): string {
+  const trialIds = cards.filter((c) => c.companyId !== COMPANY).map((c) => c.id).sort().join(",");
+  return `${questionId}_t${createHash("sha256").update(trialIds).digest("hex").slice(0, 16)}`;
+}
+
 /** A judge's own cards matter to a question at this score or above (lower than the answer's search: on the safe side). */
 const TRIAL_MATCH = 0.4;
 
@@ -259,9 +265,12 @@ export async function ask(data: Record<string, unknown>, uid: string, ctx?: { ch
   const trialHit = searchCards(text, all.filter((c) => c.companyId !== COMPANY), 1, TRIAL_MATCH).length > 0;
   const cards = trialHit ? all : all.filter((c) => c.companyId === COMPANY);
 
-  const cacheable = getClient() !== null && !trialHit;
+  const cacheable = getClient() !== null;
   const key = cacheKey(text, cards);
-  const cacheRef = db.collection("askCache").doc(key.id);
+  // An answer made with a judge's own cards is saved apart (its own doc per question and set of trial cards), so it
+  // never replaces the shared saved answer and the same judge gets it at once the next time.
+  const cacheId = trialHit ? trialCacheId(key.id, cards) : key.id;
+  const cacheRef = db.collection("askCache").doc(cacheId);
   let out: Composed | null = null;
   let cached = false;
   if (cacheable) {
