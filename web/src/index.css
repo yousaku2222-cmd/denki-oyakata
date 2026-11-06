@@ -1737,8 +1737,14 @@ input[inputmode="decimal"] {
   padding: 8px 12px;
   background: var(--surface);
 }
-.told summary {
+.told-title {
+  margin: 0;
+  font-size: var(--fs-s);
   font-weight: 700;
+}
+.told summary {
+  margin-top: 6px;
+  color: var(--muted);
   cursor: pointer;
 }
 .told .transcript {

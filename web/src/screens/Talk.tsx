@@ -53,6 +53,8 @@ const STARTERS = [
   "先輩から教わって、今も守っていることは？",
 ];
 const STARTERS_SHOWN = 3;
+/** Up to this many lines of the talk are shown as they are when fixing a card (4 exchanges); a longer one folds the middle. */
+const TOLD_OPEN = 8;
 // 審査員モード: a story to send, for a judge who has none of their own
 const SAMPLE_STORY = "PF管はな、90度の曲がりが3つあったら線が通らん。そん時は途中にプルボックスを入れる。新人は無理に引っぱって、線の被覆を傷めることが多いけん、通らんと思ったら手を止めさせよる。";
 // the listener asks back after the sample story: a judge has no site's answer of their own
@@ -488,17 +490,35 @@ export function Talk({
         <h1 className="screen-title">{status === "draft" ? "知恵カードの下書き" : "知恵カードを直す"}</h1>
         {topicNote}
         {toldShown.length > 0 && (
-          <details className="told">
-            <summary>🎙️ 聞き取りのやりとり（直す前に、話した内容を確かめる）</summary>
-            <ol className="transcript">
-              {toldShown.map((x, i) => (
+          // open from the start: fixing a card later, the veteran needs to see what was asked and said (a closed
+          // box went unnoticed). A long talk shows the first question and the last two exchanges; the rest opens.
+          <section className="told" aria-label="このカードのもとになった話">
+            <h2 className="told-title">🎙️ このカードのもとになった話</h2>
+            {(() => {
+              const long = toldShown.length > TOLD_OPEN;
+              const head = long ? toldShown.slice(0, 1) : toldShown;
+              const mid = long ? toldShown.slice(1, -4) : [];
+              const tail = long ? toldShown.slice(-4) : [];
+              const row = (x: Turn, i: number) => (
                 <li key={i} className={x.role}>
                   <span className="who">{x.role === "ai" ? "AI" : "あなた"}</span>
                   {x.text}
                 </li>
-              ))}
-            </ol>
-          </details>
+              );
+              return (
+                <>
+                  <ol className="transcript">{head.map(row)}</ol>
+                  {mid.length > 0 && (
+                    <details>
+                      <summary>途中のやりとりを全部見る（{mid.length}件）</summary>
+                      <ol className="transcript">{mid.map(row)}</ol>
+                    </details>
+                  )}
+                  {tail.length > 0 && <ol className="transcript">{tail.map(row)}</ol>}
+                </>
+              );
+            })()}
+          </section>
         )}
         <p className="hint">
           {status === "draft"
