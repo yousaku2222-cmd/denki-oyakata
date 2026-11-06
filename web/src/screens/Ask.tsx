@@ -43,6 +43,7 @@ function Stamp({ n, of }: { n: number; of: number }) {
 
 interface Answer {
   answerId: string;
+  helpedBefore?: boolean; // this asker already said 助かった to every card in it (asked again): the button starts as done
   interpretedAs: string;
   conclusion?: string | null; // written from the sentences below (Haiku), numbers checked by the program
   sentences: Sentence[];
@@ -89,7 +90,8 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
   const [asked, setAsked] = useState(pending?.asked ?? last?.asked ?? "");
   const setAnswer = (a: Answer | null, q = asked) => {
     setAnswerState(a);
-    if (a) lastOf[role] = { asked: q, answer: a };
+    setHelped(!!a?.helpedBefore);
+    if (a) lastOf[role] = { asked: q, answer: a, helped: !!a.helpedBefore };
   };
   const remember = (more: Partial<Last>) => {
     const l = lastOf[role];
@@ -141,7 +143,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
       (a) => {
         if (pendingOf[role] !== p) return;
         delete pendingOf[role];
-        lastOf[role] = { asked: p.asked, answer: a };
+        lastOf[role] = { asked: p.asked, answer: a, helped: !!a.helpedBefore };
       },
       () => {
         if (pendingOf[role] === p) delete pendingOf[role];
@@ -446,7 +448,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
                   👍
                 </motion.span>{" "}
                 {/* only a veteran's card gets the thanks (markHelped counts the cards the answer used) */}
-                {helped ? (answer.sentences.some((x) => x.source === "wisdom") ? "親方に届きました" : "ありがとうございます") : "助かった"}
+                {helped ? (answer.helpedBefore ?"前にも親方に届けました" : answer.sentences.some((x) => x.source === "wisdom") ? "親方に届きました" : "ありがとうございます") : "助かった"}
                 {plusOne > 0 && (
                   <motion.span key={`plus-${plusOne}`} className="plus-one" aria-hidden initial={{ opacity: 0, y: 0 }} animate={{ opacity: [0, 1, 0], y: -38 }} transition={{ duration: 0.9, ease: "easeOut" }}>
                     👍 +1

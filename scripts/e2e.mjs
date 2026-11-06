@@ -59,6 +59,10 @@ const a = await call("ask", { text: "PF管って何回まで曲げていいで�
 check("answer grounded in the card", a.grounded && a.sentences.some((s) => s.source === "wisdom" && s.cardId === d.cardId), `[${a.mode}] ${a.sentences.length} sentences`);
 if (a.mode === "claude") for (const s of a.sentences) console.log(`     [${s.source}] ${s.text}`);
 await call("markHelped", { answerId: a.answerId }, young);
+// asked again (わたし → 答えを聞く): a new answer, but the same person's 助かった is not counted twice
+const again = await call("ask", { text: "PF管って何回まで曲げていいですか？", askerRole: "young" }, young);
+const helpedAgain = await call("markHelped", { answerId: again.answerId }, young);
+check("asked again: 助かった starts as done and is not counted twice", again.helpedBefore === true && helpedAgain.counted === 0, `helpedBefore=${again.helpedBefore} counted=${helpedAgain.counted}`);
 
 // 3b. The mark of a card let out by the check (lawCheckVer): a published card without it (from before the check, or
 // written some other way) reaches young workers nowhere. Written here as the admin would, without going through publishCard.

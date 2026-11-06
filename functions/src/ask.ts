@@ -305,7 +305,10 @@ export async function ask(data: Record<string, unknown>, uid: string, ctx?: { ch
   }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { usedCardIds, usedLawIds, models, ...shown } = out;
-  return { answerId: ref.id, cached, ...shown };
+  // every card of this answer already had this asker's 助かった (asked again from わたし): the button starts as done
+  const helps = usedCardIds.length ? await db.getAll(...usedCardIds.map((id) => helpRef(id, askerId))) : [];
+  const helpedBefore = helps.length > 0 && helps.every((h) => h.exists);
+  return { answerId: ref.id, cached, helpedBefore, ...shown };
 }
 
 async function compose(text: string, cards: Card[]) {
@@ -493,19 +496,27 @@ async function compose(text: string, cards: Card[]) {
   };
 }
 
+/** One 助かった per person per card: asking the same question again (わたし → 答えを聞く) makes a new answer, not a new thanks. */
+const helpRef = (cardId: string, uid: string) => db.collection("helps").doc(`${cardId}_${uid}`);
+
 export async function markHelped(data: Record<string, unknown>, uid: string) {
   const answerId = str(data.answerId, "答えの番号", 64);
   const askerId = uid;
   const ref = db.collection("answers").doc(answerId);
-  await db.runTransaction(async (tx) => {
+  const counted = await db.runTransaction(async (tx) => {
     const a = await tx.get(ref);
     if (!a.exists) throw new HttpsError("not-found", "answer not found");
     if (a.get("askerId") !== askerId) throw new HttpsError("permission-denied", "not your answer");
-    if (a.get("helped")) return;
+    if (a.get("helped")) return 0;
+    const ids = a.get("usedCardIds") as string[];
+    const helps = ids.length ? await tx.getAll(...ids.map((id) => helpRef(id, askerId))) : [];
     tx.update(ref, { helped: true });
-    for (const id of a.get("usedCardIds") as string[]) {
+    const fresh = ids.filter((_, i) => !helps[i].exists);
+    for (const id of fresh) {
       tx.update(db.collection("cards").doc(id), { helpedCount: FieldValue.increment(1) });
+      tx.set(helpRef(id, askerId), { cardId: id, uid: askerId, answerId, at: Timestamp.now() });
     }
+    return fresh.length;
   });
-  return { ok: true };
+  return { ok: true, counted };
 }
