@@ -697,6 +697,7 @@ export function Talk({
         micLabel={turns.length ? "答える" : "話す"}
         onDone={busy ? undefined : (said) => void next(false, said)}
         onListening={setListening}
+        send={{ label: turns.length ? "答えを送る" : "話した内容を送る", busy, onSend: () => void next(false) }}
         rows={4}
         placeholder={
           turns.length
@@ -707,13 +708,8 @@ export function Talk({
         }
       />
       {err && <p className="hint error">{err}</p>}
-      {/* shown once something was said: a grey button that cannot be pressed only gets in the way. Not while
-          listening: the mic's own 「話し終わった（送る）」 sends then, with the last words */}
-      {(busy || (!!text.trim() && !listening)) && (
-        <button className="primary" disabled={busy} onClick={() => next(false)}>
-          {busy ? "考えています…" : turns.length ? "答えを送る" : "話した内容を送る"}
-        </button>
-      )}
+      {/* the send button is MicInput's: above the text once something was said, so the iPhone keyboard cannot hide it.
+          Not while listening: the mic's own 「話し終わった（送る）」 sends then, with the last words */}
       {sampleTold && !busy && !listening && !text.trim() && (
         <>
           <button className="secondary" onClick={() => setText(SAMPLE_REPLY)}>

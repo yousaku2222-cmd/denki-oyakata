@@ -79,6 +79,9 @@ export function MicInput(props: {
   onDone?: (text: string) => void; // one press ends speaking and sends what was said
   doneLabel?: string;
   onListening?: (on: boolean) => void; // the screen hides what would cut in while the mic is on
+  // the screen's send button, shown above the text once something is in it: below, the iPhone keyboard hid it and
+  // the big 🎤 button was pressed as if it sent
+  send?: { label: string; busy?: boolean; busyLabel?: string; onSend: () => void };
 }) {
   const { value, onChange, paused, onListening } = props;
   // several final results can arrive before the next render: append to the latest text, not to this render's copy
@@ -106,14 +109,30 @@ export function MicInput(props: {
     if (paused) stop();
   }, [paused, stop]);
   useEffect(() => onListening?.(listening), [listening, onListening]);
+  const send = props.send;
+  const sendRow = !!send && (send.busy || (!!value.trim() && !listening));
   return (
     <div className="mic-input">
+      {sendRow && send ? (
+        <div className="mic-send-row">
+          <button type="button" className="primary" disabled={send.busy} onClick={send.onSend}>
+            {send.busy ? (send.busyLabel ?? "考えています…") : send.label}
+          </button>
+          <button type="button" className="mic small" disabled={send.busy} onClick={start}>
+            <span className="mic-icon" aria-hidden>
+              🎤
+            </span>
+            話して足す
+          </button>
+        </div>
+      ) : (
       <button type="button" className={`mic ${listening ? "on" : ""}`} onClick={listening ? (props.onDone ? finish : stop) : start}>
         <span className="mic-icon" aria-hidden>
           {listening ? "■" : "🎤"}
         </span>
         {listening ? (props.onDone ? (props.doneLabel ?? "話し終わった（送る）") : "止める") : props.micLabel}
       </button>
+      )}
       {listening && <p className="hint live">聞いています… {interim}</p>}
       {listening && props.onDone && (
         <button type="button" className="link" onClick={stop}>

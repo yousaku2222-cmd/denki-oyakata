@@ -347,6 +347,30 @@ button {
   justify-content: center;
   gap: 12px;
 }
+/* text is in: send comes first and large, the mic is small and plain so it is not taken for the send button */
+.mic-send-row {
+  display: flex;
+  gap: 8px;
+}
+.mic-send-row .primary {
+  padding: 0 10px;
+  flex: 1;
+}
+.mic.small {
+  min-height: 56px;
+  padding: 0 12px;
+  border-radius: var(--r-m);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  color: inherit;
+  font-size: var(--fs-m);
+  font-weight: 700;
+  gap: 4px;
+  white-space: nowrap;
+}
+.mic.small .mic-icon {
+  font-size: 1.2rem;
+}
 .mic.on {
   background: var(--danger-solid);
   color: #fff;
