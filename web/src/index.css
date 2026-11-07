@@ -2900,3 +2900,17 @@ button.law-badge-go { border: 1px solid var(--law); min-height: 28px; font: inhe
 .mic-denied p { margin: 0; }
 .mic-denied-head { font-weight: 800; }
 .mic-denied .secondary { width: 100%; }
+/* いい質問 on the screen after answering a box question */
+.good-after {
+  width: 100%;
+  margin: 4px 0 8px;
+}
+.good-after-btn {
+  position: relative;
+  width: 100%;
+}
+.good-after-btn.done {
+  color: var(--text);
+  border-color: var(--yellow);
+  opacity: 1;
+}

@@ -6,6 +6,7 @@ import { MicInput, Notice } from "../components";
 import { canSay, hush, say, unlockSay } from "../speech";
 import { LawCheckPanel, SpecNote, type LawCheckResult, type LawCheckState } from "../LawCheck";
 import { PlainNote } from "../Glossary";
+import { StarBurst } from "./Box";
 
 /** The card as young workers would get it (publishCard with preview): the ⚠️ / 🔍 sentences against a law taken out. */
 type YoungView = {
@@ -37,6 +38,7 @@ export interface Topic {
   askerName: string;
   hasPhoto?: boolean; // false: no photo to load (unknown when a draft is opened again: then asked)
   followUp?: { text: string; cardTitle: string | null } | null; // the earlier question and card it follows
+  good?: boolean; // the veteran already said いい質問 in the box
 }
 
 // 話す with nothing said yet: a blank box stops a veteran, a question to answer does not
@@ -132,6 +134,23 @@ export function Talk({
   // with no name to show, 「出さない」 is the honest default (an empty name is shown as 社内のベテラン anyway)
   const [showName, setShowName] = useState(!!getName("veteran").trim());
   const [published, setPublished] = useState(false);
+  // いい質問 once answered too: in the box the star was only there before answering, when it is hard to say yet
+  const [good, setGood] = useState<"no" | "sending" | "sent">(topicIn?.good ? "sent" : "no");
+  const [goodErr, setGoodErr] = useState("");
+  const [goodNow, setGoodNow] = useState(false); // pressed here: the stars spring out
+  function sendGood(questionId: string) {
+    setGood("sending");
+    setGoodErr("");
+    call("markGoodQuestion", { questionId })
+      .then(() => {
+        setGood("sent");
+        setGoodNow(true);
+      })
+      .catch((e) => {
+        setGood("no");
+        setGoodErr(errorText(e, "「いい質問」を送れませんでした。もう一度お試しください。"));
+      });
+  }
   // numbers the draft has that the talk did not, and numbers no law has: for the veteran to check (nothing is blocked)
   const [checkNotes, setCheckNotes] = useState<string[]>([]);
   // the card's sentences against the articles (LawCheck.tsx): the last check of an opened card, the ⚠️ / 🔍
@@ -388,6 +407,15 @@ export function Talk({
         {savedStatus === "published" && status === "draft" && draft ? <IntoTheBag title={draft.title} /> : <div className="big-emoji">🗂️</div>}
         <h1 className="screen-title">{savedStatus === "private" ? "直しました（非公開のまま）" : status === "draft" ? "知恵袋に入りました" : "直しました"}</h1>
         {savedStatus !== "private" && <p>若手が聞けば、あなたの話が答えに出てきます。{status === "draft" && topic?.questionId && `${topic.askerName}さんにも届きます。`}</p>}
+        {topic?.questionId && (
+          <div className="good-after">
+            <button type="button" className={`secondary good-after-btn ${good === "sent" ? "done" : ""}`} disabled={good !== "no"} onClick={() => sendGood(topic.questionId)}>
+              {good === "sent" ? `⭐ ${topic.askerName}さんに「いい質問」と伝えました` : `⭐ いい質問だったと${topic.askerName}さんに伝える`}
+              {goodNow && <StarBurst />}
+            </button>
+            {goodErr && <p className="hint error">{goodErr}</p>}
+          </div>
+        )}
         {back ? (
           <>
             <button className="primary" onClick={back}>

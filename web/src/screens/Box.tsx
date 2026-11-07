@@ -57,7 +57,7 @@ function QPhoto({ photo, load }: { photo: string | null | undefined; load: () =>
   );
 }
 
-function StarBurst() {
+export function StarBurst() {
   return (
     <span className="star-burst" aria-hidden>
       {[0, 1, 2, 3, 4, 5].map((i) => {
@@ -149,7 +149,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
         話しても書いても答えられ、答えは知恵カードになります。
         <details className="more-info">
           <summary>？</summary>
-          若手が親方に聞きたい質問です。「答える（話す・書く）」を押すと、話しても文字で書いても答えられ、答えは知恵カードになります。「⭐ いい質問」を押すと、聞いた若手に届きます。
+          若手が親方に聞きたい質問です。「答える（話す・書く）」を押すと、話しても文字で書いても答えられ、答えは知恵カードになります。「⭐ いい質問」を押すと、聞いた若手に届きます。答えたあとの画面でも押せます。
         </details>
       </div>
       {!!items?.length && (
@@ -210,7 +210,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
                   </p>
                 </div>
               </div>
-              <button className="primary answer-btn" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp })}>
+              <button className="primary answer-btn" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp, good: q.good })}>
                 ✍️ 答える（話す・書く）
               </button>
             </motion.div>
