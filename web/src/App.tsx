@@ -375,7 +375,7 @@ function Waiting({ questions, onAnswer, onOpenBox }: { questions: OpenQ[]; onAns
       </p>
       <p className="waiting-text">{q.text}</p>
       <button className="primary" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp })}>
-        🎤 話して答える
+        ✍️ 答える（話す・書く）
       </button>
       {rest > 0 && (
         <button className="link" onClick={onOpenBox}>

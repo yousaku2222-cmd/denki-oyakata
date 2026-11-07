@@ -146,10 +146,10 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
     <section className="screen">
       <h1 className="screen-title">答えてほしい質問</h1>
       <div className="hint">
-        話して答えると、知恵カードになります。
+        話しても書いても答えられ、答えは知恵カードになります。
         <details className="more-info">
           <summary>？</summary>
-          若手が親方に聞きたい質問です。「話して答える」を押すと、そのまま話して答えられ、答えは知恵カードになります。「⭐ いい質問」を押すと、聞いた若手に届きます。
+          若手が親方に聞きたい質問です。「答える（話す・書く）」を押すと、話しても文字で書いても答えられ、答えは知恵カードになります。「⭐ いい質問」を押すと、聞いた若手に届きます。
         </details>
       </div>
       {!!items?.length && (
@@ -211,7 +211,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
                 </div>
               </div>
               <button className="primary answer-btn" onClick={() => onAnswer({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp })}>
-                🎤 話して答える
+                ✍️ 答える（話す・書く）
               </button>
             </motion.div>
             ))}
@@ -232,7 +232,7 @@ export function Box({ onAnswer }: { onAnswer: (t: Topic) => void }) {
             <div key={text} className="qcard">
               <p className="qtext">{text}</p>
               <button className="secondary answer-btn" onClick={() => onAnswer({ questionId: "", text, askerName: "若手", hasPhoto: false })}>
-                🎤 話して答える
+                ✍️ 答える（話す・書く）
               </button>
             </div>
           ))}

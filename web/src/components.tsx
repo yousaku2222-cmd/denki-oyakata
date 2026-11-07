@@ -82,6 +82,8 @@ export function MicInput(props: {
   // the screen's send button, shown above the text once something is in it: below, the iPhone keyboard hid it and
   // the big 🎤 button was pressed as if it sent
   send?: { label: string; busy?: boolean; busyLabel?: string; onSend: () => void };
+  // a ⌨️ button beside the mic, as large: many veterans would rather write than speak, and the box alone did not say so
+  typeLabel?: string;
 }) {
   const { value, onChange, paused, onListening } = props;
   // several final results can arrive before the next render: append to the latest text, not to this render's copy
@@ -111,6 +113,15 @@ export function MicInput(props: {
   useEffect(() => onListening?.(listening), [listening, onListening]);
   const send = props.send;
   const sendRow = !!send && (send.busy || (!!value.trim() && !listening));
+  const box = useRef<HTMLTextAreaElement>(null);
+  const micButton = (
+    <button type="button" className={`mic ${listening ? "on" : ""}`} onClick={listening ? (props.onDone ? finish : stop) : start}>
+      <span className="mic-icon" aria-hidden>
+        {listening ? "■" : "🎤"}
+      </span>
+      {listening ? (props.onDone ? (props.doneLabel ?? "話し終わった（送る）") : "止める") : props.micLabel}
+    </button>
+  );
   return (
     <div className="mic-input">
       {sendRow && send ? (
@@ -125,13 +136,25 @@ export function MicInput(props: {
             話して足す
           </button>
         </div>
+      ) : props.typeLabel && !listening ? (
+        <div className="mic-pair">
+          {micButton}
+          <button
+            type="button"
+            className="mic-type"
+            onClick={() => {
+              box.current?.focus();
+              box.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+            }}
+          >
+            <span className="mic-icon" aria-hidden>
+              ⌨️
+            </span>
+            {props.typeLabel}
+          </button>
+        </div>
       ) : (
-      <button type="button" className={`mic ${listening ? "on" : ""}`} onClick={listening ? (props.onDone ? finish : stop) : start}>
-        <span className="mic-icon" aria-hidden>
-          {listening ? "■" : "🎤"}
-        </span>
-        {listening ? (props.onDone ? (props.doneLabel ?? "話し終わった（送る）") : "止める") : props.micLabel}
-      </button>
+        micButton
       )}
       {listening && <p className="hint live">聞いています… {interim}</p>}
       {listening && props.onDone && (
@@ -141,6 +164,7 @@ export function MicInput(props: {
       )}
       {error && <p className="hint error">{error}</p>}
       <textarea
+        ref={box}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={props.placeholder}

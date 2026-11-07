@@ -713,7 +713,12 @@ export function Talk({
         </ol>
       )}
 
-      {fresh && !turns.length && !aiQuestion && <h1 className="screen-title">現場の話を、聞かせてください</h1>}
+      {fresh && !turns.length && !aiQuestion && (
+        <>
+          <h1 className="screen-title">現場の話を、聞かせてください</h1>
+          <p className="talk-either">話しても、文字で書いても大丈夫です</p>
+        </>
+      )}
       {swapNote && !aiQuestion && <p className="hint">{swapNote}</p>}
 
       {aiQuestion && (
@@ -749,17 +754,18 @@ export function Talk({
         maxLength={3000}
         value={text}
         onChange={setText}
-        micLabel={turns.length ? "答える" : "話す"}
+        micLabel={turns.length || topic ? "話して答える" : "話す"}
+        typeLabel={turns.length || topic ? "書いて答える" : "書く"}
         onDone={busy ? undefined : (said) => void next(false, said)}
         onListening={setListening}
         send={{ label: turns.length ? "答えを送る" : "話した内容を送る", busy, onSend: () => void next(false) }}
         rows={4}
         placeholder={
           turns.length
-            ? "話した内容がここに入ります"
+            ? "話した内容がここに入ります。文字で書いても大丈夫です"
             : topic
-              ? "🎤を押して、この質問への答えを話してください（方言のままで大丈夫）"
-              : "例: PF管はな、90度の曲がりが3つあったら線が通らん。プルボックスを入れる。"
+              ? "話すか、ここに書いて答えてください（方言のままで大丈夫）"
+              : "ここに文字で書いても大丈夫です。例: PF管はな、90度の曲がりが3つあったら線が通らん。プルボックスを入れる。"
         }
       />
       {(aiQuestion || topic) && !listening && (

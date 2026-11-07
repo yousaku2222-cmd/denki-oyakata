@@ -2875,3 +2875,24 @@ button.law-badge-go { border: 1px solid var(--law); min-height: 28px; font: inhe
 .law-check-acts .link { align-self: center; font-size: var(--fs-s); }
 .law-again-here { margin-top: 6px; width: 100%; }
 .talk-sure { font-size: var(--fs-xs); }
+/* the mic and ⌨️ side by side and as large: writing is as welcome as speaking */
+.mic-pair { display: flex; gap: 8px; }
+.mic-pair .mic { flex: 1.3; min-width: 0; }
+.mic-type {
+  flex: 1;
+  min-width: 0;
+  min-height: 88px;
+  border-radius: var(--r-l);
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-l);
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mic-pair .mic { font-size: var(--fs-l); gap: 6px; flex-wrap: wrap; }
+.talk-either { margin: -4px 0 8px; font-weight: 700; color: var(--muted); }
