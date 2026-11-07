@@ -49,6 +49,7 @@ export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
   const [error, setError] = useState("");
+  const [denied, setDenied] = useState(false); // the mic was refused: the screen shows how to allow it again
   const rec = useRef<Recognition | null>(null);
   const finalRef = useRef(onFinal);
   finalRef.current = onFinal;
@@ -94,6 +95,7 @@ export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
       return;
     }
     setError("");
+    setDenied(false);
     stopped.current = false;
     failed.current = false;
     // a result already taken is not taken again (Chrome on Android may send the same one twice)
@@ -118,6 +120,7 @@ export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
       if (e.error !== "no-speech" && e.error !== "aborted") failed.current = true;
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         setError("マイクの使用が許可されていません。設定で許可するか、文字で入力してください。");
+        setDenied(true);
         endNow(); // the mic will not come: back to the typed text and its send button at once
       } else if (e.error !== "no-speech" && e.error !== "aborted") setError("音声をうまく聞き取れませんでした。");
     };
@@ -139,5 +142,5 @@ export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
   }, [endNow]);
 
   useEffect(() => () => rec.current?.stop(), []);
-  return { listening, interim, error, start, stop };
+  return { listening, interim, error, denied, start, stop };
 }

@@ -2896,3 +2896,7 @@ button.law-badge-go { border: 1px solid var(--law); min-height: 28px; font: inhe
 }
 .mic-pair .mic { font-size: var(--fs-l); gap: 6px; flex-wrap: wrap; }
 .talk-either { margin: -4px 0 8px; font-weight: 700; color: var(--muted); }
+.mic-denied { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--r-m); background: var(--note-bg); color: var(--note-fg); }
+.mic-denied p { margin: 0; }
+.mic-denied-head { font-weight: 800; }
+.mic-denied .secondary { width: 100%; }

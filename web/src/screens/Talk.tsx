@@ -756,6 +756,7 @@ export function Talk({
         onChange={setText}
         micLabel={turns.length || topic ? "話して答える" : "話す"}
         typeLabel={turns.length || topic ? "書いて答える" : "書く"}
+        reloadSafe
         onDone={busy ? undefined : (said) => void next(false, said)}
         onListening={setListening}
         send={{ label: turns.length ? "答えを送る" : "話した内容を送る", busy, onSend: () => void next(false) }}

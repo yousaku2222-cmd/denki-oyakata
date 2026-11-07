@@ -84,6 +84,7 @@ export function MicInput(props: {
   send?: { label: string; busy?: boolean; busyLabel?: string; onSend: () => void };
   // a ⌨️ button beside the mic, as large: many veterans would rather write than speak, and the box alone did not say so
   typeLabel?: string;
+  reloadSafe?: boolean; // the screen keeps what was said and typed over a reload (Talk): 🔄 can be offered
 }) {
   const { value, onChange, paused, onListening } = props;
   // several final results can arrive before the next render: append to the latest text, not to this render's copy
@@ -91,7 +92,7 @@ export function MicInput(props: {
   latest.current = value;
   // 「話し終わった」: the last words arrive after stop, so it is sent when listening has ended
   const sendAfter = useRef(false);
-  const { listening, interim, error, start, stop } = useSpeech(
+  const { listening, interim, error, denied, start, stop } = useSpeech(
     (t) => {
       latest.current = (latest.current ? latest.current + " " : "") + t;
       onChange(latest.current);
@@ -162,7 +163,30 @@ export function MicInput(props: {
           送らずに止める（直してから送る）
         </button>
       )}
-      {error && <p className="hint error">{error}</p>}
+      {denied ? (
+        // a site cannot ask again once the mic was refused; Safari asks again after a reload, otherwise the settings
+        <div className="mic-denied">
+          <p className="mic-denied-head">🎤 マイクが使えない状態です</p>
+          {props.reloadSafe && (
+            <button type="button" className="secondary" onClick={() => window.location.reload()}>
+              🔄 読み込み直して、もう一度許可する
+            </button>
+          )}
+          <details className="more-info">
+            <summary>許可し直す方法（iPhone／Android）</summary>
+            <p>
+              iPhone（Safari）：アドレスバーの「ぁあ」→「Webサイトの設定」→「マイク」→「確認」か「許可」
+              <br />
+              Android（Chrome）：アドレスバー左のアイコン →「権限」→「マイク」→「許可」
+              <br />
+              直したら、もう一度🎤を押してください。
+            </p>
+          </details>
+          <p className="hint">文字で書いて送ることもできます。</p>
+        </div>
+      ) : (
+        error && <p className="hint error">{error}</p>
+      )}
       <textarea
         ref={box}
         value={value}
