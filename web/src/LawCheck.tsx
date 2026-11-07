@@ -64,6 +64,8 @@ interface CheckItem {
   label: string;
   quote: string;
   note: string;
+  part?: string; // differs: the words that differ (marked in the sentence)
+  fix?: string; // differs: a way to say it that agrees with the article (offered, used only on a press)
   legal?: boolean; // against a law (else 標準仕様書, which is not law); a check from before: law
 }
 export interface LawCheckResult {
@@ -78,7 +80,7 @@ export interface LawCheckResult {
 // ⚠️ first: what the veteran has to look at comes before what agrees
 const ORDER: Verdict[] = ["differs", "unsure", "stricter", "same"];
 const MARK: Record<Verdict, { icon: string; label: string }> = {
-  differs: { icon: "⚠️", label: "条文と違うかもしれない" },
+  differs: { icon: "⚠️", label: "条文と違うかもしれない所があります" },
   unsure: { icon: "🔍", label: "要確認（条文の引用が確かめられませんでした）" },
   stricter: { icon: "🟦", label: "条文より厳しい、会社の決まり" },
   same: { icon: "✅", label: "条文と同じ" },
@@ -92,10 +94,6 @@ const spec = (it: CheckItem) => it.legal === false && HIDDEN.includes(it.verdict
 const SPEC_ADVICE: Partial<Record<Verdict, string>> = {
   differs: "公共工事の仕様書とは違うやり方のようです（法令ではありません）。若手にも表示し、「公共工事の仕様書とは違うやり方です（民間の現場では会社のやり方のこともあります）」と添えます。",
   unsure: "仕様書と確かめられませんでした（法令ではないので、若手にも表示します）。",
-};
-const ADVICE: Partial<Record<Verdict, string>> = {
-  differs: "AIの判断では条文と違うようです。AIが誤っている可能性もあります。その時は言い回しを変えて、もう一度照らしてください。",
-  unsure: "条文と確かめられませんでした。言い回しを変えて、もう一度照らしてください。",
 };
 const HELD: Partial<Record<Verdict, string>> = {
   differs: "この文は条文と違うため、若手には表示していません。",
@@ -143,6 +141,7 @@ export function LawCheckPanel({
   onLeft,
   onState,
   runRef,
+  onRewrite,
 }: {
   cardId: string;
   card: CardWords;
@@ -152,6 +151,7 @@ export function LawCheckPanel({
   onLeft: (texts: string[]) => void;
   onState?: (s: LawCheckState) => void;
   runRef?: MutableRefObject<(() => void) | null>;
+  onRewrite?: (field: CheckField) => void; // 自分で書き直す: the screen shows 「もう一度照らす」 by that field
 }) {
   const [result, setResult] = useState<LawCheckResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -196,6 +196,13 @@ export function LawCheckPanel({
   const leftKey = JSON.stringify(left);
   useEffect(() => onLeft(JSON.parse(leftKey) as string[]), [leftKey, onLeft]);
 
+  const runAfterEdit = useRef(false);
+  useEffect(() => {
+    if (!runAfterEdit.current) return;
+    runAfterEdit.current = false;
+    void run();
+  }, [fields, run]);
+
   const stale = !!result && result.sentences.length > 0 && !isChecked(result, fields, tags);
   const checked = !!result && isChecked(result, fields, tags);
   const failed = !!err;
@@ -211,6 +218,30 @@ export function LawCheckPanel({
     if (it.field === "terms") takenTerms.current.push(...(card.terms ?? []).filter((t) => termLine(t) === it.text));
     edit(it.field, now.slice(0, at) + now.slice(at + it.text.length));
     setTaken({ ...taken, [it.n]: { field: it.field, at } });
+  }
+  function applyFix(it: CheckItem) {
+    const now = fields[it.field];
+    const at = now.indexOf(it.text);
+    if (at < 0 || !it.fix) return;
+    runAfterEdit.current = true;
+    edit(it.field, now.slice(0, at) + it.fix + now.slice(at + it.text.length));
+  }
+  function rewrite(it: CheckItem) {
+    onRewrite?.(it.field);
+    const box = document.querySelector<HTMLTextAreaElement>(`[data-field="${it.field}"]`);
+    if (!box) {
+      // 標準語では / 言葉の意味 have their own box
+      document.querySelector(".field-words")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    box.scrollIntoView({ block: "center", behavior: "smooth" });
+    box.focus({ preventScroll: true });
+    const at = box.value.indexOf(it.text);
+    if (at >= 0) box.setSelectionRange(at, at + it.text.length);
+  }
+  function removeSentence(it: CheckItem) {
+    if (!window.confirm("この文を消すと、この知恵は若手に届かなくなります。消しますか？")) return;
+    takeOut(it);
   }
   function putBack(it: CheckItem) {
     const t = taken[it.n];
@@ -243,6 +274,7 @@ export function LawCheckPanel({
         <p className="hint">関係する条文が出てくる文はありませんでした（現場のコツの話です）。</p>
       ) : null}
 
+      {!busy && items.some((it) => HIDDEN.includes(it.verdict)) && <p className="law-check-sub">AIの判断なので、間違っていることもあります。決めるのは親方です。</p>}
       {!busy && items.length > 0 && (
         <ul className="law-check-list">
           {items.map((it) => {
@@ -254,13 +286,34 @@ export function LawCheckPanel({
                   {MARK[it.verdict].icon} {spec(it) ? (it.verdict === "differs" ? "公共工事の仕様書と違うかもしれない" : "要確認（仕様書の引用が確かめられませんでした）") : MARK[it.verdict].label}
                 </p>
                 <p className="law-check-text">
-                  {FIELD_NAME[it.field] && <span className="src-meta">（{FIELD_NAME[it.field]}）</span>}「{it.text}」
+                  {HIDDEN.includes(it.verdict) && <span className="law-check-k">あなたの文：</span>}
+                  {FIELD_NAME[it.field] && <span className="src-meta">（{FIELD_NAME[it.field]}）</span>}
+                  {it.part && it.text.includes(it.part) ? (
+                    <>
+                      {it.text.slice(0, it.text.indexOf(it.part))}
+                      <mark className="law-check-part">{it.part}</mark>
+                      {it.text.slice(it.text.indexOf(it.part) + it.part.length)}
+                    </>
+                  ) : (
+                    <>「{it.text}」</>
+                  )}
                 </p>
-                {it.note && <p className="law-check-note">{it.note}</p>}
-                {(spec(it) ? SPEC_ADVICE : ADVICE)[it.verdict] && <p className="law-check-note">{(spec(it) ? SPEC_ADVICE : ADVICE)[it.verdict]}</p>}
+                {it.note && (
+                  <p className="law-check-note">
+                    <span className="law-check-k">条文では：</span>
+                    {it.note.replace(/^条文では、?/, "")}
+                  </p>
+                )}
+                {spec(it) && SPEC_ADVICE[it.verdict] && <p className="law-check-note">{SPEC_ADVICE[it.verdict]}</p>}
                 {it.quote && (
                   <p className="law-check-quote">
                     — {it.label}「{it.quote}」
+                  </p>
+                )}
+                {it.fix && !out && (
+                  <p className="law-check-fix">
+                    <span className="law-check-k">直すなら（案）：</span>
+                    {it.fix}
                   </p>
                 )}
                 {held(it) && !out && <p className="law-check-held">{HELD[it.verdict]}</p>}
@@ -276,12 +329,25 @@ export function LawCheckPanel({
                     ) : (
                       <p className="law-check-done">カードから消えています。</p>
                     )
-                  ) : emptied ? (
-                    <p className="hint">この欄は空にできません。言い回しを変えてから［もう一度照らす］を押してください。</p>
                   ) : (
-                    <button type="button" className="secondary law-check-x" onClick={() => takeOut(it)}>
-                      この文を取り消す
-                    </button>
+                    // fixing comes first and is the easy press; taking the sentence out is a small link, asked once
+                    <div className="law-check-acts">
+                      {it.fix && (
+                        <button type="button" className="primary" onClick={() => applyFix(it)}>
+                          この案に直す
+                        </button>
+                      )}
+                      <button type="button" className="secondary" onClick={() => rewrite(it)}>
+                        自分で書き直す
+                      </button>
+                      {emptied ? (
+                        <p className="hint">この欄は空にできないので、消さずに書き直してください。</p>
+                      ) : (
+                        <button type="button" className="link" onClick={() => removeSentence(it)}>
+                          この文を消す
+                        </button>
+                      )}
+                    </div>
                   ))}
               </li>
             );

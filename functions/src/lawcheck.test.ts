@@ -64,6 +64,20 @@ test("only sentences of the card, articles given and quotes in the original keep
   assert.equal(spec[0].legal, false, "a 要確認 against 標準仕様書 is not law");
 });
 
+test("the words that differ are marked only when they are in the sentence, and a fix is offered only from a checked quote", () => {
+  const s = cardSentences(card);
+  const note = "条文では、電気工事士でなければこの作業はできません。";
+  const [ok] = checkItems([{ n: 2, verdict: "differs", lawId: LICENSE, quote: licQuote, note, part: "資格がなくても", fix: "資格が無いもんにはさせたらいけん。" }], s, new Set([LICENSE]));
+  assert.equal(ok.part, "資格がなくても");
+  assert.equal(ok.fix, "資格が無いもんにはさせたらいけん。");
+  const [notIn] = checkItems([{ n: 2, verdict: "differs", lawId: LICENSE, quote: licQuote, note, part: "文に無い言葉", fix: ok.text }], s, new Set([LICENSE]));
+  assert.equal(notIn.part, undefined, "a part not in the sentence marks nothing");
+  assert.equal(notIn.fix, undefined, "a fix that changes nothing is not offered");
+  const [unsure] = checkItems([{ n: 3, verdict: "differs", lawId: LICENSE, quote: "言い換えた引用です、原文にはありません", note, part: "取り替え", fix: "直した文" }], s, new Set([LICENSE]));
+  assert.equal(unsure.verdict, "unsure");
+  assert.equal(unsure.fix, undefined, "no fix from a citation that was not found in the article");
+});
+
 test("laws and the public works standard are told apart by the source, for every article in laws.json", () => {
   for (const l of LAWS) assert.ok(LEGAL_SOURCES.has(l.lawName) !== SPEC_SOURCES.has(l.lawName), `${l.id}: put 「${l.lawName}」 in LEGAL_SOURCES or SPEC_SOURCES`);
   for (const l of LAWS) assert.equal(isLegal(l), !l.id.startsWith("shiyo-"), l.id);

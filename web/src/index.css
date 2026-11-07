@@ -2866,3 +2866,12 @@ button.law-badge-go { border: 1px solid var(--law); min-height: 28px; font: inhe
 .thanks-box-row input { flex: 1; min-width: 0; }
 .thanks-box-row button { flex: none; }
 .thanks-done { margin: 8px 0 0; font-size: var(--fs-s); color: var(--wisdom); font-weight: 700; }
+/* the law check: fixing is the easy press, taking the sentence out a small link */
+.law-check-k { font-weight: 800; margin-right: 2px; }
+.law-check-part { background: var(--yellow); color: var(--navy); padding: 0 2px; border-radius: 3px; font-weight: 800; }
+.law-check-fix { font-size: var(--fs-m); margin-top: 6px !important; padding: 6px 8px; border-radius: var(--r-s); background: var(--surface); color: var(--text); border: 1px dashed var(--line); }
+.law-check-acts { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.law-check-acts .primary, .law-check-acts .secondary { width: 100%; }
+.law-check-acts .link { align-self: center; font-size: var(--fs-s); }
+.law-again-here { margin-top: 6px; width: 100%; }
+.talk-sure { font-size: var(--fs-xs); }

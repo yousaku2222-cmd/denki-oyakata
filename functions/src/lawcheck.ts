@@ -53,6 +53,9 @@ export interface CheckItem {
   label: string; // 標準仕様書 2.3.3【…】
   quote: string;
   note: string;
+  // differs only: the words of the sentence that differ (found in it word for word), and a way to say it that agrees
+  part?: string;
+  fix?: string;
   // against a law (true) or against 標準仕様書 (false); for 要確認, the article the AI named (unknown: law)
   legal: boolean;
 }
@@ -132,6 +135,8 @@ interface RawItem {
   lawId: string;
   quote: string;
   note: string;
+  part?: string;
+  fix?: string;
 }
 
 const cut = (s: string, n: number) => Array.from(s.trim()).slice(0, n).join("");
@@ -156,6 +161,9 @@ export function checkItems(raw: RawItem[], sentences: CardSentence[], allowedLaw
     if (!quoted && r.verdict !== "differs") continue;
     if (r.verdict === "differs" && !note) continue; // nothing to tell the veteran
     seen.add(r.n);
+    // only for a differs whose article was checked: a fix made from an unchecked citation is not offered
+    const part = quoted && r.verdict === "differs" && r.part ? r.part.trim() : "";
+    const fix = quoted && r.verdict === "differs" && r.fix ? cut(r.fix, s.text.length + 80) : "";
     out.push({
       n: r.n,
       field: s.field,
@@ -165,6 +173,8 @@ export function checkItems(raw: RawItem[], sentences: CardSentence[], allowedLaw
       label: quoted ? lawLabel(law!) : "",
       quote: quoted ? r.quote.replace(/^[「『]|[」』]$/g, "").replace(/｜/g, " ").trim() : "",
       note,
+      ...(part && part.length < s.text.length && s.text.includes(part) ? { part } : {}),
+      ...(fix && fix !== s.text.trim() ? { fix } : {}),
       legal: law ? isLegal(law) : true,
     });
   }
@@ -264,7 +274,9 @@ const CHECK_SYSTEM = `電気工事のベテラン（親方）が話した「知�
   - differs: 条文と違うかもしれない（条文が資格を求める作業を資格なしで良いと言う、条文より緩い数値、条文が禁じることをして良いと言う、など）
 - lawId: 判断の元にした条文の lawId
 - quote: 判断の元にした条文の原文から、一続きでそのまま抜き出した部分（12〜80字。言い換え・省略・漢数字の書き換えをしない）。プログラムが原文と照合し、一致しない時は使われない
-- note: differs の時だけ、条文では何がどうなっているかを1文（60字以内）。「条文では〜です。確かめてください。」のように言い、親方を責めない・説教しない。differs 以外は空文字`;
+- note: differs の時だけ、条文では何がどうなっているかを1文（60字以内）。「条文では〜です。」のように言い、親方を責めない・説教しない。differs 以外は空文字
+- part: differs の時だけ、文の中で条文と違う部分（文からそのまま一続きで抜き出す。2〜30字。文全体ではなく、違う所だけ）。differs 以外は空文字
+- fix: differs の時だけ、条文に合うように直した文の案。親方の言い回し・方言・他の中身はできるだけそのまま残し、違う所だけを直す（注意書き・但し書きを足さない）。（言葉の意味）の文なら「言葉：意味」の形のまま。differs 以外は空文字`;
 
 // every < > is replaced (not removed): removing a tag once let "</ca</card>rd>" leave a working </card> behind
 const fenced = (s: string) => s.replace(/</g, "＜").replace(/>/g, "＞");
@@ -293,8 +305,10 @@ export async function runLawCheck(f: CheckFields, tags: string[]): Promise<{ sen
               lawId: { type: "string" },
               quote: { type: "string" },
               note: { type: "string" },
+              part: { type: "string" },
+              fix: { type: "string" },
             },
-            required: ["n", "verdict", "lawId", "quote", "note"],
+            required: ["n", "verdict", "lawId", "quote", "note", "part", "fix"],
             additionalProperties: false,
           },
         },

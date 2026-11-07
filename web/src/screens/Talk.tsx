@@ -139,6 +139,7 @@ export function Talk({
   // whether the card is checked as it is now (only then can it be published)
   const [lawInit, setLawInit] = useState<LawCheckResult | null>(null);
   const [lawLeft, setLawLeft] = useState<string[]>([]);
+  const [rewriting, setRewriting] = useState<string | null>(null); // the field 自分で書き直す went to
   const [lawState, setLawState] = useState<LawCheckState>({ checked: false, busy: false, failed: false });
   const [preview, setPreview] = useState<YoungView | null>(null); // 「若手にはこう見えます」, before publishing
   const runCheck = useRef<(() => void) | null>(null);
@@ -479,10 +480,26 @@ export function Talk({
   if (draft) {
     // the same limits as the server (functions/src/interview.ts CARD_LIMITS)
     const MAX: Record<string, number> = { title: 60, scene: 500, body: 1500, reason: 1000, caution: 1000 };
+    // 自分で書き直す took the veteran to a field: 「もう一度照らす」 waits right there, not back down at the check
+    const againButton = (
+      <button
+        type="button"
+        className="secondary law-again-here"
+        onClick={(e) => {
+          e.preventDefault();
+          setRewriting(null);
+          runCheck.current?.();
+          checkBox.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+        }}
+      >
+        ⚖️ 直したので、もう一度照らす
+      </button>
+    );
     const field = (key: keyof Draft, label: string, rows = 2) => (
       <label className="field">
         <span>{label}</span>
-        <textarea rows={rows} maxLength={MAX[key]} value={draft[key] as string} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
+        <textarea data-field={key} rows={rows} maxLength={MAX[key]} value={draft[key] as string} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
+        {rewriting === key && againButton}
       </label>
     );
     return (
@@ -538,6 +555,7 @@ export function Talk({
           <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} />
         </label>
         <FieldWords draft={draft} onChange={setDraft} />
+        {(rewriting === "plain" || rewriting === "terms") && againButton}
         {cardId && (
           <div ref={checkBox}>
             <LawCheckPanel
@@ -550,6 +568,7 @@ export function Talk({
               onLeft={setLawLeft}
               onState={setLawState}
               runRef={runCheck}
+              onRewrite={setRewriting}
             />
           </div>
         )}
@@ -707,6 +726,10 @@ export function Talk({
               : "例: PF管はな、90度の曲がりが3つあったら線が通らん。プルボックスを入れる。"
         }
       />
+      {(aiQuestion || topic) && !listening && (
+        // a veteran answering felt unsure whether what they said was right: the check comes after, and they decide
+        <p className="hint talk-sure">📖 うろ覚えでも大丈夫です。カードにしたあと条文と照らして、違う所はお知らせします。公開するかは親方が決めます。</p>
+      )}
       {err && <p className="hint error">{err}</p>}
       {/* the send button is MicInput's: above the text once something was said, so the iPhone keyboard cannot hide it.
           Not while listening: the mic's own 「話し終わった（送る）」 sends then, with the last words */}
