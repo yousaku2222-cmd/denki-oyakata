@@ -139,7 +139,10 @@ export function Talk({
   // whether the card is checked as it is now (only then can it be published)
   const [lawInit, setLawInit] = useState<LawCheckResult | null>(null);
   const [lawLeft, setLawLeft] = useState<string[]>([]);
-  const [rewriting, setRewriting] = useState<string | null>(null); // the field 自分で書き直す went to
+  const [rewriting, setRewriting] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState<string[]>([]); // the listener's questions turned down for this answer
+  const [swapping, setSwapping] = useState(false);
+  const [swapNote, setSwapNote] = useState(""); // the field 自分で書き直す went to
   const [lawState, setLawState] = useState<LawCheckState>({ checked: false, busy: false, failed: false });
   const [preview, setPreview] = useState<YoungView | null>(null); // 「若手にはこう見えます」, before publishing
   const runCheck = useRef<(() => void) | null>(null);
@@ -257,6 +260,31 @@ export function Talk({
   }, [active]);
   useEffect(() => hush, []);
 
+  const topicText = () => topic && `${topic.followUp ? `前の質問「${topic.followUp.text}」の続きです。` : ""}${topic.text}${photoPart ? `（写真の物は、AIの判定では「${photoPart}」）` : ""}`;
+
+  // 🔄 ほかの質問にする: the listener asks something else; a question turned down is never put in the talk
+  async function otherQuestion() {
+    if (!aiQuestion || !turns.length) return;
+    const skip = [...skipped, aiQuestion].slice(-5);
+    setSwapping(true);
+    setErr("");
+    try {
+      const r = await call<{ done: boolean; question: string }>("interviewNext", { transcript: turns, questionText: topicText(), skip });
+      setSkipped(skip);
+      if (r.done || !r.question) {
+        setAiQuestion("");
+        setSwapNote("もう十分に聞けました。下の「ここまでの話をカードにする」を押してください。");
+      } else {
+        hush();
+        setAiQuestion(r.question);
+      }
+    } catch (e) {
+      setErr(errorText(e, "別の質問を出せませんでした。もう一度お試しください。"));
+    } finally {
+      setSwapping(false);
+    }
+  }
+
   // said: what the one-press 「話し終わった」 sends (the box's text may not be updated yet)
   async function next(finish = false, said = text) {
     const t: Turn[] = said.trim()
@@ -272,9 +300,11 @@ export function Talk({
     try {
       const r = finish
         ? { done: true, question: "" }
-        : await call<{ done: boolean; question: string }>("interviewNext", { transcript: t, questionText: topic && `${topic.followUp ? `前の質問「${topic.followUp.text}」の続きです。` : ""}${topic.text}${photoPart ? `（写真の物は、AIの判定では「${photoPart}」）` : ""}` });
+        : await call<{ done: boolean; question: string }>("interviewNext", { transcript: t, questionText: topicText() });
       // only now: if the call failed, what was said stays in the box and can be sent again
       setTurns(t);
+      setSkipped([]);
+      setSwapNote("");
       setText("");
       setAiQuestion("");
       if (!r.done) {
@@ -684,6 +714,7 @@ export function Talk({
       )}
 
       {fresh && !turns.length && !aiQuestion && <h1 className="screen-title">現場の話を、聞かせてください</h1>}
+      {swapNote && !aiQuestion && <p className="hint">{swapNote}</p>}
 
       {aiQuestion && (
         <div className="ai-question">
@@ -692,6 +723,11 @@ export function Talk({
           {canSay() && !listenerMode && !listening && (
             <button className="link" onClick={() => say(aiQuestion)}>
               🔊 もう一度聞く
+            </button>
+          )}
+          {turns.length > 0 && !listening && (
+            <button className="link" disabled={swapping || busy} onClick={() => void otherQuestion()}>
+              {swapping ? "別の質問を考えています…" : "🔄 ほかの質問にする"}
             </button>
           )}
           {fresh && !turns.length && (
