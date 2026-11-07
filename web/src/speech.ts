@@ -57,11 +57,35 @@ export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
   // stopped by a press (or by leaving the screen): anything else is the browser stopping by itself
   const stopped = useRef(false);
   const failed = useRef(false);
+  // the end of this listening, run once: by the browser's onend, or by us when the browser never says it ended
+  // (iPhone Safari with the mic refused stays silent: the screen stayed 「聞いています」 and nothing could be sent)
+  const ended = useRef(true);
+  const endNow = useCallback(() => {
+    if (ended.current) return;
+    ended.current = true;
+    setListening(false);
+    setInterim("");
+    endRef.current?.();
+  }, []);
+  // not waited on for ever: after a press, what was typed is sent even if the browser never answers
+  // each listening has its number: a late timer from the last one must not end the next
+  const session = useRef(0);
+  const endSoon = useCallback((ms: number) => {
+    const n = session.current;
+    window.setTimeout(() => {
+      if (session.current === n) endNow();
+    }, ms);
+  }, [endNow]);
 
   const stop = useCallback(() => {
     stopped.current = true;
-    rec.current?.stop();
-  }, []);
+    try {
+      rec.current?.stop();
+    } catch {
+      /* never started */
+    }
+    endSoon(1500);
+  }, [endSoon]);
 
   const start = useCallback(() => {
     const r = makeRecognition();
@@ -92,20 +116,27 @@ export function useSpeech(onFinal: (text: string) => void, onEnd?: () => void) {
     };
     r.onerror = (e) => {
       if (e.error !== "no-speech" && e.error !== "aborted") failed.current = true;
-      if (e.error === "not-allowed") setError("マイクの使用が許可されていません。設定で許可するか、文字で入力してください。");
-      else if (e.error !== "no-speech" && e.error !== "aborted") setError("音声をうまく聞き取れませんでした。");
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        setError("マイクの使用が許可されていません。設定で許可するか、文字で入力してください。");
+        endNow(); // the mic will not come: back to the typed text and its send button at once
+      } else if (e.error !== "no-speech" && e.error !== "aborted") setError("音声をうまく聞き取れませんでした。");
     };
     r.onend = () => {
       // Chrome on Android stops after a few silent seconds: say so, or the next words are said to no one
       if (!stopped.current && !failed.current) setError("聞き取りが止まりました。続けて話す時は、もう一度🎤を押してください。");
-      setListening(false);
-      setInterim("");
-      endRef.current?.();
+      endNow();
     };
     rec.current = r;
-    r.start();
+    try {
+      r.start();
+    } catch {
+      setError("音声入力を始められませんでした。文字で入力してください。");
+      return;
+    }
+    session.current++;
+    ended.current = false;
     setListening(true);
-  }, []);
+  }, [endNow]);
 
   useEffect(() => () => rec.current?.stop(), []);
   return { listening, interim, error, start, stop };
