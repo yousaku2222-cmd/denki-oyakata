@@ -41,6 +41,10 @@ export default function App() {
   const [meDot, setMeDot] = useState(false);
   // わたし →「答えを聞く」: the question is asked again on 聞く (now the veteran's card is there to answer it)
   const [askSeed, setAskSeed] = useState<{ text: string; questionId: string; n: number } | null>(null);
+  // another tab opens at its top, not at the place the last one was scrolled to
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [tab]);
   // an answer that came back since わたし was last opened: dot on わたし when the app opens
   useEffect(() => {
     if (role !== "young") return;
@@ -206,7 +210,8 @@ export default function App() {
         {/* kept mounted while other tabs are open, so a half-told story is not lost */}
         {role === "veteran" && (
           <div hidden={tab !== "talk"}>
-            {thanks && !talkDirty && (
+            {/* not for a judge: it loads a moment after 話す opens and would push the sample button down */}
+            {thanks && !talkDirty && !getTrial() && (
               <div className="thanks-note" role="status">
                 <strong>🙏 あなたの話が、若手の役に立ちました</strong>
                 <ul>

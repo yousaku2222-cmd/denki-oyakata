@@ -272,6 +272,11 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
                   setBoxErr("");
                   setBoxHeld(null);
                   delete lastOf[role];
+                  // the answer was read far down: the empty box (or the words to fix) is back at the top
+                  requestAnimationFrame(() => {
+                    window.scrollTo(0, 0);
+                    if (b.words) document.querySelector<HTMLTextAreaElement>(".screen textarea")?.focus();
+                  });
                 }}
               >
                 {b.label}

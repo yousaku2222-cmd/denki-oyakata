@@ -1195,7 +1195,7 @@ input[inputmode="decimal"] {
 }
 .birth-stage {
   position: relative;
-  padding-top: 220px; /* the words float above, then fall into the card */
+  /* padding-top is animated in CardBirth: room for the words to float in, closed once the card is filled */
 }
 .birth-word {
   position: absolute;
@@ -1326,7 +1326,11 @@ input[inputmode="decimal"] {
   flex: 1;
   width: auto;
   min-height: 40px;
-  padding: 0 12px;
+  padding: 0 8px;
+  white-space: nowrap; /* 「別のことを聞く」 left a lone 「く」 on a second line at phone width */
+}
+.ask-bar-btns button.primary {
+  flex: 1.4;
 }
 .ask-waiting ol {
   list-style: none;

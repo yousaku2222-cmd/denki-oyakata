@@ -56,7 +56,13 @@ export function CardBirth({ said, draft, onDone }: { said: string[]; draft: Draf
   return (
     <section className="screen birth" onClick={onDone} aria-label="知恵カードができました（押すと次へ）">
       <p className="birth-lead">{made ? "🎉 知恵カードができました" : "あなたの話から、知恵カードを作っています"}</p>
-      <div className="birth-stage">
+      {/* the room the words float in closes once the card is filled, so the card is not left under a blank gap */}
+      <motion.div
+        className="birth-stage"
+        initial={{ paddingTop: bits.length ? 220 : 0 }}
+        animate={{ paddingTop: 0 }}
+        transition={{ delay: bits.length ? cardAt + 0.3 + rows.length * 0.22 : 0, duration: 0.45, ease: "easeInOut" }}
+      >
         {bits.map((b, i) => {
           const s = SPOTS[i % SPOTS.length];
           const fly = 0.35 + i * 0.08 + 0.5;
@@ -101,7 +107,7 @@ export function CardBirth({ said, draft, onDone }: { said: string[]; draft: Draf
             </motion.div>
           ))}
         </motion.div>
-      </div>
+      </motion.div>
       <motion.button
         className="primary birth-next"
         initial={{ opacity: 0, y: 12 }}

@@ -134,7 +134,8 @@ const draftText = (d: Pick<Draft, "title" | "scene" | "body" | "reason" | "cauti
  * The edit screen shows them, so the veteran can fix a figure before it goes out as their knowledge.
  */
 // keep the <talk>/<card> fences intact whatever was said
-const fenced = (s: string) => s.replace(/<\/?(talk|card)[^>]*>/gi, "");
+// every < > is replaced (not removed): removing a tag once let "</ca</card>rd>" leave a working </card> behind
+const fenced = (s: string) => s.replace(/</g, "＜").replace(/>/g, "＞");
 
 const FAITHFUL_SYSTEM = `電気工事のベテランの話（聞き取りのやりとり）と、それを元にAIが書いた「知恵カード」の文（番号付き）を受け取ります。
 カードの文のうち、ベテランが話していない中身を含む文の番号を返してください。

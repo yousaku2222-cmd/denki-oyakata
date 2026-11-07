@@ -266,7 +266,8 @@ const CHECK_SYSTEM = `電気工事のベテラン（親方）が話した「知�
 - quote: 判断の元にした条文の原文から、一続きでそのまま抜き出した部分（12〜80字。言い換え・省略・漢数字の書き換えをしない）。プログラムが原文と照合し、一致しない時は使われない
 - note: differs の時だけ、条文では何がどうなっているかを1文（60字以内）。「条文では〜です。確かめてください。」のように言い、親方を責めない・説教しない。differs 以外は空文字`;
 
-const fenced = (s: string) => s.replace(/<\/?card[^>]*>/gi, "");
+// every < > is replaced (not removed): removing a tag once let "</ca</card>rd>" leave a working </card> behind
+const fenced = (s: string) => s.replace(/</g, "＜").replace(/>/g, "＞");
 
 /** Claude (Opus) reads the card's sentences against the candidate articles; the program then checks what it said. */
 export async function runLawCheck(f: CheckFields, tags: string[]): Promise<{ sentences: CardSentence[]; items: CheckItem[]; laws: Law[] }> {

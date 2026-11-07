@@ -644,6 +644,13 @@ export function Talk({
         </button>
       )}
       {topicNote}
+      {/* a judge without a site's story to tell can still see the interview. On top, so the question box's card that
+          loads a moment later cannot push it down under the judge's finger */}
+      {blank && getTrial() && (
+        <button className="secondary" onClick={() => setText(SAMPLE_STORY)}>
+          🧪 見本の話で試す
+        </button>
+      )}
       {blank && lead}
 
       {turns.length > 0 && (
@@ -705,12 +712,6 @@ export function Talk({
       {(busy || (!!text.trim() && !listening)) && (
         <button className="primary" disabled={busy} onClick={() => next(false)}>
           {busy ? "考えています…" : turns.length ? "答えを送る" : "話した内容を送る"}
-        </button>
-      )}
-      {/* a judge without a site's story to tell can still see the interview */}
-      {blank && getTrial() && (
-        <button className="secondary" onClick={() => setText(SAMPLE_STORY)}>
-          🧪 見本の話で試す
         </button>
       )}
       {sampleTold && !busy && !listening && !text.trim() && (

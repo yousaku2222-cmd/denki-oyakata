@@ -42,6 +42,7 @@ function MyRecord({ stats, answered, onAsk }: { stats: Stats; answered: Q[]; onA
         📘 わかったこと <span className="record-num"><CountOnce to={u.total} /></span>件
         <span className="record-months">（今月 {u.thisMonth}件・先月 {u.lastMonth}件）</span>
       </p>
+      {u.recent.length > 0 && u.total > u.recent.length && <p className="record-sub">最近の{u.recent.length}件</p>}
       {u.recent.length > 0 && (
         <ul className="record-asked">
           {u.recent.map((r) => (
