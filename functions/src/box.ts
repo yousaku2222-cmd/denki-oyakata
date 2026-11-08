@@ -5,7 +5,7 @@ import { db, displayAuthor, reachesYoung, spaceOf, spacesOf, str, type CardDoc }
 import { giveBackQuota, takeQuota, today } from "./limits";
 import { normalizeQuestion } from "./ask";
 import { getClient, jsonCall } from "./claude";
-import { assertShown, badItems } from "./moderate";
+import { assertShown, badItems, canCheck } from "./moderate";
 import { MODEL_ROUTER } from "./models";
 
 // Before a question goes in the box: would the veteran understand it as written? Speech input mishears and drops
@@ -115,7 +115,16 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
     const card = cardId ? await db.collection("cards").doc(cardId).get() : null;
     followUp = { questionId: prev.id, text: prev.get("text") as string, cardTitle: card?.exists && reachesYoung(card.data()) ? (card.get("title") as string) : null };
   }
-  // words every veteran will read: insults and the like do not go in the box, 「このまま送る」 or not (moderate.ts)
+  // words every veteran will read: insults and the like do not go in the box, 「このまま送る」 or not (moderate.ts).
+  // The check is a Claude call: it is counted as a check ("boxCheck", which also stops at the day's budget), and a
+  // rejected question keeps its counts (as a rejected thanks does), so resending blocked words is not free.
+  const counted = canCheck(); // the local runs make no Claude call here
+  try {
+    if (counted) await takeQuota(askerId, "boxCheck", ctx?.ip);
+  } catch (e) {
+    await giveBackQuota(askerId, "box", ctx?.ip).catch(() => undefined);
+    throw e;
+  }
   try {
     await assertShown(
       [
@@ -125,7 +134,11 @@ export async function sendToBox(data: Record<string, unknown>, uid: string, ctx?
       () => "親方に届けられない言葉が入っているようです。言い回しを変えてください。",
     );
   } catch (e) {
-    await giveBackQuota(askerId, "box", ctx?.ip).catch(() => undefined); // nothing was sent
+    if ((e as HttpsError).code === "unavailable") {
+      // the check could not be made: not the asker's doing, so nothing is counted
+      await giveBackQuota(askerId, "box", ctx?.ip).catch(() => undefined);
+      if (counted) await giveBackQuota(askerId, "boxCheck", ctx?.ip).catch(() => undefined);
+    }
     throw e;
   }
   // Would the veteran understand it? If not, nothing is written: the asker sees why and a fixed wording, and sends
@@ -379,7 +392,8 @@ export async function readSeeds(spaces: string[]) {
     const bad = await badItems(unjudged.map((o) => o.text));
     if (bad !== "failed") {
       unjudged.forEach((o, i) => (o.ok = !bad.includes(i)));
-      await Promise.all(unjudged.map((o) => o.ref.update({ seedOk: o.ok }).catch(() => undefined)));
+      // only a real verdict is kept (the local runs let everything through without asking)
+      if (canCheck()) await Promise.all(unjudged.map((o) => o.ref.update({ seedOk: o.ok }).catch(() => undefined)));
     }
   }
   return cands.filter((o) => o.ok === true).slice(0, 3).map((o) => o.text);

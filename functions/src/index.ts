@@ -76,10 +76,11 @@ const KEEP_WARM: CallableOptions = { minInstances: 1 };
 
 export const interviewNext = callable(interviewNextImpl, "claude", KEEP_WARM);
 export const draftCard = callable(draftCardImpl, "claude", KEEP_WARM);
-export const publishCard = callable(publishCardImpl, false, KEEP_WARM);
+// the words of the card are checked before it goes out (moderate.ts): it needs the key, though it counts no answer
+export const publishCard = callable(publishCardImpl, false, { ...KEEP_WARM, secrets: [anthropicKey] });
 // counts itself, after the card is known to be the caller's (a stranger's call must not use up a question)
 export const checkCard = callable(checkCardImpl, "self");
-export const setCardStatus = callable(setCardStatusImpl);
+export const setCardStatus = callable(setCardStatusImpl, false, { secrets: [anthropicKey] });
 export const myCards = callable(myCardsImpl);
 export const myCard = callable(myCardImpl);
 export const deleteDraft = callable(deleteDraftImpl);
@@ -92,7 +93,8 @@ export const sendThanks = callable(sendThanksImpl, false, { secrets: [anthropicK
 export const hideThanks = callable(hideThanksImpl);
 export const markGoodQuestion = callable(markGoodQuestionImpl);
 export const openQuestions = callable(openQuestionsImpl);
-export const talkSeeds = callable(talkSeedsImpl);
+// a question asked only of the AI is checked once before the veterans see it (moderate.ts)
+export const talkSeeds = callable(talkSeedsImpl, false, { secrets: [anthropicKey] });
 export const questionPhoto = callable(questionPhotoImpl);
 export const myQuestions = callable(myQuestionsImpl);
 export const withdrawQuestion = callable(withdrawQuestionImpl);

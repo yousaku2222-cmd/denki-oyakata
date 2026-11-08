@@ -35,7 +35,8 @@ test("insulting words do not go in the box, even sent as they are; a failed chec
     setShownJudge(failing);
     await assert.rejects(sendToBox({ text: `PF管の支持は？ ${uid}`, confirmed: true, trial: true }, uid), /確かめられなかった/);
     assert.equal((await db.collection("questions").where("askerId", "==", uid).get()).size, 0);
-    assert.equal(await boxCount(uid), 0); // nothing sent: the day's count is given back
+    // blocked words keep their counts (resending them is not free); the failed check gave its count back
+    assert.equal(await boxCount(uid), 2);
     setShownJudge(judge);
     const r = await sendToBox({ text: `触ったら死ぬぞ、と言われたけど何ボルト？ ${uid}`, confirmed: true, trial: true }, uid);
     assert.ok("questionId" in r && r.questionId);

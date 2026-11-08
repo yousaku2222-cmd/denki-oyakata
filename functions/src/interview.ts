@@ -464,7 +464,9 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
   try {
     await assertCardShown(young, fields.tags, shownName);
   } catch (e) {
-    await giveBackQuota(authorId, kind, ctx?.ip).catch(() => undefined); // nothing went out
+    // the check could not be made: nothing went out and it was not the veteran's doing. A rejected card keeps the
+    // count, so resending blocked words (a Claude call each time) is not free.
+    if ((e as HttpsError).code === "unavailable") await giveBackQuota(authorId, kind, ctx?.ip).catch(() => undefined);
     throw e;
   }
   const now = Timestamp.now();
@@ -516,11 +518,17 @@ export async function setCardStatus(data: Record<string, unknown>, uid: string, 
     const priv = await db.collection("cardPrivate").doc(cardId).get();
     // from わたしのカード: the check is made on the edit screen (［直す］), which then saves it
     const y = forYoung(priv.get("lawCheck") as SavedCheck | undefined, fullOf(priv, card), card.tags ?? [], "条文との照らし合わせをしてから公開してください。［直す］で開くと照らせます。").update;
-    // shown again: its words are checked as on publishing (a card hidden before this check came in, too)
-    await assertCardShown(y, card.tags ?? [], card.showAuthorName ? card.authorName : "");
+    // shown again: its words are checked as on publishing (a card hidden before this check came in, too). Counted
+    // first: the check is a Claude call, and only a check that could not be made gives the count back.
+    await takeQuota(authorId, "edit", ctx?.ip);
+    try {
+      await assertCardShown(y, card.tags ?? [], card.showAuthorName ? card.authorName : "");
+    } catch (e) {
+      if ((e as HttpsError).code === "unavailable") await giveBackQuota(authorId, "edit", ctx?.ip).catch(() => undefined);
+      throw e;
+    }
     young = y;
-  }
-  await takeQuota(authorId, "edit", ctx?.ip);
+  } else await takeQuota(authorId, "edit", ctx?.ip);
   await ref.update({ ...young, status, updatedAt: Timestamp.now() });
   return { ok: true };
 }

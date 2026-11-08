@@ -58,6 +58,11 @@ export function setShownJudge(j: ShownJudge | null | undefined) {
   override = j;
 }
 const theJudge = (): ShownJudge | null => (override === undefined ? (getClient() ? judgeShown : null) : override);
+// The local emulators' dummy mode and the tests run without a key: there nothing is checked. Anywhere else, no key
+// is a check that could not be made (a function not given the key would otherwise let every word through).
+const LOCAL = process.env.FUNCTIONS_EMULATOR === "true" || !!process.env.FIRESTORE_EMULATOR_HOST;
+/** Whether a real verdict is made (not the local runs' let-everything-through): only a real one may be kept. */
+export const canCheck = () => !!theJudge();
 
 /**
  * Which items must not be shown: [] when all may go (or there is no check to make), "failed" when the check could
@@ -66,7 +71,12 @@ const theJudge = (): ShownJudge | null => (override === undefined ? (getClient()
 export async function badItems(items: string[]): Promise<number[] | "failed"> {
   const judge = theJudge();
   const list = items.map((t) => t.trim());
-  if (!judge || !list.some(Boolean)) return [];
+  if (!list.some(Boolean)) return [];
+  if (!judge) {
+    if (LOCAL) return [];
+    logger.error("shown-words check has no key: nothing is shown");
+    return "failed";
+  }
   try {
     return shownVerdict(await judge(list), list.length);
   } catch (e) {
