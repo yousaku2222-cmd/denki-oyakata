@@ -2962,3 +2962,17 @@ button.law-badge-go { border: 1px solid var(--law); min-height: 28px; font: inhe
 .scene-list .hint {
   margin: 0;
 }
+.scene-asked {
+  margin-left: 4px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+.scene-asked-note {
+  margin: 2px 0 0;
+}
+.next-ask {
+  margin-top: 12px;
+}
+.next-ask .hint {
+  margin: 0;
+}

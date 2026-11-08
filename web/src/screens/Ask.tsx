@@ -12,6 +12,7 @@ import { AnswerSample } from "../AnswerSample";
 import { GlossSheet, Glossed, fieldTerms, firstMentions, meaningsFor, useGlossary, type FieldWord, type Term } from "../Glossary";
 import { Icon, ic } from "../Icon";
 import { SceneFinder } from "../SceneFinder";
+import { nextFor } from "../sceneQuestions";
 import { LawCheckBadge, LawLinks, SpecNote, type LawLink } from "../LawCheck";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
@@ -78,6 +79,8 @@ const lastOf: Partial<Record<Role, Last>> = {};
 // answer that lands while away is kept in lastOf for the next opening
 type Pending = { asked: string; done: Promise<Answer> };
 const pendingOf: Partial<Record<Role, Pending>> = {};
+// what was asked since the app opened: 続けて聞く does not offer it again
+const askedSoFar: string[] = [];
 
 export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string; seedQuestionId?: string }) {
   const [text, setText] = useState("");
@@ -129,6 +132,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
   // after: a follow-up to the question opened from わたし (the AI reads it as the continuation)
   async function submit(q = text, after?: string) {
     if (!q.trim() || busy) return;
+    askedSoFar.push(q.trim());
     setBusy(true);
     setErr("");
     setBoxErr("");
@@ -502,6 +506,7 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
             </p>
           )}
           {boxHeld && <SendCheck key={boxHeld.text} held={boxHeld} sending={sent} onSend={(q, confirmed, from) => void toBox(q, confirmed, from)} />}
+          {!fromMe && !busy && <NextAsk asked={asked} onAsk={(q) => void submit(q)} />}
           {fromMe && seed && seedQuestionId && <FollowUp role={role} prev={seed} prevId={seedQuestionId} first={asked !== seed ? asked : ""} busy={busy} onAsk={(q) => void submit(q, seed)} />}
           {sent && (
             <motion.p className="hint sent-note" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
@@ -606,6 +611,22 @@ function FollowUp({ role, prev, prevId, first, busy, onAsk }: { role: Role; prev
       {err && <p className="hint error">{err}</p>}
       {note && <p className="hint sent-note">{note}</p>}
       {envelope}
+    </div>
+  );
+}
+
+/** After an answer: a next step in the same place and work (sceneQuestions.ts), for one who does not know what to ask next. */
+function NextAsk({ asked, onAsk }: { asked: string; onAsk: (q: string) => void }) {
+  const next = nextFor(asked, askedSoFar);
+  if (!next.length) return null;
+  return (
+    <div className="next-ask">
+      <p className="hint">🧭 続けて聞くなら</p>
+      {next.map((q) => (
+        <button key={q} type="button" className="chip example-chip" onClick={() => onAsk(q)}>
+          {q}
+        </button>
+      ))}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { canSay, hush, say, unlockSay } from "../speech";
 import { LawCheckPanel, SpecNote, type LawCheckResult, type LawCheckState } from "../LawCheck";
 import { PlainNote } from "../Glossary";
 import { StarBurst } from "./Box";
-import { SceneFinder } from "../SceneFinder";
+import { SceneFinder, type YoungAsk } from "../SceneFinder";
 
 /** The card as young workers would get it (publishCard with preview): the ⚠️ / 🔍 sentences against a law taken out. */
 type YoungView = {
@@ -99,6 +99,7 @@ export function Talk({
   onDone,
   onBack,
   boxOpen = 0,
+  asks,
   onOpenBox,
   onDirty,
   onTryAsYoung,
@@ -109,6 +110,7 @@ export function Talk({
   active?: boolean; // false while another tab is shown (this screen stays mounted)
   onDone: () => void;
   onBack?: () => void; // opened from わたしのカード: going back there is where the veteran came from
+  asks?: YoungAsk[]; // young workers' questions waiting (質問箱 and AI-only): marked on the scene chips
   boxOpen?: number; // young workers' questions waiting in 質問箱: answering them starts there, not here
   onOpenBox?: () => void;
   onDirty?: (dirty: boolean) => void; // something told or edited that is not published yet
@@ -824,6 +826,7 @@ export function Talk({
           <p className="part-sub">🎙️ 何から話しますか？ 押すと、聞き手がその質問から始めます</p>
           <SceneFinder
             who="veteran"
+            asks={asks}
             onPick={(q) => {
               unlockSay();
               setAiQuestion(q);

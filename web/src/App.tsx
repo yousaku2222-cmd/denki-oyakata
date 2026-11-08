@@ -12,6 +12,7 @@ import { Photo, type CalcStart } from "./screens/Photo";
 import { FlowSteps } from "./FlowSteps";
 import { Icon } from "./Icon";
 import { UpdateNote } from "./UpdateNote";
+import type { YoungAsk } from "./SceneFinder";
 import { call } from "./firebase";
 
 type Tab = "ask" | "browse" | "calc" | "photo" | "me" | "talk" | "box" | "mycards";
@@ -57,6 +58,7 @@ export default function App() {
   const [boxNew, setBoxNew] = useState(0);
   const [boxQs, setBoxQs] = useState<OpenQ[]>([]); // all the open ones, for 話す's way to the box
   const boxOpen = boxQs.length;
+  const [aiSeeds, setAiSeeds] = useState<string[]>([]); // asked only of the AI: no one sent them, but a veteran can answer
   useEffect(() => {
     if (role !== "veteran" || tab === "box") return;
     call<{ questions: OpenQ[] }>("openQuestions", {})
@@ -64,6 +66,9 @@ export default function App() {
         setBoxNew(r.questions.filter((q) => q.lastAskedAt > boxLastSeen()).length);
         setBoxQs(r.questions);
       })
+      .catch(() => {}); // only a hint
+    call<{ questions: string[] }>("talkSeeds", {})
+      .then((r) => setAiSeeds(r.questions))
       .catch(() => {}); // only a hint
   }, [role, tab]);
   // a veteran's card that helped someone since わたしのカード was last opened: dot on that tab when the app opens
@@ -134,6 +139,14 @@ export default function App() {
     setTab("talk");
     window.scrollTo(0, 0); // the question being answered is at the top of 話す
   };
+  // the young workers' questions for 話す's scene chips, opened as 質問箱 opens them
+  const sameWords = (t: string) => t.normalize("NFKC").replace(/[s？?。、]/g, "");
+  const asks: YoungAsk[] = [
+    ...boxQs.map((q) => ({ text: q.text, open: () => startTalk({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp }) })),
+    ...aiSeeds
+      .filter((t) => !boxQs.some((q) => sameWords(q.text) === sameWords(t)))
+      .map((t) => ({ text: t, open: () => startTalk({ questionId: "", text: t, askerName: "若手", hasPhoto: false }) })),
+  ];
 
   return (
     <div className="app" data-role={role}>
@@ -238,7 +251,7 @@ export default function App() {
                 </div>
               </div>
             )}
-            <Talk key={talkKey} topic={topic} resumeCardId={resumeId} active={tab === "talk"} onDirty={setTalkDirty} onDone={() => startTalk(null, null, true)} boxOpen={boxOpen} onOpenBox={() => setTab("box")}
+            <Talk key={talkKey} topic={topic} resumeCardId={resumeId} active={tab === "talk"} onDirty={setTalkDirty} onDone={() => startTalk(null, null, true)} boxOpen={boxOpen} asks={asks} onOpenBox={() => setTab("box")}
               lead={!talkDirty && <Waiting questions={boxQs} onAnswer={(q) => startTalk(q)} onOpenBox={() => setTab("box")} />}
               onTryAsYoung={(q) => {
                 choose("young");

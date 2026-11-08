@@ -86,3 +86,58 @@ export function openersFor(place: Place | null, work: Work | null): string[] {
   const what = p && w ? `${p}の${w}` : p ? `${p}の作業` : `${w}の作業`;
   return [`${what}で、新人がよくやる失敗は何ですか？`, `${what}で、段取りでやっておくことは？`, `${what}で、ヒヤッとしたことはありますか？`, `${what}で、新人にまず教えることは？`];
 }
+
+// Which place and work a question is about, by its words (no AI: instant and free). A question with none of
+// them is just not marked; the words are narrow so a question rarely lands in the wrong place.
+const PLACE_WORDS: Record<Place, RegExp> = {
+  ceiling: /天井/,
+  floor: /床下/,
+  outdoor: /屋外|外壁|屋側|引込|室外機|接地棒|雨/,
+  panel: /盤|ブレーカ|遮断器|主幹/,
+  wall: /壁|スイッチ|コンセント|器具付/,
+};
+const WORK_WORDS: Record<Work, RegExp> = {
+  pipe: /配管|PF|ＰＦ|VE|ＶＥ|CD管|電線管|サドル|管を|管の|管は|管で|管が/,
+  wire: /配線|通線|ケーブル|VVF|ＶＶＦ|電線|呼び線|結線|線を引|線が通/,
+  box: /ボックス|リングスリーブ|コネクタ|ジョイント|接続/,
+  earth: /接地|アース|漏電/,
+  fixture: /コンセント|スイッチ|照明|ダウンライト|器具|エアコン/,
+};
+export function sceneOf(text: string): { places: Place[]; works: Work[] } {
+  const t = text.normalize("NFKC");
+  return {
+    places: PLACES.map((p) => p.key).filter((k) => PLACE_WORDS[k].test(t)),
+    works: WORKS.map((w) => w.key).filter((k) => WORK_WORDS[k].test(t)),
+  };
+}
+/** Whether a question is about what is picked (each pick must match; nothing picked: no). */
+export function inScene(text: string, place: Place | null, work: Work | null): boolean {
+  if (!place && !work) return false;
+  const s = sceneOf(text);
+  return (!place || s.places.includes(place)) && (!work || s.works.includes(work));
+}
+
+// the same question in other words at its end (「…ことは？」/「…ことはありますか？」): the start is compared
+const same = (a: string) => a.normalize("NFKC").replace(/[s？?。、]/g, "").slice(0, 14);
+/** After an answer: the next questions of the same place and work, not the one asked nor any asked before. */
+export function nextFor(asked: string, before: string[] = []): string[] {
+  const s = sceneOf(asked);
+  if (!s.places.length && !s.works.length) return [];
+  const seen = new Set([asked, ...before].map(same));
+  // the closest first: same place and work; same work, for anywhere; same work elsewhere (only when no place was
+  // said); same place, other work
+  const score = ([p, w]: [Place | null, Work, string]) => {
+    const pl = p !== null && s.places.includes(p);
+    const wk = s.works.includes(w);
+    if (pl && wk) return 4;
+    if (wk && p === null) return 3;
+    if (wk && !s.places.length) return 2;
+    if (pl) return 1;
+    return 0;
+  };
+  return Q.map((q, i) => ({ q: q[2], n: score(q), i }))
+    .filter((x) => x.n > 0 && !seen.has(same(x.q)))
+    .sort((a, b) => b.n - a.n || a.i - b.i)
+    .slice(0, 3)
+    .map((x) => x.q);
+}
