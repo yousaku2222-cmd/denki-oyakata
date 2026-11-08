@@ -140,9 +140,9 @@ export default function App() {
     window.scrollTo(0, 0); // the question being answered is at the top of 話す
   };
   // the young workers' questions for 話す's scene chips, opened as 質問箱 opens them
-  const sameWords = (t: string) => t.normalize("NFKC").replace(/[s？?。、]/g, "");
+  const sameWords = (t: string) => t.normalize("NFKC").replace(/[\s？?。、]/g, "");
   const asks: YoungAsk[] = [
-    ...boxQs.map((q) => ({ text: q.text, open: () => startTalk({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp }) })),
+    ...boxQs.map((q) => ({ text: q.text, open: () => startTalk({ questionId: q.id, text: q.text, askerName: q.askerName, hasPhoto: q.hasPhoto, followUp: q.followUp, good: q.good }) })),
     ...aiSeeds
       .filter((t) => !boxQs.some((q) => sameWords(q.text) === sameWords(t)))
       .map((t) => ({ text: t, open: () => startTalk({ questionId: "", text: t, askerName: "若手", hasPhoto: false }) })),
@@ -370,7 +370,7 @@ function TrialGuide({ role }: { role: Role | null }) {
 }
 
 // a question in 質問箱, as openQuestions gives it (the fields 話す's top needs)
-type OpenQ = { id: string; text: string; askerName: string; hasPhoto: boolean; followUp: Topic["followUp"]; createdAt: number; lastAskedAt: number };
+type OpenQ = { id: string; text: string; askerName: string; hasPhoto: boolean; followUp: Topic["followUp"]; createdAt: number; lastAskedAt: number; good?: boolean };
 
 /**
  * On top of 話す: the young worker who has waited longest, by name, one press from answering. A veteran opens 話す

@@ -4,18 +4,19 @@
 // A veteran gets the same chips on 話す, with openers made from the same words.
 
 export const PLACES = [
-  { key: "ceiling", label: "天井裏" },
-  { key: "floor", label: "床下" },
-  { key: "outdoor", label: "屋外" },
-  { key: "panel", label: "盤まわり" },
-  { key: "wall", label: "壁・器具付け" },
+  { key: "ceiling", label: "天井裏", talk: "天井裏" },
+  { key: "floor", label: "床下", talk: "床下" },
+  { key: "outdoor", label: "屋外", talk: "屋外" },
+  { key: "panel", label: "盤まわり", talk: "盤まわり" },
+  { key: "wall", label: "壁・器具付け", talk: "壁" },
 ] as const;
 export const WORKS = [
-  { key: "pipe", label: "配管", talk: "配管" },
-  { key: "wire", label: "配線・通線", talk: "配線" },
-  { key: "box", label: "ボックス", talk: "ボックスまわり" },
-  { key: "earth", label: "接地", talk: "接地（アース）" },
-  { key: "fixture", label: "器具・コンセント", talk: "器具付け" },
+  // talk: 「（場所で）〜時」, the veteran's opener
+  { key: "pipe", label: "配管", talk: "配管をする" },
+  { key: "wire", label: "配線・通線", talk: "配線や通線をする" },
+  { key: "box", label: "ボックス", talk: "ボックスを付ける" },
+  { key: "earth", label: "接地", talk: "接地（アース）を取る" },
+  { key: "fixture", label: "器具・コンセント", talk: "器具を付ける" },
 ] as const;
 export type Place = (typeof PLACES)[number]["key"];
 export type Work = (typeof WORKS)[number]["key"];
@@ -81,10 +82,11 @@ export function questionsFor(place: Place | null, work: Work | null): string[] {
 /** The veteran's openers on 話す, made from the picked words. */
 export function openersFor(place: Place | null, work: Work | null): string[] {
   if (!place && !work) return [];
-  const p = PLACES.find((x) => x.key === place)?.label;
+  const p = PLACES.find((x) => x.key === place)?.talk;
   const w = WORKS.find((x) => x.key === work)?.talk;
-  const what = p && w ? `${p}の${w}` : p ? `${p}の作業` : `${w}の作業`;
-  return [`${what}で、新人がよくやる失敗は何ですか？`, `${what}で、段取りでやっておくことは？`, `${what}で、ヒヤッとしたことはありますか？`, `${what}で、新人にまず教えることは？`];
+  // 「天井裏で配管をする時」「天井裏の作業で」「配管をする時」: each word once, as said
+  const what = p && w ? `${p}で${w}時` : p ? `${p}の作業で` : `${w}時`;
+  return [`${what}、新人がよくやる失敗は何ですか？`, `${what}、段取りでやっておくことは？`, `${what}、ヒヤッとしたことはありますか？`, `${what}、新人にまず教えることは？`];
 }
 
 // Which place and work a question is about, by its words (no AI: instant and free). A question with none of
@@ -118,7 +120,7 @@ export function inScene(text: string, place: Place | null, work: Work | null): b
 }
 
 // the same question in other words at its end (「…ことは？」/「…ことはありますか？」): the start is compared
-const same = (a: string) => a.normalize("NFKC").replace(/[s？?。、]/g, "").slice(0, 14);
+const same = (a: string) => a.normalize("NFKC").replace(/[\s？?。、]/g, "").slice(0, 14);
 /** After an answer: the next questions of the same place and work, not the one asked nor any asked before. */
 export function nextFor(asked: string, before: string[] = []): string[] {
   const s = sceneOf(asked);

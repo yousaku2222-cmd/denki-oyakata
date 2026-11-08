@@ -56,6 +56,8 @@ export function SceneFinder({ who, onPick, idle, asks = [] }: { who: "young" | "
             </button>
           ))}
         </div>
+      ) : place && work && who === "young" ? (
+        <p className="hint">この組み合わせの候補はまだありません。場所か作業の片方だけ選ぶと出ます。</p>
       ) : (
         idle
       )}

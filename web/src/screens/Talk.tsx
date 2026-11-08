@@ -197,6 +197,7 @@ export function Talk({
     setText(k.text);
     setAiQuestion(k.aiQuestion);
     setTopic(k.topic);
+    if (k.topic?.good) setGood("sent");
     setKept(null);
   };
 
