@@ -11,6 +11,7 @@ import { useFlyToMe } from "../FlyToMe";
 import { AnswerSample } from "../AnswerSample";
 import { GlossSheet, Glossed, fieldTerms, firstMentions, meaningsFor, useGlossary, type FieldWord, type Term } from "../Glossary";
 import { Icon, ic } from "../Icon";
+import { SceneFinder } from "../SceneFinder";
 import { LawCheckBadge, LawLinks, SpecNote, type LawLink } from "../LawCheck";
 
 // Sentences come in one by one, and the check of a law quote lands on it like a seal: the check is the program's, not the AI's.
@@ -295,6 +296,19 @@ export function Ask({ role, seed, seedQuestionId }: { role: Role; seed?: string;
             </button>
           )}
           <p className="hint">親方の知恵が無かった質問は、名前を伏せて親方の話のきっかけになります。</p>
+          <SceneFinder
+            who="young"
+            onPick={(q) => {
+              setText(q);
+              // into the box, not sent: the young worker adds their own situation first
+              const box = document.querySelector<HTMLTextAreaElement>(".mic-input textarea");
+              box?.scrollIntoView({ block: "center", behavior: "smooth" });
+              setTimeout(() => {
+                box?.focus();
+                box?.setSelectionRange(q.length, q.length);
+              }, 0);
+            }}
+          />
         </>
       )}
 

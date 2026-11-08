@@ -7,6 +7,7 @@ import { canSay, hush, say, unlockSay } from "../speech";
 import { LawCheckPanel, SpecNote, type LawCheckResult, type LawCheckState } from "../LawCheck";
 import { PlainNote } from "../Glossary";
 import { StarBurst } from "./Box";
+import { SceneFinder } from "../SceneFinder";
 
 /** The card as young workers would get it (publishCard with preview): the ⚠️ / 🔍 sentences against a law taken out. */
 type YoungView = {
@@ -821,17 +822,28 @@ export function Talk({
             </button>
           )}
           <p className="part-sub">🎙️ 何から話しますか？ 押すと、聞き手がその質問から始めます</p>
-          {starters.map((q) => (
-            <button key={q} className="seed" onClick={() => {
-                unlockSay();
-                setAiQuestion(q);
-              }}>
-              {q}
-            </button>
-          ))}
-          <button className="link" onClick={() => setRound((r) => r + 1)}>
-            別のきっかけ ↻
-          </button>
+          <SceneFinder
+            who="veteran"
+            onPick={(q) => {
+              unlockSay();
+              setAiQuestion(q);
+            }}
+            idle={
+              <>
+                {starters.map((q) => (
+                  <button key={q} className="seed" onClick={() => {
+                      unlockSay();
+                      setAiQuestion(q);
+                    }}>
+                    {q}
+                  </button>
+                ))}
+                <button className="link" onClick={() => setRound((r) => r + 1)}>
+                  別のきっかけ ↻
+                </button>
+              </>
+            }
+          />
           <p className="hint">押さずに、思いついたことをそのまま話しても大丈夫です。</p>
         </div>
       )}

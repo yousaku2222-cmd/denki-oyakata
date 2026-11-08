@@ -2914,3 +2914,51 @@ button.law-badge-go { border: 1px solid var(--law); min-height: 28px; font: inhe
   border-color: var(--yellow);
   opacity: 1;
 }
+/* 🧭 選んで聞く / 場面から話す (SceneFinder.tsx) */
+.scene-finder {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+}
+.scene-head {
+  margin: 0;
+  font-weight: 700;
+}
+.scene-k {
+  margin: 4px 0 0;
+  font-size: var(--fs-s);
+  color: var(--muted);
+}
+.scene-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.scene-chip {
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs-s);
+  cursor: pointer;
+}
+.scene-chip.on {
+  background: var(--sel-bg);
+  color: var(--sel-fg);
+  border-color: var(--sel-bg);
+  font-weight: 700;
+}
+.scene-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+.scene-list .hint {
+  margin: 0;
+}
