@@ -4,7 +4,8 @@ import { DocumentSnapshot, FieldValue, Timestamp } from "firebase-admin/firestor
 import { getClient, jsonCall } from "./claude";
 import { MODEL_ANSWER, MODEL_FAITHFUL } from "./models";
 import { CATEGORIES, COMPANY, CardDoc, FieldTerm, LAW_CHECK_VER, LOCATIONS, Turn, db, spaceOf, spacesOf, str, strList, turns } from "./common";
-import { takeQuota } from "./limits";
+import { giveBackQuota, takeQuota } from "./limits";
+import { assertShown } from "./moderate";
 import { openQuestionCount } from "./box";
 import { thanksTo } from "./thanks";
 import { lawLabel, numbersMissing, searchLaws } from "./laws";
@@ -409,6 +410,28 @@ function forYoung(saved: SavedCheck | undefined, full: FullCard, tags: string[],
   return { update, hidden: r.hidden, summary: r.summary };
 }
 
+/**
+ * The card as young workers will read it, with the shown name, checked for words not to show anyone (moderate.ts):
+ * anyone can act as a veteran, so insults and the like must not go out on a card. The rough way veterans teach
+ * safety passes. Throws with the parts to reword (the card stays as it was).
+ */
+async function assertCardShown(y: { title: string; scene: string; body: string; reason: string; caution: string; terms?: FieldTerm[]; plain?: string }, tags: string[], name: string) {
+  await assertShown(
+    [
+      { label: "一言でいうと", text: y.title },
+      { label: "どんな現場・場面で", text: y.scene },
+      { label: "やり方・コツ", text: y.body },
+      { label: "なぜそうするか", text: y.reason },
+      { label: "新人がよく間違えること", text: y.caution },
+      { label: "言葉の意味", text: (y.terms ?? []).map((t) => `${t.word}：${t.meaning}`).join("\n") },
+      { label: "標準語では", text: y.plain ?? "" },
+      { label: "探す時の言葉", text: tags.join("、") },
+      { label: "名前", text: name },
+    ],
+    (labels) => `「${labels.join("」「")}」に、若手に見せられない言葉が入っているようです。言い回しを変えてください。`,
+  );
+}
+
 const fullOf = (priv: DocumentSnapshot, card: CardDoc): FullCard =>
   (priv.get("full") as FullCard | undefined) ?? { title: card.title, scene: card.scene, body: card.body, reason: card.reason, caution: card.caution, terms: card.terms ?? [], plain: card.plain ?? "" };
 
@@ -432,11 +455,18 @@ export async function publishCard(data: Record<string, unknown>, uid: string, ct
   }
   // Anyone can act as a veteran (no login by design), so first publications per device are capped; so are later
   // fixes, since each one makes the saved answers of the cards' questions stale (ask.ts cacheKey).
-  await takeQuota(authorId, card.status === "draft" ? "publish" : "edit", ctx?.ip);
+  const kind = card.status === "draft" ? "publish" : "edit";
+  await takeQuota(authorId, kind, ctx?.ip);
   const authorName = nameIn || (priv.get("authorName") as string | undefined) || card.authorName;
   const showAuthorName = data.showAuthorName !== false;
   // The card itself is public: keep the name out of it unless the veteran chose to show it.
   const shownName = showAuthorName ? authorName : "";
+  try {
+    await assertCardShown(young, fields.tags, shownName);
+  } catch (e) {
+    await giveBackQuota(authorId, kind, ctx?.ip).catch(() => undefined); // nothing went out
+    throw e;
+  }
   const now = Timestamp.now();
   const newStatus: CardDoc["status"] = card.status === "private" ? "private" : "published";
 
@@ -485,7 +515,10 @@ export async function setCardStatus(data: Record<string, unknown>, uid: string, 
   if (status === "published") {
     const priv = await db.collection("cardPrivate").doc(cardId).get();
     // from わたしのカード: the check is made on the edit screen (［直す］), which then saves it
-    young = forYoung(priv.get("lawCheck") as SavedCheck | undefined, fullOf(priv, card), card.tags ?? [], "条文との照らし合わせをしてから公開してください。［直す］で開くと照らせます。").update;
+    const y = forYoung(priv.get("lawCheck") as SavedCheck | undefined, fullOf(priv, card), card.tags ?? [], "条文との照らし合わせをしてから公開してください。［直す］で開くと照らせます。").update;
+    // shown again: its words are checked as on publishing (a card hidden before this check came in, too)
+    await assertCardShown(y, card.tags ?? [], card.showAuthorName ? card.authorName : "");
+    young = y;
   }
   await takeQuota(authorId, "edit", ctx?.ip);
   await ref.update({ ...young, status, updatedAt: Timestamp.now() });
