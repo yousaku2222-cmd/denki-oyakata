@@ -70,21 +70,19 @@ function callable(fn: Handler, quota: Quota = false, opts: CallableOptions = {})
   });
 }
 
-// One warm instance each for the judging days, so the first question or interview does not wait for a cold start.
-// TODO: set back to 0 (remove KEEP_WARM) once the judging period ends on 11/10. It is billed while idle.
-const KEEP_WARM: CallableOptions = { minInstances: 1 };
+// No warm instances (minInstances 0): they were kept for the judging days only and are billed while idle.
 
-export const interviewNext = callable(interviewNextImpl, "claude", KEEP_WARM);
-export const draftCard = callable(draftCardImpl, "claude", KEEP_WARM);
+export const interviewNext = callable(interviewNextImpl, "claude");
+export const draftCard = callable(draftCardImpl, "claude");
 // the words of the card are checked before it goes out (moderate.ts): it needs the key, though it counts no answer
-export const publishCard = callable(publishCardImpl, false, { ...KEEP_WARM, secrets: [anthropicKey] });
+export const publishCard = callable(publishCardImpl, false, { secrets: [anthropicKey] });
 // counts itself, after the card is known to be the caller's (a stranger's call must not use up a question)
 export const checkCard = callable(checkCardImpl, "self");
 export const setCardStatus = callable(setCardStatusImpl, false, { secrets: [anthropicKey] });
 export const myCards = callable(myCardsImpl);
 export const myCard = callable(myCardImpl);
 export const deleteDraft = callable(deleteDraftImpl);
-export const ask = callable(askImpl, "self", KEEP_WARM);
+export const ask = callable(askImpl, "self");
 export const markHelped = callable(markHelpedImpl);
 // no count for Claude here: the short check before sending counts itself ("boxCheck") and is skipped when it fails
 export const sendToBox = callable(sendToBoxImpl, false, { secrets: [anthropicKey] });
