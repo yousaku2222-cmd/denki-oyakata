@@ -1,5 +1,5 @@
 import { Timestamp } from "firebase-admin/firestore";
-import { jsonCall } from "./claude";
+import { getClient, isBusy, jsonCall } from "./claude";
 import { MODEL_HEAVY } from "./models";
 import { Law, getLawById, lawLabel, normalizeForQuote, quoteIsInOriginal, searchLaws } from "./laws";
 import { MIN_ANSWER_QUOTE } from "./ask";
@@ -281,17 +281,23 @@ const CHECK_SYSTEM = `電気工事のベテラン（親方）が話した「知�
 // every < > is replaced (not removed): removing a tag once let "</ca</card>rd>" leave a working </card> behind
 const fenced = (s: string) => s.replace(/</g, "＜").replace(/>/g, "＞");
 
-/** Claude (Opus) reads the card's sentences against the candidate articles; the program then checks what it said. */
-export async function runLawCheck(f: CheckFields, tags: string[]): Promise<{ sentences: CardSentence[]; items: CheckItem[]; laws: Law[] }> {
-  const sentences = cardSentences(f);
-  const laws = lawCandidates(f, tags);
-  if (!sentences.length || !laws.length) return { sentences, items: [], laws };
-  const r = await jsonCall<{ items: RawItem[] }>({
+/** What the check sends: the card's sentences inside one <card> (the veteran's words cannot close it), then the articles. */
+export function checkPrompt(sentences: CardSentence[], laws: Law[]): string {
+  return `<card>\n${sentences.map((s, i) => `${i + 1}. （${FIELD_LABEL[s.field]}）${fenced(s.text)}`).join("\n")}\n</card>\n\n条文:\n${laws
+    .map((l) => `[lawId=${l.id}] ${l.lawName}（${l.edition}） ${l.article}【${l.heading}】\n原文:\n${l.text}`)
+    .join("\n\n")}`;
+}
+
+/** Asks Claude to read the card's prompt (checkPrompt) against the articles; returns its raw reply (read by checkedReply). */
+// signal: aborted when the check runs out of time (runLawCheck), so the request itself stops there
+export type LawJudge = (user: string, signal: AbortSignal) => Promise<unknown>;
+
+const judgeLaw: LawJudge = (user, signal) =>
+  jsonCall<unknown>({
     model: MODEL_HEAVY,
     system: CHECK_SYSTEM,
-    user: `<card>\n${sentences.map((s, i) => `${i + 1}. （${FIELD_LABEL[s.field]}）${fenced(s.text)}`).join("\n")}\n</card>\n\n条文:\n${laws
-      .map((l) => `[lawId=${l.id}] ${l.lawName}（${l.edition}） ${l.article}【${l.heading}】\n原文:\n${l.text}`)
-      .join("\n\n")}`,
+    user,
+    signal,
     schema: {
       type: "object",
       properties: {
@@ -319,7 +325,102 @@ export async function runLawCheck(f: CheckFields, tags: string[]): Promise<{ sen
     maxTokens: 8000,
     effort: "medium",
   });
-  return { sentences, items: checkItems(r.items ?? [], sentences, new Set(laws.map((l) => l.id))), laws };
+
+// for the tests: undefined uses Claude when there is a key (none in the local emulators' dummy mode: nothing is checked)
+let lawOverride: LawJudge | null | undefined;
+let timeoutOverride: number | undefined;
+/** timeoutMs: for the tests, a shorter time limit for checkCard's checks (undefined: LAW_CHECK_TIMEOUT_MS) */
+export function setLawJudge(j: LawJudge | null | undefined, timeoutMs?: number) {
+  lawOverride = j;
+  timeoutOverride = j === undefined ? undefined : timeoutMs;
+}
+const theLawJudge = (): LawJudge | null => (lawOverride === undefined ? (getClient() ? judgeLaw : null) : lawOverride);
+/** Whether a real check is made (not the local runs' check-nothing): checkCard refuses outside the local runs if not. */
+export const canLawCheck = () => !!theLawJudge();
+
+/**
+ * The check could not be made (no key, Claude failed, a reply of the wrong shape, no reply in time): the card is not
+ * "checked" by it, nothing is saved, and the caller refuses (checkCard). A busy Claude is not wrapped (claude.ts isBusy).
+ */
+export class LawCheckFailed extends Error {
+  /**
+   * No reply in time: the request was cut off (aborted) after Claude may already have worked on it, so it may be
+   * billed. The count is not given back then (checkCard), or slow calls could run up the bill for free.
+   */
+  readonly timedOut: boolean;
+  constructor(why: string, readonly cause?: unknown, timedOut = false) {
+    super(`law check failed: ${why}`);
+    this.timedOut = timedOut;
+  }
+}
+
+/** Under the functions' 120 seconds (index.ts), so a slow reply ends as a check that could not be made. */
+export const LAW_CHECK_TIMEOUT_MS = 100_000;
+
+const VERDICTS = ["same", "stricter", "differs", "unrelated"];
+const isStr = (x: unknown) => typeof x === "string";
+/**
+ * The reply's items, or null when the reply is not of the asked shape: a missing list, an item that is not one of
+ * the card's numbered sentences or has no known verdict. Such a reply is no check (an unread list would let every
+ * sentence out as if it had no article about it).
+ */
+export function checkedReply(raw: unknown, sentenceCount: number): RawItem[] | null {
+  const r = raw as { items?: unknown } | null;
+  if (!r || typeof r !== "object" || !Array.isArray(r.items)) return null;
+  const ok = r.items.every((x: unknown) => {
+    const i = x as Partial<Record<keyof RawItem, unknown>> | null;
+    return (
+      !!i &&
+      typeof i === "object" &&
+      Number.isInteger(i.n) &&
+      (i.n as number) >= 1 &&
+      (i.n as number) <= sentenceCount &&
+      VERDICTS.includes(i.verdict as string) &&
+      isStr(i.lawId) &&
+      isStr(i.quote) &&
+      isStr(i.note) &&
+      (i.part === undefined || isStr(i.part)) &&
+      (i.fix === undefined || isStr(i.fix))
+    );
+  });
+  return ok ? (r.items as RawItem[]) : null;
+}
+
+/**
+ * Claude (Opus) reads the card's sentences against the candidate articles; the program then checks what it said.
+ * Throws LawCheckFailed when the check could not be made (never returns an unread reply as a check).
+ */
+export async function runLawCheck(f: CheckFields, tags: string[], timeoutMs = timeoutOverride ?? LAW_CHECK_TIMEOUT_MS): Promise<{ sentences: CardSentence[]; items: CheckItem[]; laws: Law[] }> {
+  const sentences = cardSentences(f);
+  const laws = lawCandidates(f, tags);
+  // no article to read the card against: a real answer (a card of 現場のコツ only), no Claude call is needed
+  if (!sentences.length || !laws.length) return { sentences, items: [], laws };
+  const judge = theLawJudge();
+  if (!judge) throw new LawCheckFailed("no key");
+  let timer: NodeJS.Timeout | undefined;
+  let raw: unknown;
+  // the time limit stops the request itself (the SDK's signal), not only the wait: a call left running would be billed
+  const stop = new AbortController();
+  try {
+    raw = await Promise.race([
+      judge(checkPrompt(sentences, laws), stop.signal),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          // settled as "no reply in time" first, so the abort's own error from the request is not what is seen
+          reject(new LawCheckFailed("no reply in time", undefined, true));
+          stop.abort();
+        }, timeoutMs);
+      }),
+    ]);
+  } catch (e) {
+    if (e instanceof LawCheckFailed || isBusy(e)) throw e;
+    throw new LawCheckFailed("claude call failed", e);
+  } finally {
+    clearTimeout(timer);
+  }
+  const items = checkedReply(raw, sentences.length);
+  if (!items) throw new LawCheckFailed("a reply of the wrong shape");
+  return { sentences, items: checkItems(items, sentences, new Set(laws.map((l) => l.id))), laws };
 }
 
 /** The saved check as the edit screen shows it (myCard): the times as ms, nothing else. */

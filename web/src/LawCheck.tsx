@@ -1,6 +1,7 @@
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { call, errorText } from "./firebase";
 import { LawSheet } from "./LawSheet";
+import { askConfirm } from "./Confirm";
 
 // 親方のカードを、公開する前に条文と照らし合わせる（functions/src/lawcheck.ts の checkCard）。
 // AI が照らし、引用はプログラムが原文と確かめてある。⚠️ と 🔍 の文は、公開しても若手には出さない（親方のカードには残る）。
@@ -239,8 +240,8 @@ export function LawCheckPanel({
     const at = box.value.indexOf(it.text);
     if (at >= 0) box.setSelectionRange(at, at + it.text.length);
   }
-  function removeSentence(it: CheckItem) {
-    if (!window.confirm("この文を消すと、この知恵は若手に届かなくなります。消しますか？")) return;
+  async function removeSentence(it: CheckItem) {
+    if (!(await askConfirm("この文を消すと、この知恵は若手に届かなくなります。消しますか？"))) return;
     takeOut(it);
   }
   function putBack(it: CheckItem) {

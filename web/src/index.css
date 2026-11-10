@@ -862,6 +862,13 @@ input[type="text"] {
 .sheet-close {
   float: right;
 }
+/* the app's own 確認 (Confirm.tsx), in place of the browser's confirm dialog */
+.confirm-text {
+  clear: both;
+  margin: 36px 0 16px;
+  font-size: var(--fs-l);
+  line-height: 1.6;
+}
 .law-src {
   color: var(--law);
   font-weight: 700;

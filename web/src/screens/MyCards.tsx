@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
+import { askConfirm } from "../Confirm";
 import { fmtDate } from "../components";
 import { Transfer } from "../Transfer";
 import { CountOnce, RecordFrame } from "../Record";
@@ -231,7 +232,7 @@ export function MyCards({ onEdit, onOpenBox }: { onEdit: (cardId: string) => voi
                   {c.status === "draft" ? "続きを直して公開する" : "直す"}
                 </button>
                 {c.status === "draft" ? (
-                  <button className="secondary" disabled={!!busy} onClick={() => confirm("この下書きを消しますか？") && act(c, "deleteDraft", {})}>
+                  <button className="secondary" disabled={!!busy} onClick={async () => (await askConfirm("この下書きを消しますか？")) && act(c, "deleteDraft", {})}>
                     下書きを消す
                   </button>
                 ) : (

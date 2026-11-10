@@ -12,6 +12,7 @@ import { Photo, type CalcStart } from "./screens/Photo";
 import { FlowSteps } from "./FlowSteps";
 import { Icon } from "./Icon";
 import { UpdateNote } from "./UpdateNote";
+import { askConfirm } from "./Confirm";
 import type { YoungAsk } from "./SceneFinder";
 import { call } from "./firebase";
 
@@ -131,7 +132,10 @@ export default function App() {
 
   const startTalk = (t: Topic | null, resume: string | null = null, force = false) => {
     // starting another story replaces the one on 話す: do not drop what was told without asking
-    if (!force && talkDirty && !confirm("「話す」で話している途中の内容は消えます。よろしいですか？")) return;
+    if (!force && talkDirty) {
+      void askConfirm("「話す」で話している途中の内容は消えます。よろしいですか？").then((ok) => ok && startTalk(t, resume, true));
+      return;
+    }
     setTalkDirty(false);
     setTopic(t);
     setResumeId(resume);
@@ -162,7 +166,7 @@ export default function App() {
         <button className="icon-btn" aria-label="明るさの切り替え" onClick={toggleTheme}>
           ◐
         </button>
-        <button className="icon-btn" onClick={() => (role !== "veteran" || !talkDirty || confirm("「話す」で話している途中の内容は消えます。切り替えますか？")) && choose(null)}>
+        <button className="icon-btn" onClick={async () => (role !== "veteran" || !talkDirty || (await askConfirm("「話す」で話している途中の内容は消えます。切り替えますか？"))) && choose(null)}>
           切替
         </button>
       </header>
@@ -176,11 +180,11 @@ export default function App() {
               🧰 ベテランで試す
             </button>
           ) : (
-            <button className="trial-end trial-next" onClick={() => (!talkDirty || confirm("「話す」で話している途中の内容は消えます。切り替えますか？")) && choose("young")}>
+            <button className="trial-end trial-next" onClick={async () => (!talkDirty || (await askConfirm("「話す」で話している途中の内容は消えます。切り替えますか？"))) && choose("young")}>
               🔰 若手で聞く
             </button>
           )}
-          <button className="trial-end" onClick={() => (role !== "veteran" || !talkDirty || confirm("「話す」で話している途中の内容は消えます。審査員モードを終えますか？")) && choose(null, false)}>
+          <button className="trial-end" onClick={async () => (role !== "veteran" || !talkDirty || (await askConfirm("「話す」で話している途中の内容は消えます。審査員モードを終えますか？"))) && choose(null, false)}>
             終える
           </button>
         </p>

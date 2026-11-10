@@ -74,17 +74,21 @@ export async function jsonCall<T>(opts: {
   schema: Record<string, unknown>;
   maxTokens?: number;
   effort?: "low" | "medium" | "high";
+  signal?: AbortSignal; // ends the request itself (and its retries) when aborted, not only the wait for it
 }): Promise<T> {
   const c = getClient();
   if (!c) throw new Error("no api key");
   // max_tokens also covers thinking, so leave headroom above the JSON itself.
-  const res = await c.messages.create({
-    model: opts.model,
-    max_tokens: opts.maxTokens ?? 4000,
-    system: systemBlocks(opts.system),
-    messages: [{ role: "user", content: opts.user }],
-    output_config: { format: { type: "json_schema", schema: opts.schema }, ...(opts.effort ? { effort: opts.effort } : {}) },
-  });
+  const res = await c.messages.create(
+    {
+      model: opts.model,
+      max_tokens: opts.maxTokens ?? 4000,
+      system: systemBlocks(opts.system),
+      messages: [{ role: "user", content: opts.user }],
+      output_config: { format: { type: "json_schema", schema: opts.schema }, ...(opts.effort ? { effort: opts.effort } : {}) },
+    },
+    opts.signal ? { signal: opts.signal } : undefined,
+  );
   await recordUsage(opts.model, res.usage);
   if (res.stop_reason === "refusal") throw new Error("refused");
   if (res.stop_reason === "max_tokens") throw new Error(`${opts.model} hit max_tokens (${JSON.stringify(res.usage)})`);
