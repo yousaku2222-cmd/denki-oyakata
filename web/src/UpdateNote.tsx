@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { askConfirm } from "./Confirm";
 
 // The script this page was built with (its name changes with every build).
 const scriptOf = (html: string) => html.match(/\/assets\/index-[\w-]+\.js/)?.[0] ?? null;
@@ -34,7 +35,7 @@ export function UpdateNote({ dirty = false }: { dirty?: boolean }) {
   }, []);
   if (!newer) return null;
   return (
-    <button className="update-note" onClick={() => (!dirty || confirm("「話す」で話している途中の内容は消えます。更新しますか？")) && location.reload()}>
+    <button className="update-note" onClick={async () => (!dirty || (await askConfirm("「話す」で話している途中の内容は消えます。更新しますか？"))) && location.reload()}>
       ✨ 新しい版があります（押すと更新）
     </button>
   );

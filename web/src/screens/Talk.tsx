@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CardBirth, IntoTheBag } from "../CardMotion";
 import { call, errorText } from "../firebase";
+import { askConfirm } from "../Confirm";
 import { getName, getTrial, setName } from "../local";
 import { MicInput, Notice } from "../components";
 import { canSay, hush, say, unlockSay } from "../speech";
@@ -675,14 +676,14 @@ export function Talk({
         <button
           className="link"
           disabled={busy}
-          onClick={() =>
-            confirm(
+          onClick={async () =>
+            (await askConfirm(
               dirty
                 ? status === "draft"
                   ? `直した所は保存されません（下書きは直す前のまま「わたしのカード」に残ります）。${leaveAsk}`
                   : `直した所は保存されません。${leaveAsk}`
                 : `この下書きは「わたしのカード」に残ります。${leaveAsk}`,
-            ) && (leave ?? onDone)()
+            )) && (leave ?? onDone)()
           }
         >
           {status === "draft" ? `下書きのまま置いて、${leaveTo}` : `保存しないで、${leaveTo}`}
@@ -720,7 +721,7 @@ export function Talk({
   return (
     <section className="screen">
       {fromBox && (
-        <button className="link back-link" disabled={busy} onClick={() => (!dirty || confirm("話している途中の内容は消えます。質問箱に戻りますか？")) && toBox()}>
+        <button className="link back-link" disabled={busy} onClick={async () => (!dirty || (await askConfirm("話している途中の内容は消えます。質問箱に戻りますか？"))) && toBox()}>
           ← 質問箱に戻る
         </button>
       )}
@@ -857,7 +858,7 @@ export function Talk({
         <div className="finish-talk">
           {/* while listening, the last words are not written yet: they would be left out of the card */}
           <p className="hint">{listening ? "🎤を止めてから押せます" : "話し終えたら"}</p>
-          <button className="secondary" disabled={busy || listening} onClick={() => confirm("ここまでの話で、知恵カードの下書きを作りますか？（下書きは、公開する前に直せます）") && next(true)}>
+          <button className="secondary" disabled={busy || listening} onClick={async () => (await askConfirm("ここまでの話で、知恵カードの下書きを作りますか？（下書きは、公開する前に直せます）")) && next(true)}>
             🗂️ ここまでの話をカードにする
           </button>
         </div>

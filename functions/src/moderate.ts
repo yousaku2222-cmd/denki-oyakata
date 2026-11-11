@@ -60,7 +60,7 @@ export function setShownJudge(j: ShownJudge | null | undefined) {
 const theJudge = (): ShownJudge | null => (override === undefined ? (getClient() ? judgeShown : null) : override);
 // The local emulators' dummy mode and the tests run without a key: there nothing is checked. Anywhere else, no key
 // is a check that could not be made (a function not given the key would otherwise let every word through).
-const LOCAL = process.env.FUNCTIONS_EMULATOR === "true" || !!process.env.FIRESTORE_EMULATOR_HOST;
+export const LOCAL = process.env.FUNCTIONS_EMULATOR === "true" || !!process.env.FIRESTORE_EMULATOR_HOST;
 /** Whether a real verdict is made (not the local runs' let-everything-through): only a real one may be kept. */
 export const canCheck = () => !!theJudge();
 

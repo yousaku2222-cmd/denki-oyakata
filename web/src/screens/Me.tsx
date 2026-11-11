@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { call, errorText } from "../firebase";
+import { askConfirm } from "../Confirm";
 import { getName, getParts, savePart, setName, type PartEntry } from "../local";
 import { fmtDate, LoadFailed, Skeleton } from "../components";
 import { Transfer } from "../Transfer";
@@ -131,7 +132,7 @@ export function Me({ onAskAgain, onAsk }: { onAskAgain: (text: string, questionI
   }
 
   async function withdraw(q: Q) {
-    if (!confirm("この質問を取り下げますか？ 親方の質問箱から消えます。")) return;
+    if (!(await askConfirm("この質問を取り下げますか？ 親方の質問箱から消えます。"))) return;
     setBusy(true);
     setErr("");
     try {

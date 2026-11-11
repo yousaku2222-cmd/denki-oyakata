@@ -1,15 +1,15 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { DocumentSnapshot, FieldValue, Timestamp } from "firebase-admin/firestore";
-import { getClient, jsonCall } from "./claude";
+import { getClient, isBusy, jsonCall } from "./claude";
 import { MODEL_ANSWER, MODEL_FAITHFUL } from "./models";
 import { CATEGORIES, COMPANY, CardDoc, FieldTerm, LAW_CHECK_VER, LOCATIONS, Turn, db, spaceOf, spacesOf, str, strList, turns } from "./common";
 import { giveBackQuota, takeQuota } from "./limits";
-import { assertShown } from "./moderate";
+import { LOCAL, assertShown } from "./moderate";
 import { openQuestionCount } from "./box";
 import { thanksTo } from "./thanks";
 import { lawLabel, numbersMissing, searchLaws } from "./laws";
-import { CheckFields, MAX_SENTENCES, SavedCheck, Shown, cardSentences, runLawCheck, savedCheckShown, shownCard, termLine, termsText } from "./lawcheck";
+import { CheckFields, LawCheckFailed, MAX_SENTENCES, SavedCheck, Shown, canLawCheck, cardSentences, runLawCheck, savedCheckShown, shownCard, termLine, termsText } from "./lawcheck";
 
 const MAX_FOLLOW_UPS = 3;
 const ENOUGH_CHARS = 12000; // a talk this long has the material: go to the card (common.ts bounds it at 16000)
@@ -354,32 +354,63 @@ const checkFieldsOf = (c: FullCard): CheckFields => ({ title: c.title, scene: c.
  * The result stays on the server (cardPrivate.lawCheck): publishCard makes the card's badge from it, so a device
  * cannot send a badge of its own. Counted as one Claude call, only once the card is known to be the caller's.
  */
-export async function checkCard(data: Record<string, unknown>, uid: string, ctx?: { charge?: () => Promise<void> }) {
+export async function checkCard(data: Record<string, unknown>, uid: string, ctx?: { charge?: () => Promise<void>; ip?: string }) {
   const cardId = str(data.cardId, "カードの番号", 64);
   const f = cardFields((data.edits ?? {}) as Record<string, unknown>);
+  // Only the local runs check nothing and still let the card out (as moderate.ts does): anywhere else no key is a
+  // check that could not be made, and an unchecked card must not go out as if it were checked.
+  if (!canLawCheck() && !LOCAL) {
+    logger.error("law check has no key: nothing is checked");
+    throw new HttpsError("unavailable", LAWCHECK_FAILED_MSG);
+  }
   await ownCard(cardId, uid);
   const cf = checkFieldsOf(f);
   if (cardSentences(cf).length > MAX_SENTENCES) throw new HttpsError("invalid-argument", `文が多すぎて照らせません（${MAX_SENTENCES}文まで）。短くまとめてください。`);
-  if (!getClient()) {
+  if (!canLawCheck()) {
     // local runs without Claude: nothing is checked, but the card can still be published (with no badge)
     const at = Timestamp.now();
     const saved: SavedCheck = { at, sentences: cardSentences(cf), items: [], dummy: true, tags: f.tags };
     await db.collection("cardPrivate").doc(cardId).set({ lawCheck: saved }, { merge: true });
     return { mode: "dummy", checkedAt: at.toMillis(), sentences: saved.sentences, items: [], tags: f.tags, lawCount: 0 };
   }
-  await ctx?.charge?.();
-  const r = await runLawCheck(cf, f.tags);
+  let charged = false;
+  if (ctx?.charge) {
+    await ctx.charge();
+    charged = !!getClient(); // index.ts charge() counts only when there is a key
+  }
+  let r: Awaited<ReturnType<typeof runLawCheck>>;
+  try {
+    r = await runLawCheck(cf, f.tags);
+  } catch (e) {
+    // a busy Claude goes to index.ts, which gives the count back and says it is busy
+    if (isBusy(e)) throw e;
+    // The check could not be made (Claude failed, a reply of the wrong shape, no reply in time): nothing is saved,
+    // so the card goes out only as it was checked before, if ever. Not the veteran's doing: the count goes back,
+    // as moderate.ts checks that could not be made give theirs back (publishCard, sendToBox), except after the time
+    // limit (givesBackOnFail): that request was cut off but may be billed.
+    logger.warn("law check failed", e);
+    if (charged && givesBackOnFail(e)) await giveBackQuota(uid, "claude", ctx?.ip).catch(() => undefined);
+    throw new HttpsError("unavailable", LAWCHECK_FAILED_MSG);
+  }
   const at = Timestamp.now();
   const saved: SavedCheck = { at, sentences: r.sentences, items: r.items, tags: f.tags };
   await db.collection("cardPrivate").doc(cardId).set({ lawCheck: saved }, { merge: true });
   return { mode: "claude", checkedAt: at.toMillis(), sentences: r.sentences, items: r.items, tags: f.tags, lawCount: r.laws.length };
 }
 
+/**
+ * Whether a law check that could not be made gives its count back (checkCard): yes, except when it ran out of time.
+ * A call cut off at the time limit may still be billed, so it stays counted (and against the day's budget).
+ */
+export const givesBackOnFail = (e: unknown) => !(e instanceof LawCheckFailed && e.timedOut);
+
 const UNCHECKED_MSG = "条文との照らし合わせをしてから公開してください。";
+// worded like moderate.ts SHOWN_FAILED_MSG
+export const LAWCHECK_FAILED_MSG = "いまは条文と照らし合わせられなかったので、照らしていません。少し待ってから、もう一度お試しください。";
 const ALL_HIDDEN_MSG = "題名・やり方が、若手に出せない文だけになります。言い回しを変えて、もう一度照らしてください。";
 
 /** The veteran's words, as they are kept for the edit screen (cardPrivate.full): the public card may hold less. */
-type FullCard = { title: string; scene: string; body: string; reason: string; caution: string; terms: FieldTerm[]; plain: string };
+export type FullCard = { title: string; scene: string; body: string; reason: string; caution: string; terms: FieldTerm[]; plain: string };
 
 /**
  * What young workers may read of the card (lawcheck.ts shownCard), or refused: a card goes out only as it was
@@ -388,7 +419,9 @@ type FullCard = { title: string; scene: string; body: string; reason: string; ca
  * (it rewords the whole body). lawCheckVer: the mark that the card was let out by the check (common.ts LAW_CHECK_VER),
  * on every card that goes out, one with no article about it too; only marked cards reach young workers.
  */
-function forYoung(saved: SavedCheck | undefined, full: FullCard, tags: string[], unchecked = UNCHECKED_MSG) {
+export function forYoung(saved: SavedCheck | undefined, full: FullCard, tags: string[], unchecked = UNCHECKED_MSG) {
+  // a check that made no verdict (local runs without Claude) lets a card out only in the local runs
+  if (saved?.dummy && !LOCAL) throw new HttpsError("failed-precondition", unchecked);
   const r: Shown = shownCard(saved, checkFieldsOf(full), tags);
   if (!r.ok) throw new HttpsError("failed-precondition", r.why === "empty" ? ALL_HIDDEN_MSG : unchecked);
   const { title, scene, body, reason, caution } = r.fields;
